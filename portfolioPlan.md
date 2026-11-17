@@ -1,0 +1,300 @@
+# Master Portfolio Roadmap & API Architecture
+**Project:** Lou Diamond Lava Valdellon — Cinematic Full-Stack & Business Analytics Portfolio  
+**Target Platform:** Vercel (Hobby Tier — $0/month guaranteed)
+
+---
+
+## 1. Do We Need an API? (The API Strategy)
+
+For a portfolio, you want **maximum speed** (static generation) paired with **dynamic full-stack capabilities** (proving to recruiters that you understand APIs and backend engineering).
+
+We will implement **two lightweight, serverless API routes** within Next.js:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Next.js Frontend                       │
+│  (Hero, Projects, Liquid Cards, Kinetic Motion, UI Forms)   │
+└──────────────┬──────────────────────────────┬───────────────┘
+               │                              │
+        POST /api/contact               GET /api/github
+               ▼                              ▼
+┌─────────────────────────────┐┌──────────────────────────────┐
+│     Contact API Route       ││       GitHub API Route       │
+│ - Zod request validation    ││ - Caches live GitHub metrics │
+│ - Spam prevention (honeypot)││ - Fetches latest public work │
+│ - Dispatches email straight ││ - Demonstrates real-world    │
+│   to Lou's personal inbox   ││   API integration to tech    │
+│   (Resend / Web3Forms)      ││   recruiters                 │
+└─────────────────────────────┘└──────────────────────────────┘
+```
+
+### API 1: `/api/contact` (Interactive In-Site Messaging)
+* **Problem it solves:** Many users dislike opening desktop mail clients like Outlook from `mailto:` links.
+* **Function:** Accepts `name`, `email`, `subject`, and `message` from an on-page modal or footer form.
+* **Security & Validation:**
+  * Uses **Zod** schema validation to sanitize inputs.
+  * Includes a hidden **honeypot field** to block automated spam bots without irritating CAPTCHAs.
+* **Email Service:** Powered by **Resend** (free tier: 3,000 emails/mo) or **Web3Forms** (zero-config, free API key). Sends the message directly to `loudiamond.valdellon@gmail.com`.
+
+#### API Contract (`POST /api/contact`):
+```typescript
+// Request Body
+{
+  "name": "Alex Mercer",
+  "email": "alex@company.com",
+  "subject": "Full-Stack Opportunity",
+  "message": "Hi Lou, we loved your capstone project and want to schedule an interview."
+}
+
+// Response (200 OK)
+{
+  "success": true,
+  "message": "Thank you, Lou has received your message and will reply shortly."
+}
+```
+
+---
+
+### API 2: `/api/github` (Live Engineering Proof — Optional)
+* **Problem it solves:** Proves real-time code activity and technical capability directly on your site.
+* **Function:** Queries GitHub REST API for your total repositories, star count, and top languages.
+* **Performance:** Cached with Next.js ISR (Incremental Static Regeneration, revalidated every 1 hour) so it never hits GitHub's rate limits and loads instantly.
+
+---
+
+## 2. Project Data Models (Type-Safe Schemas)
+
+All portfolio data is structured in TypeScript, making it easy to add projects, skills, or achievements without touching layout code:
+
+```typescript
+// src/types/portfolio.ts
+
+export interface Project {
+  id: string;
+  title: string;
+  category: "Full-Stack System" | "Business Analytics" | "Web Application";
+  year: string;
+  summary: string;
+  role: string; // e.g. "Lead Developer: DB, API, Frontend"
+  outcome: string; // e.g. "Production Capstone — Deployed"
+  stack: string[]; // ["MySQL", "Node.js", "React", "Tailwind"]
+  image: string; // Path to WebP mockup
+  githubUrl?: string;
+  liveUrl?: string;
+  metrics?: string; // e.g. "Reduced query latency by 45%"
+}
+
+export interface SkillCategory {
+  category: "Frontend" | "Backend" | "Database & Data" | "Analytics & Tools";
+  skills: Array<{ name: string; level?: string; icon: string }>;
+}
+```
+
+---
+
+## 3. The 5-Milestone Implementation Roadmap
+
+```mermaid
+flowchart TD
+    M1["Milestone 1: Scaffolding & Motion Core"] --> M2["Milestone 2: Cinematic Hero & Visuals"]
+    M2 --> M3["Milestone 3: Projects, Story & Data"]
+    M3 --> M4["Milestone 4: Contact API & Interactions"]
+    M4 --> M5["Milestone 5: SEO & Vercel Launch"]
+```
+
+---
+
+### Milestone 1: Scaffolding & Motion Infrastructure (Day 1)
+- [ ] Initialize Next.js 15+ App Router with TypeScript and Tailwind CSS v4.
+- [ ] Install core motion packages:
+  ```bash
+  npm install gsap @studio-freight/lenis split-type lucide-react clsx tailwind-merge zod
+  ```
+- [ ] Configure custom theme tokens in `globals.css`:
+  * Obsidian dark theme (`#08080a`), surface colors, line dividers, signature accent red (`#ff3b1d`).
+  * Load display font (**Anton**) and sans-serif font (**Onest** or **Geist**).
+- [ ] Implement `SmoothScroll.tsx`:
+  * Initialize **Lenis** smooth scroll and bind it to GSAP's `requestAnimationFrame` ticker.
+
+---
+
+### Milestone 2: Cinematic Intro & Hero Experience (Day 2)
+- [ ] **`Preloader.tsx`**:
+  * 0% $\rightarrow$ 100% tabular counter over 1.8 seconds.
+  * Vertical curtain wipe animation unlocking Lenis scroll.
+- [ ] **`Navbar.tsx`**:
+  * Fixed glassmorphic navigation with monogram badge **`LV`** and magnetic links.
+- [ ] **`Hero.tsx`**:
+  * Kinetic letter-by-letter reveal for **LOU DIAMOND VALDELLON**.
+  * Line-by-line staggered text for roles: *Full-Stack Developer*, *Analytics Engineer*, *Systems Builder*.
+  * Composited portrait cutout with bottom obsidian gradient.
+  * Animated scroll cue (`Scroll to Explore`).
+- [ ] **`Marquee.tsx`**:
+  * Infinite seamless marquee ticker (*Architect The Database • Build End-To-End • Data-Driven Thinking*).
+
+---
+
+### Milestone 3: Your Story, Projects & Systems (Day 3)
+- [ ] **`Story.tsx`**:
+  * Narrate your journey: stepping up as the sole developer for your group mates across frontend, backend, and database.
+  * 4 Pillars grid with hover accent lines.
+- [ ] **`LiquidImage.tsx`**:
+  * Reusable SVG displacement filter component (`feTurbulence` + `feDisplacementMap`) that wobbles on hover.
+- [ ] **`Projects.tsx`**:
+  * Feature your Capstone System, Business Analytics Dashboard, and Full-Stack apps.
+  * Offset 2-column staggered layout with liquid image cards.
+- [ ] **`Impact.tsx`**:
+  * Animated numeric counters (100% stack ownership, BSIT Class of 2026, 3+ systems built).
+- [ ] **`Skills.tsx`**:
+  * Visual badges organized by Database, Backend, Frontend, and Analytics.
+
+---
+
+### Milestone 4: Backend API & Contact Experience (Day 4)
+- [ ] Create API Route `src/app/api/contact/route.ts`.
+- [ ] Setup validation with Zod and integrate email dispatch (Resend or Web3Forms).
+- [ ] Build **`Contact.tsx`**:
+  * Magnetic `mailto:` anchor with expanding arrow indicator.
+  * Interactive "Send a Message" form with loading, success, and error states.
+  * Footer bar with copyright, social links (GitHub, LinkedIn), and status badge (*Available for Opportunities*).
+
+---
+
+### Milestone 5: Optimization, Polish & Vercel Deployment (Day 5)
+- [ ] Run Lighthouse audit (target: 95+ score on Performance, Accessibility, Best Practices, SEO).
+- [ ] Add `prefers-reduced-motion` fallbacks for accessibility.
+- [ ] Generate Open Graph card (`/opengraph-image.png`) for social sharing.
+- [ ] Initialize Git repo, push to GitHub, and connect to **Vercel**.
+- [ ] Test live URL on mobile devices and desktops.
+
+---
+
+## 4. Free Hosting Guarantee & Maintenance Checklist
+
+* **Hosting:** Vercel Hobby Tier gives you unlimited deployments, 100GB bandwidth, and zero server fees.
+* **Database & Media Storage:** **Supabase (Free Tier)** provides a 500MB PostgreSQL database + 1GB File Storage for project mockups and avatars at **$0/month**.
+
+---
+
+## 5. Full-Stack Portfolio Management System (`/admin` CMS Plan)
+
+To showcase your **Full-Stack Engineering (DB + API + UI)** and **BSIT Business Analytics** specialization, the portfolio includes a dedicated **Portfolio Management & Analytics System** at `/admin`.
+
+```mermaid
+flowchart LR
+    Visitor["Public Visitor (/)"] -->|0ms Static Cache| Edge["Next.js Static / ISR Cache"]
+    Visitor -->|POST /api/contact & Events| API["Next.js API Routes"]
+    Admin["Lou (/admin Dashboard)"] -->|CRUD + Auth| API
+    API -->|SQL Queries & Storage| DB[("PostgreSQL + Storage\n(Supabase Free Tier)")]
+    API -->|revalidatePath('/')| Edge
+```
+
+### A. The 6 Core Admin Modules
+
+1. **Module 1: Security & "Recruiter Demo Mode" (`/admin/login`)**
+   * **Admin Authentication:** Protected login (Email/Password or GitHub OAuth via Supabase Auth / HTTP-only JWT session).
+   * **Recruiter Read-Only Demo Mode *(Optional)*:** Allows technical recruiters to explore your `/admin` dashboard and analytics charts in a safe **Read-Only** mode (all Save/Delete buttons disabled) to prove your full-stack & analytics engineering skills!
+2. **Module 2: Business Analytics & KPI Overview (`/admin`)**
+   * **Executive KPI Cards:** Total Page Views, Project Demo Clicks, Resume Downloads, Unread Contact Inquiries.
+   * **Visual Analytics:** Interactive charts showing visitor traffic trends, most clicked Projects, and Story Chapter engagement (`01 Story` $\rightarrow$ `05 Contact`).
+3. **Module 3: Projects & Case Studies CRUD (`/admin/projects`)**
+   * Create, edit, reorder, and delete projects.
+   * Fields for Title, Category, Year, Role, Description, **The Problem**, **Engineered Solution**, **Impact Metrics**, Tech Stack tags, GitHub URL, and Live Demo URL.
+   * **Drag-and-Drop Image Uploader** for project thumbnails (`LiquidImage`).
+   * **Published / Draft Toggle** so you can prepare new projects privately before publishing.
+4. **Module 4: Profile, Hero & Story Manager (`/admin/profile`)**
+   * Update Hero Roles, Bio Pitch, Availability Badge (*Available for Roles* / *Employed*), and Resume PDF link.
+   * Upload/swap Hero Cutout Avatar (`avatar.png`).
+   * Edit Origin Story paragraphs, Marquee ticker statements, and the 4 Core Pillars.
+5. **Module 5: 4-Layer Tech Bento & Impact Metrics (`/admin/skills`)**
+   * Manage the 4 System Layers (*Database*, *Backend*, *Frontend*, *Business Analytics*).
+   * Add/remove skills, reorder them, and toggle the accent **Highlight** badge.
+   * Edit the 4 By-The-Numbers Impact stats (`100%`, `2026`, `3+`, `60-120 FPS`).
+6. **Module 6: Contact Inbox & Lead Tracker (`/admin/inbox`)**
+   * Stores all submissions from the public Contact Form in PostgreSQL.
+   * Filter by `Unread`, `Read`, `Starred`, or `Archived`, with a 1-click **"Reply via Email"** action.
+
+### B. Relational Database Schema (PostgreSQL)
+
+| Table | Primary Columns | Purpose |
+| :--- | :--- | :--- |
+| `profile_settings` | `id`, `full_name`, `headline`, `bio`, `status`, `email`, `github`, `linkedin`, `avatar_url`, `resume_url`, `roles[]`, `story_heading`, `story_body[]`, `marquee_items[]` | Stores global identity, hero, and story copy. |
+| `projects` | `id`, `title`, `category`, `year`, `role`, `description`, `problem`, `solution`, `metrics`, `stack[]`, `image_url`, `github_url`, `live_url`, `sort_order`, `is_published` | Stores featured systems & case studies. |
+| `skill_categories` | `id`, `slug`, `eyebrow`, `title`, `description`, `sort_order` | The 4 Bento Grid system layers. |
+| `skills` | `id`, `category_id` (FK), `name`, `level`, `highlight`, `sort_order` | Individual skills linked to each layer. |
+| `story_pillars` | `id`, `number`, `title`, `description`, `sort_order` | The 4 core origin pillars. |
+| `impact_metrics` | `id`, `value`, `prefix`, `suffix`, `label`, `description`, `sort_order` | The 4 big numeric counters. |
+| `contact_messages` | `id`, `name`, `email`, `subject`, `message`, `is_read`, `is_starred`, `created_at` | In-site contact form inbox. |
+| `analytics_events` | `id`, `event_type` (`page_view`, `project_click`, `cv_download`), `target`, `created_at` | Cookieless Business Analytics tracking. |
+
+---
+
+## 6. Post-Audit Hardening & Next Implementation Roadmap (Tracks A–C)
+
+Following completion of the initial 5 milestones, `/admin` CMS workspace, Settings Hub, QR device pairing, PWA offline support, Appearance Studio, Global Search, and Analytics Overview, a full-app code and security audit identified remaining hardening, functional, performance, and hygiene tasks organized into three follow-up tracks:
+
+```mermaid
+flowchart LR
+    M6["Track A (Milestone 6): Security, QR Pairing & Data Integrity (P0)"] --> M7["Track B (Milestone 7): Email Dispatch & Automated Test Suite (P1)"]
+    M7 --> M8["Track C (Milestone 8): Performance, UI Hygiene & Case Studies (P2)"]
+```
+
+---
+
+### Track A (Milestone 6 — Priority 1): Security, QR Pairing & Data Integrity (`P0`)
+
+* **QR Device Pairing State Machine (`src/app/api/admin/devices/pair/route.ts`, `pair/verify/route.ts`, `QrDevicePairModal.tsx`, `DevicePairClient.tsx`):**
+  - [x] Fix reject/cancel polling 404 loop: in `PUT /api/admin/devices/pair/verify`, check terminal challenge statuses (`cancelled`, `burned`, `expired`) before rejecting missing `claimTokenHash`, so `DevicePairClient.tsx` exits polling cleanly when desktop rejects or cancels.
+  - [x] Enforce `challenge.expiresAt` on `"approved"` challenges in `PUT /api/admin/devices/pair/verify`.
+  - [x] Move pairing status, expiry, `attempts`, and `claimToken` checks inside `mutateAdminSecurityStore()` to eliminate read-then-write TOCTOU races.
+  - [x] Restrict `resolveRequestOrigin()` in `src/app/api/admin/devices/pair/route.ts` to allowlisted canonical origins (plus explicit dev localhost/LAN targets) instead of trusting arbitrary `originOverride` or unvalidated `x-forwarded-host` / `x-forwarded-proto` headers.
+  - [x] Polish `src/components/admin/settings/QrDevicePairModal.tsx` & `src/components/admin/DevicePairClient.tsx`: stop the `setInterval` countdown once expired/terminal, display `"Pairing Cancelled"` when cancelled, add a copyable 1-time Pairing Link + Challenge ID badge, and add manual link/ID lookup on `/admin/pair`.
+* **Auth, Self-Lockout, Offline TOTP 2FA & Fail-Closed Storage (`src/lib/auth.ts`, `src/lib/security.ts`, `src/lib/totp.ts`, `src/lib/db.ts`, `src/app/api/admin/devices/route.ts`, `.gitignore`):**
+  - [x] Fail closed on transient Supabase read errors in `readAdminSecurityStore()` and `readAdminCredentialOverride()` instead of silently falling back to defaults (`stealthGateEnabled: false` or env `ADMIN_PASSWORD`), and serialize `mutateAdminSecurityStore()` writes so concurrent updates cannot overwrite trusted devices or audit logs.
+  - [x] Clear or re-issue `ADMIN_COOKIE_NAME` properly when revoking or deleting `ctx.currentDeviceId` in `PATCH /api/admin/devices` and `PATCH /api/admin/auth` so unregistering or removing the current device does not trigger immediate `401` self-lockout in `getSessionAndDeviceContext()`.
+  - [x] Remove the `ADMIN_PASSWORD` fallback in `getSecret()` (`src/lib/auth.ts`) and require a dedicated `ADMIN_SESSION_SECRET`.
+  - [x] Add zero-dependency RFC 6238 Authenticator App 2FA (`TOTP` with AES-256-GCM encryption at rest & replay protection) via `/api/admin/devices/totp`, `TotpSetupModal.tsx`, `SecurityAccessSettings.tsx`, and 2-step `AdminLogin.tsx`.
+  - [x] Ignore `/data/portfolio-db.json` in `.gitignore` alongside existing `/data/admin-*.json` and `/data/portfolio-snapshots.json` stores.
+* **Uploads, CSP, Validation, Rate Limits & Public Payload Filtering:**
+  - [x] Harden `POST /api/admin/upload`: reject empty MIME types, verify file magic bytes (`src/lib/uploadSecurity.ts`), and block same-origin `.svg` / `image/svg+xml` uploads.
+  - [x] Harden `isSafeUploadStoragePath()` in `src/lib/backups.ts` to reject `?`, `#`, `%` and apply `encodeURIComponent()` to object filenames before Supabase Storage deletes.
+  - [x] Apply a global `Content-Security-Policy` header in `next.config.ts` across `/(.*)` (not only `/sw.js`) and replace wildcard `images.remotePatterns` (`hostname: "**"`) with explicit allowed hosts.
+  - [x] Add Zod/domain validation for `sectionHeaders`, `marqueePrinciples`, `pillars`, `skills`, `projects`, and `impactMetrics` in `PUT /api/admin/portfolio`, plus `try/catch` guards on `GET /api/admin/portfolio` and `GET`/`DELETE /api/admin/devices/pair`.
+  - [x] Update `"flush-server-cache"` in `POST /api/admin/system` to call `revalidateTag` / `revalidatePath("/", "layout")` alongside `clearPortfolioMemoryCache()`, matching the `MaintenanceDangerSettings.tsx` status message.
+  - [x] Extend IP/key rate limiting beyond `POST /api/admin/auth` to `/api/contact`, `/api/analytics`, `/api/psgc` (with `AbortSignal.timeout`), `PUT /api/admin/auth`, `/api/admin/devices/pair/verify`, and `?portal=` stealth-key checks in `src/app/admin/page.tsx`.
+  - [x] Filter out unpublished draft projects (`published === false`) and strip private PII fields (`profile.birthDate`, detailed `profile.contact.address` PSGC codes/barangay) from SSR `initialData` in `src/app/layout.tsx` and `GET /api/portfolio` via `src/lib/portfolioPublic.ts`.
+
+---
+
+### Track B (Milestone 7 — Priority 2): Email Dispatch, Relational Scale & Automated Tests (`P1`)
+
+* **Real Email Dispatch & Inbox Reply Flow (`src/app/api/contact/route.ts`, `src/components/admin/InboxManager.tsx`):**
+  - [x] Wire transactional email delivery (e.g., Resend or SMTP via Nodemailer) into `POST /api/contact` so visitor inquiries trigger real email notifications in addition to database storage.
+  - [x] Remove the unreachable `honeypot` branch after `apiContactSchema.parse` and sanitize `StorageWriteError.message` on HTTP `503`.
+  - [x] Add an optional server-dispatched **"Send Reply"** workflow in `InboxManager.tsx` alongside the existing `mailto:` quick-reply button.
+* **Relational Supabase Migration (`supabase/schema.sql`, `src/lib/db.ts`):**
+  - [x] Migrate high-churn `messages` and `analytics` arrays out of the single `portfolio_store` JSONB document into the normalized `contact_messages` and `analytics_events` tables so Vercel multi-instance deployments do not share stale in-memory caches or hit the `2,000`-event cap.
+* **Automated Testing & Quality Gates (`package.json`):**
+  - [x] Add Vitest unit/integration tests (`npm run test`) covering `src/lib/auth.ts`, `src/lib/security.ts` pairing flows, `src/lib/validation.ts`, and `src/lib/analytics.ts`.
+  - [x] Add Playwright end-to-end smoke tests covering public portfolio navigation, contact submission/outbox sync, `/admin` login/stealth gate, and CMS publish/restore flows.
+
+---
+
+### Track C (Milestone 8 — Priority 3): Performance, UI/CSS Hygiene & Public Case Studies (`P2`)
+
+* **CSS Tokens, Primitive Consistency & `/offline` UX:**
+  - [x] Define `--shadow-card` in `src/app/globals.css` (referenced by `src/app/offline/page.tsx`, `OfflineBanner.tsx`, and `Footer.tsx`).
+  - [x] Fix invalid `gap-inherit` utility inside `src/components/ui/Button.tsx` (`slideDirection` content wrapper).
+  - [x] Refactor `src/app/offline/page.tsx` raw `<button>` and `<Link>` controls to use the reusable `<Button>` primitive; update `Navbar.tsx` on `/offline` so hash links navigate back to `/#story`..`/#contact` (or hide chapter tabs), and skip mounting `Preloader` on `/offline`.
+* **Core Web Vitals, Motion & Media Hygiene:**
+  - [x] Convert `public/assets/hero/avatar.png` (`~661 KB`) to compressed `.webp`/`.avif`.
+  - [x] Review `DEFAULT_APPEARANCE.preloaderMode` (`"once-per-session"` default vs `"always"`), replace per-frame React `setCount` state updates in `Preloader.tsx` with direct ref/text updates, and wrap `Preloader.tsx` & `SplitText.tsx` GSAP animations in `gsap.context()`.
+  - [x] Fix `LiquidImage.tsx` so SVG `<filter>` is only applied on desktop fine-pointer hover (`(hover: hover) and (pointer: fine)`), and reset `imageError` / `hasCustomImage` when `src` changes in both `LiquidImage.tsx` and `Avatar.tsx` (removing hardcoded fallback owner copy from `Avatar.tsx`).
+  - [x] Fix `SplitText.tsx` (`type="lines"` implementation, include `text` and `type` in effect deps, avoid trailing `mr-[0.25em]` on last word), and optimize Google Font loading in `src/app/layout.tsx` so unused pairings do not ship unnecessary font files on initial visit.
+* **Dynamic Metadata & Public Project Showcase Depth:**
+  - [x] Sync `src/app/manifest.ts` metadata/theme colors and `src/app/layout.tsx` OpenGraph/Twitter descriptions and keywords dynamically from `getPortfolioContent()`.
+  - [x] Surface CMS `featured` and `outcome` metadata on public `ProjectCard.tsx`, add public category/stack filtering in `Projects.tsx`, and build a dedicated `/projects/[id]` route or interactive case-study drawer (updating `src/app/sitemap.ts`).
+* **Dead Code Cleanup:**
+  - [x] Remove unused `recordAnalyticsEvent` export from `src/lib/db.ts` and archive/remove redundant early draft docs (`prompt.md`) once no longer needed.
+
+

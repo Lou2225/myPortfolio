@@ -1,0 +1,698 @@
+"use client";
+
+import React, {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { BrandPortalOrb } from "@/components/motion/BrandPortalOrb";
+import {
+  announceBrandPortalStatus,
+  BrandPortalTone,
+  DEVICE_STORAGE_KEY,
+  DEVICE_SYNC_EVENT,
+} from "@/lib/brandPortalStatus";
+import {
+  queryKeys,
+  writePersistedAdminCache,
+} from "@/lib/queryClient";
+
+export {
+  announceBrandPortalStatus,
+  useBrandPortalWorkspaceSync,
+  setBrandPortalMeta,
+} from "@/lib/brandPortalStatus";
+export type { BrandPortalTone } from "@/lib/brandPortalStatus";
+
+interface BrandPortalContextValue {
+  /**
+   * Expands a radial wave pulse from the logo (just like the Dark/Light mode toggle)
+   * across the entire viewport while loading the dashboard, then collapses in reverse
+   * back to where the logo is.
+   */
+  triggerLoginPortal: (onMidpoint: () => void | Promise<void>) => void;
+  /**
+   * Smoothly slides across the viewport when navigating between
+   * Public Portfolio ("left") and Portfolio Manager ("right").
+   */
+  triggerSlideNavigate: (href: string, direction?: "left" | "right") => void;
+  /**
+   * Animates the bottom-left Brand Portal orb to display a status update.
+   */
+  announceStatus: (input: {
+    tone: BrandPortalTone;
+    label: string;
+    detail?: string;
+    durationMs?: number;
+  }) => number;
+}
+
+interface PendingSlideState {
+  targetPath: string;
+  direction: "left" | "right";
+  exitToX: number;
+  slideInComplete: boolean;
+  routeReady: boolean;
+  exited: boolean;
+  fallbackTimer?: ReturnType<typeof setTimeout>;
+}
+
+const BrandPortalContext = createContext<BrandPortalContextValue>({
+  triggerLoginPortal: (cb) => {
+    void cb();
+  },
+  triggerSlideNavigate: () => {},
+  announceStatus: announceBrandPortalStatus,
+});
+
+export function useBrandPortal() {
+  return useContext(BrandPortalContext);
+}
+
+export function BrandPortalProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
+
+  const logoButtonRef = useRef<HTMLDivElement>(null);
+  const portalOverlayRef = useRef<HTMLDivElement>(null);
+  const slideOverlayRef = useRef<HTMLDivElement>(null);
+  const slideLabelRef = useRef<HTMLDivElement>(null);
+  const pendingSlideRef = useRef<PendingSlideState | null>(null);
+
+  const isAnimatingRef = useRef(false);
+  const triggerSlideNavigateRef = useRef<
+    (href: string, direction?: "left" | "right") => void
+  >(() => {});
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [isRegisteredDevice, setIsRegisteredDevice] = useState(false);
+  const [slideText, setSlideText] = useState("PORTFOLIO");
+
+  const isAdminRoute = Boolean(pathname?.startsWith("/admin"));
+
+  // Prefetch the reciprocal route only when on /admin or on a recognized admin device
+  useEffect(() => {
+    if (isAdminRoute) {
+      router.prefetch("/");
+    } else if (isRegisteredDevice) {
+      router.prefetch("/admin");
+    }
+  }, [router, isAdminRoute, isRegisteredDevice]);
+
+  // Keep Next.js DevTools floating toast/issues pill strictly contained inside the 36x36 footprint in dev mode
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      process.env.NODE_ENV !== "development"
+    ) {
+      return;
+    }
+
+    const containNextJsPortalPill = () => {
+      const portals = document.querySelectorAll("nextjs-portal");
+      portals.forEach((portal) => {
+        const sr = portal.shadowRoot;
+        if (!sr || sr.querySelector("#lou-portal-pill-clamp")) return;
+        const style = document.createElement("style");
+        style.id = "lou-portal-pill-clamp";
+        style.textContent = `
+          [data-nextjs-toast],
+          [data-next-badge-root],
+          [data-nextjs-dev-tools-button],
+          .nextjs-toast {
+            max-width: 36px !important;
+            max-height: 36px !important;
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 9999px !important;
+            overflow: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+          }
+        `;
+        sr.appendChild(style);
+      });
+    };
+
+    containNextJsPortalPill();
+    const observer = new MutationObserver(containNextJsPortalPill);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const cached =
+      typeof window !== "undefined" &&
+      localStorage.getItem(DEVICE_STORAGE_KEY) === "true";
+
+    const rafId = requestAnimationFrame(() => {
+      if (cached) {
+        setIsRegisteredDevice(true);
+      }
+    });
+
+    let authTimerId: ReturnType<typeof setTimeout> | null = null;
+    let idleCallbackId: number | null = null;
+    let cancelled = false;
+
+    const verifyAdminDeviceStatus = () => {
+      if (cancelled) return;
+      fetch("/api/admin/auth", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled) return;
+          const verified = Boolean(data.deviceRegistered || data.authenticated);
+          setIsRegisteredDevice(verified);
+          if (verified) {
+            localStorage.setItem(DEVICE_STORAGE_KEY, "true");
+          } else {
+            localStorage.removeItem(DEVICE_STORAGE_KEY);
+          }
+
+          // Seed TanStack Query cache so /admin knows auth status in 0ms
+          queryClient.setQueryData(queryKeys.adminAuth, {
+            authenticated: Boolean(data.authenticated),
+            deviceRegistered: Boolean(data.deviceRegistered),
+            storageMode: data.storageMode || "local-json",
+            ...(data.authenticated
+              ? {
+                  passwordSource: data.passwordSource,
+                  envConfigured: data.envConfigured,
+                  overrideUpdatedAt: data.overrideUpdatedAt ?? null,
+                }
+              : {}),
+          });
+
+          // If already authenticated on this device, warm the admin DB cache in the background
+          if (data.authenticated) {
+            void queryClient.prefetchQuery({
+              queryKey: queryKeys.adminPortfolio,
+              queryFn: async () => {
+                const res = await fetch("/api/admin/portfolio", {
+                  cache: "no-store",
+                });
+                if (!res.ok) throw new Error("Failed to prefetch admin DB");
+                const payload = await res.json();
+                writePersistedAdminCache(payload);
+                return payload;
+              },
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
+    if (isAdminRoute || cached) {
+      verifyAdminDeviceStatus();
+    } else if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleCallbackId = window.requestIdleCallback(verifyAdminDeviceStatus, {
+        timeout: 2200,
+      });
+    } else {
+      authTimerId = setTimeout(verifyAdminDeviceStatus, 1400);
+    }
+
+    const handleDeviceSync = (e: Event) => {
+      const custom = e as CustomEvent<boolean>;
+      setIsRegisteredDevice(Boolean(custom.detail));
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "a"
+      ) {
+        e.preventDefault();
+        triggerSlideNavigateRef.current("/admin", "right");
+      }
+    };
+
+    window.addEventListener(DEVICE_SYNC_EVENT, handleDeviceSync);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      if (authTimerId !== null) clearTimeout(authTimerId);
+      if (
+        idleCallbackId !== null &&
+        typeof window !== "undefined" &&
+        "cancelIdleCallback" in window
+      ) {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+      window.removeEventListener(DEVICE_SYNC_EVENT, handleDeviceSync);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [router, queryClient, isAdminRoute]);
+
+  /**
+   * Executes the exit phase of the slide curtain once BOTH:
+   * 1. The curtain has finished covering the viewport (slideInComplete)
+   * 2. The target Next.js route has mounted and painted underneath (routeReady)
+   */
+  const tryCompleteSlideExit = useCallback(() => {
+    const pending = pendingSlideRef.current;
+    if (
+      !pending ||
+      pending.exited ||
+      !pending.slideInComplete ||
+      !pending.routeReady
+    ) {
+      return;
+    }
+
+    pending.exited = true;
+    if (pending.fallbackTimer) {
+      clearTimeout(pending.fallbackTimer);
+    }
+
+    const slideEl = slideOverlayRef.current;
+    const labelEl = slideLabelRef.current;
+
+    if (!slideEl || !labelEl) {
+      pendingSlideRef.current = null;
+      isAnimatingRef.current = false;
+      setIsAnimating(false);
+      return;
+    }
+
+    // Wait 2 animation frames so the new route DOM is fully painted behind the curtain
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        void import("gsap").then(({ default: gsap }) => {
+          gsap
+            .timeline({
+              onComplete: () => {
+                gsap.set(slideEl, { autoAlpha: 0, pointerEvents: "none" });
+                pendingSlideRef.current = null;
+                isAnimatingRef.current = false;
+                setIsAnimating(false);
+              },
+            })
+            .to(labelEl, {
+              autoAlpha: 0,
+              x: pending.direction === "right" ? -24 : 24,
+              duration: 0.18,
+              ease: "power2.in",
+            })
+            .to(
+              slideEl,
+              {
+                xPercent: pending.exitToX,
+                duration: 0.48,
+                ease: "expo.inOut",
+              },
+              "-=0.08"
+            );
+        });
+      });
+    });
+  }, []);
+
+  // Watch pathname changes to detect when Next.js finishes route navigation
+  useEffect(() => {
+    const pending = pendingSlideRef.current;
+    if (!pending || pending.exited) return;
+
+    const matchesTarget =
+      pending.targetPath === "/"
+        ? pathname === "/"
+        : pathname?.startsWith(pending.targetPath);
+
+    if (!matchesTarget) return;
+
+    if (!pending.targetPath.startsWith("/admin")) {
+      pending.routeReady = true;
+      tryCompleteSlideExit();
+    } else if (typeof window !== "undefined") {
+      // Once /admin pathname activates, ask mounted AdminDashboardClient to confirm readiness
+      const rafId = requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent("lou-check-admin-ready"));
+      });
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [pathname, tryCompleteSlideExit]);
+
+  // Listen for /admin finishing its initial auth & DB readiness check
+  useEffect(() => {
+    const handleAdminReady = () => {
+      const pending = pendingSlideRef.current;
+      if (!pending || pending.exited) return;
+      if (
+        pending.targetPath.startsWith("/admin") &&
+        typeof window !== "undefined" &&
+        window.location.pathname.startsWith("/admin")
+      ) {
+        pending.routeReady = true;
+        tryCompleteSlideExit();
+      }
+    };
+
+    window.addEventListener("lou-admin-ready", handleAdminReady);
+    return () => {
+      window.removeEventListener("lou-admin-ready", handleAdminReady);
+    };
+  }, [tryCompleteSlideExit]);
+
+  /**
+   * Spawns the glowing radial shockwave ring identical to ThemeToggle.tsx,
+   * supporting both "expand" (0 -> maxRadius) and "collapse" (maxRadius -> 0).
+   */
+  const spawnPulseWaveRing = useCallback(
+    (
+      cx: number,
+      cy: number,
+      maxRadius: number,
+      mode: "expand" | "collapse",
+      durationMs = 720
+    ) => {
+      const wave = document.createElement("div");
+      const diameter = maxRadius * 2;
+      wave.style.position = "fixed";
+      wave.style.left = `${cx}px`;
+      wave.style.top = `${cy}px`;
+      wave.style.width = `${diameter}px`;
+      wave.style.height = `${diameter}px`;
+      wave.style.borderRadius = "9999px";
+      wave.style.pointerEvents = "none";
+      wave.style.zIndex = "10000";
+      wave.style.border = "2px solid var(--accent)";
+      wave.style.boxShadow =
+        "0 0 60px var(--accent-glow), inset 0 0 45px var(--accent-ring)";
+      wave.style.willChange = "transform, opacity";
+
+      document.body.appendChild(wave);
+
+      const keyframes =
+        mode === "expand"
+          ? [
+              {
+                transform: "translate(-50%, -50%) scale(0)",
+                opacity: 1,
+              },
+              {
+                transform: "translate(-50%, -50%) scale(1)",
+                opacity: 0.15,
+              },
+            ]
+          : [
+              {
+                transform: "translate(-50%, -50%) scale(1)",
+                opacity: 0.25,
+              },
+              {
+                transform: "translate(-50%, -50%) scale(0)",
+                opacity: 1,
+              },
+            ];
+
+      const anim = wave.animate(keyframes, {
+        duration: durationMs,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        fill: "forwards",
+      });
+
+      anim.onfinish = () => {
+        wave.remove();
+      };
+    },
+    []
+  );
+
+  const triggerLoginPortal = useCallback(
+    (onMidpoint: () => void | Promise<void>) => {
+      if (isAnimating) return;
+
+      const overlay = portalOverlayRef.current;
+      const logoBtn = logoButtonRef.current;
+
+      if (!overlay || !logoBtn) {
+        void onMidpoint();
+        return;
+      }
+
+      isAnimatingRef.current = true;
+      setIsAnimating(true);
+
+      const rect = logoBtn.getBoundingClientRect();
+      const originX = Math.round(rect.left + rect.width / 2);
+      const originY = Math.round(rect.top + rect.height / 2);
+      const startRadius = Math.round(rect.width / 2);
+      const maxRadius = Math.ceil(
+        Math.hypot(
+          Math.max(originX, window.innerWidth - originX),
+          Math.max(originY, window.innerHeight - originY)
+        ) + 30
+      );
+
+      void import("gsap").then(({ default: gsap }) => {
+        gsap.set(overlay, {
+          autoAlpha: 1,
+          pointerEvents: "auto",
+          clipPath: `circle(${startRadius}px at ${originX}px ${originY}px)`,
+        });
+
+        // 1. Fire expanding shockwave pulse ring (just like ThemeToggle)
+        spawnPulseWaveRing(originX, originY, maxRadius, "expand", 680);
+
+        // 2. Expand wave cover from logo across the entire viewport
+        const expandTl = gsap.timeline();
+
+        expandTl
+          .to(logoBtn, {
+            scale: 1.28,
+            duration: 0.2,
+            ease: "power2.out",
+          })
+          .to(
+            overlay,
+            {
+              clipPath: `circle(${maxRadius}px at ${originX}px ${originY}px)`,
+              duration: 0.68,
+              ease: "expo.inOut",
+            },
+            0
+          )
+          .add(() => {
+            // 3. Load dashboard while viewport is covered by the wave
+            Promise.resolve(onMidpoint()).finally(() => {
+              const nextRect = logoBtn.getBoundingClientRect();
+              const targetX = Math.round(nextRect.left + nextRect.width / 2);
+              const targetY = Math.round(nextRect.top + nextRect.height / 2);
+              const endRadius = Math.round(nextRect.width / 2);
+
+              // 4. Fire reverse collapsing shockwave pulse ring back to the logo
+              spawnPulseWaveRing(targetX, targetY, maxRadius, "collapse", 680);
+
+              gsap
+                .timeline({
+                  onComplete: () => {
+                    gsap.set(overlay, { autoAlpha: 0, pointerEvents: "none" });
+                    gsap.set(logoBtn, { scale: 1 });
+                    isAnimatingRef.current = false;
+                    setIsAnimating(false);
+                  },
+                })
+                .to(overlay, {
+                  clipPath: `circle(${endRadius}px at ${targetX}px ${targetY}px)`,
+                  duration: 0.68,
+                  ease: "expo.inOut",
+                })
+                .to(
+                  logoBtn,
+                  {
+                    scale: 1,
+                    duration: 0.35,
+                    ease: "elastic.out(1, 0.45)",
+                  },
+                  "-=0.22"
+                );
+            });
+          });
+      });
+    },
+    [isAnimating, spawnPulseWaveRing]
+  );
+
+  const triggerSlideNavigate = useCallback(
+    (href: string, direction: "left" | "right" = "right") => {
+      if (isAnimatingRef.current || isAnimating) return;
+
+      const targetPath = href.split("?")[0].split("#")[0] || "/";
+      if (pathname === targetPath) return;
+
+      // Warm Next.js Router & RSC payload immediately while curtain starts closing
+      router.prefetch(href);
+
+      const slideEl = slideOverlayRef.current;
+      const labelEl = slideLabelRef.current;
+
+      if (!slideEl || !labelEl) {
+        router.push(href);
+        return;
+      }
+
+      isAnimatingRef.current = true;
+      setIsAnimating(true);
+      setSlideText(
+        targetPath.startsWith("/admin")
+          ? "PORTFOLIO MANAGER // CMS"
+          : "PUBLIC PORTFOLIO // LIVE"
+      );
+
+      // "right" (going to Admin) slides in from right (100% -> 0% -> -100%)
+      // "left" (Back to Public Portfolio) slides in from left (-100% -> 0% -> 100%)
+      const enterFromX = direction === "right" ? 100 : -100;
+      const exitToX = direction === "right" ? -100 : 100;
+
+      const state: PendingSlideState = {
+        targetPath,
+        direction,
+        exitToX,
+        slideInComplete: false,
+        routeReady: false,
+        exited: false,
+      };
+
+      // Safety fallback in case navigation stalls unexpectedly
+      state.fallbackTimer = setTimeout(() => {
+        if (pendingSlideRef.current === state && !state.exited) {
+          state.routeReady = true;
+          tryCompleteSlideExit();
+        }
+      }, 6000);
+
+      pendingSlideRef.current = state;
+
+      void import("gsap").then(({ default: gsap }) => {
+        gsap.killTweensOf([slideEl, labelEl]);
+        gsap.set(slideEl, {
+          autoAlpha: 1,
+          pointerEvents: "auto",
+          xPercent: enterFromX,
+        });
+
+        gsap.set(labelEl, {
+          autoAlpha: 0,
+          x: direction === "right" ? 32 : -32,
+        });
+
+        // Cover 100% of the viewport first (`xPercent: 0`) BEFORE swapping routes so neither route ever flashes through
+        gsap
+          .timeline({
+            onComplete: () => {
+              state.slideInComplete = true;
+              tryCompleteSlideExit();
+            },
+          })
+          .to(slideEl, {
+            xPercent: 0,
+            duration: 0.38,
+            ease: "expo.inOut",
+            onComplete: () => {
+              router.push(href);
+              if (targetPath.startsWith("/admin")) {
+                window.dispatchEvent(new CustomEvent("lou-check-admin-ready"));
+              }
+            },
+          })
+          .to(
+            labelEl,
+            {
+              autoAlpha: 1,
+              x: 0,
+              duration: 0.2,
+              ease: "power3.out",
+            },
+            "-=0.2"
+          );
+      });
+    },
+    [isAnimating, pathname, router, tryCompleteSlideExit]
+  );
+
+  useEffect(() => {
+    triggerSlideNavigateRef.current = triggerSlideNavigate;
+  }, [triggerSlideNavigate]);
+
+  const handleOrbAction = useCallback(() => {
+    if (isAnimating) return;
+
+    if (isRegisteredDevice) {
+      if (isAdminRoute) {
+        triggerSlideNavigate("/", "left");
+      } else {
+        triggerSlideNavigate("/admin", "right");
+      }
+      return;
+    }
+
+    if (!isAdminRoute && typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [isAnimating, isRegisteredDevice, isAdminRoute, triggerSlideNavigate]);
+
+  const contextValue = useMemo<BrandPortalContextValue>(
+    () => ({
+      triggerLoginPortal,
+      triggerSlideNavigate,
+      announceStatus: announceBrandPortalStatus,
+    }),
+    [triggerLoginPortal, triggerSlideNavigate]
+  );
+
+  return (
+    <BrandPortalContext.Provider value={contextValue}>
+      {children}
+
+      {/* Persistent Bottom-Left Brand Portal Orb & Animated Status Pill */}
+      <BrandPortalOrb
+        logoButtonRef={logoButtonRef}
+        isAdminRoute={isAdminRoute}
+        isRegisteredDevice={isRegisteredDevice}
+        isAnimating={isAnimating}
+        onOrbAction={handleOrbAction}
+      />
+
+      {/* Radial Wave Pulse Overlay (Expands from Logo across Viewport, then Collapses Reverse back to Logo) */}
+      <div
+        ref={portalOverlayRef}
+        aria-hidden="true"
+        className="fixed inset-0 z-9994 bg-(--bg-canvas) opacity-0 pointer-events-none will-change-[clip-path]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 40px calc(100vh - 40px), var(--accent-glow) 0%, var(--bg-badge-highlight) 38%, transparent 70%)",
+        }}
+      />
+
+      {/* Smooth Directional Slide Curtain Overlay (Public <-> Portfolio Manager) */}
+      <div
+        ref={slideOverlayRef}
+        aria-hidden="true"
+        className="fixed inset-0 z-9993 bg-(--bg-canvas) border-x-2 border-brand flex items-center justify-center opacity-0 pointer-events-none will-change-transform"
+      >
+        <div
+          ref={slideLabelRef}
+          className="flex items-center gap-3 px-5 py-2.5 rounded-full bg-(--bg-surface) border border-(--border-strong) shadow-2xl select-none"
+        >
+          <span className="w-2 h-2 rounded-full bg-brand animate-ping" />
+          <span className="font-mono text-xs uppercase tracking-[0.26em] text-(--text-primary)">
+            {slideText}
+          </span>
+        </div>
+      </div>
+    </BrandPortalContext.Provider>
+  );
+}
