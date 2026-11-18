@@ -16,6 +16,7 @@ import { BrandPortalProvider } from "@/components/motion/BrandPortal";
 import { Navbar } from "@/components/ui/Navbar";
 import { Footer } from "@/components/ui/Footer";
 import { ScrollToTop } from "@/components/ui/ScrollToTop";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const viewport: Viewport = {
   themeColor: "#08080a",
@@ -132,6 +133,7 @@ export default async function RootLayout({
             <OfflineBanner />
           </OfflineManager>
         </PortfolioProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
