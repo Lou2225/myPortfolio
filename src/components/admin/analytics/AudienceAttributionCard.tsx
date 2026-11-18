@@ -5,6 +5,7 @@ import gsap from "gsap";
 import type { AnalyticsSnapshotSummary } from "@/lib/analytics";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { InfoTooltip } from "@/components/ui/Tooltip";
 import { AnimatedBar, AnimatedCounter } from "@/components/motion/AdminMotion";
 import { shouldReduceMotion } from "@/lib/appearance";
 import { Globe, MonitorSmartphone, Target } from "lucide-react";
@@ -107,7 +108,7 @@ export function AudienceAttributionCard({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* Left: Device Viewport Donut */}
-      <div className="lg:col-span-5 bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-6 flex flex-col justify-between gap-5">
+      <div className="lg:col-span-5 bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 flex flex-col justify-between gap-5">
         <div>
           <SectionHeader
             eyebrow="Viewport Telemetry"
@@ -115,7 +116,13 @@ export function AudienceAttributionCard({
             size="sm"
             className="mb-4"
             rightSlot={
-              <MonitorSmartphone className="w-5 h-5 text-(--text-accent)" />
+              <div className="flex items-center gap-2">
+                <InfoTooltip
+                  label="Device class classification"
+                  content="Classifies active sessions into Desktop, Tablet, or Mobile using viewport dimensions recorded with each telemetry event."
+                />
+                <MonitorSmartphone className="w-5 h-5 text-(--text-accent)" />
+              </div>
             }
           />
 
@@ -218,14 +225,22 @@ export function AudienceAttributionCard({
       </div>
 
       {/* Right: Conversion Channels & Top Referrers */}
-      <div className="lg:col-span-7 bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="lg:col-span-7 bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Conversion Action Breakdown */}
         <div className="space-y-4">
           <SectionHeader
             eyebrow="Conversion Channels"
             title="Goal Action Mix"
             size="sm"
-            rightSlot={<Target className="w-4 h-4 text-(--text-accent)" />}
+            rightSlot={
+              <div className="flex items-center gap-2">
+                <InfoTooltip
+                  label="Conversion action attribution"
+                  content="Breaks down high-intent visitor actions across Resume/CV viewer opens, submitted contact forms, and direct mailto clicks."
+                />
+                <Target className="w-4 h-4 text-(--text-accent)" />
+              </div>
+            }
           />
 
           <div className="space-y-3">
@@ -262,7 +277,15 @@ export function AudienceAttributionCard({
             eyebrow="Acquisition Sources"
             title="Top Referrers"
             size="sm"
-            rightSlot={<Globe className="w-4 h-4 text-(--text-accent)" />}
+            rightSlot={
+              <div className="flex items-center gap-2">
+                <InfoTooltip
+                  label="Referral source parsing"
+                  content="Groups incoming traffic by parsed document referrer hostname, or marks visits as Direct when no upstream referrer host was provided."
+                />
+                <Globe className="w-4 h-4 text-(--text-accent)" />
+              </div>
+            }
           />
 
           {referrers.length === 0 ? (

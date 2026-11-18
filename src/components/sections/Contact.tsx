@@ -167,39 +167,39 @@ export function Contact() {
     <section
       id="contact"
       aria-label="Contact Section"
-      className="scroll-mt-16 w-full py-16 sm:py-24 lg:py-32 px-4 sm:px-6 md:px-10 bg-(--bg-canvas)"
+      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) bg-(--bg-canvas)"
     >
-      <div className="max-w-7xl mx-auto flex flex-col gap-12 sm:gap-16">
+      <div className="max-w-7xl mx-auto w-full flex flex-col gap-10 sm:gap-14">
         {/* Header */}
         <div>
-          <Eyebrow withDot className="mb-3">
+          <Eyebrow withDot className="mb-2.5">
             {sectionHeaders.contactEyebrow}
           </Eyebrow>
           <DisplayHeading as="h2" size="xl" className="max-w-4xl">
             {sectionHeaders.contactHeading}
           </DisplayHeading>
-          <BodyText size="md" tone="secondary" className="max-w-xl mt-5 sm:mt-6">
+          <BodyText size="md" tone="secondary" className="max-w-xl mt-4 sm:mt-5">
             {sectionHeaders.contactSubtitle}
           </BodyText>
 
           {/* Responsive Magnetic Mailto Hero Link */}
-          <div className="mt-6 sm:mt-8">
+          <div className="mt-5 sm:mt-7">
             <a
               href={`mailto:${profile.contact.email}`}
               onClick={() => trackEvent("contact_click", "Direct Email Click")}
-              className="group inline-flex flex-wrap items-center gap-2 sm:gap-3 font-display text-lg sm:text-2xl md:text-4xl text-(--text-primary) hover:text-(--text-accent) transition-colors break-all sm:break-normal"
+              className="group inline-flex flex-wrap items-center gap-2 sm:gap-3 font-display text-[clamp(1.0625rem,3.6vw,2.25rem)] text-(--text-primary) hover:text-(--text-accent) transition-colors break-all sm:break-normal"
             >
-              <Mail className="w-5 h-5 sm:w-6 sm:h-6 text-(--text-accent) shrink-0" />
+              <Mail className="w-4 h-4 sm:w-6 sm:h-6 text-(--text-accent) shrink-0" />
               <span className="underline underline-offset-8 decoration-(--border-strong) group-hover:decoration-(--text-accent)">
                 {profile.contact.email}
               </span>
-              <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6 text-(--text-accent) group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform shrink-0" />
+              <ArrowUpRight className="w-4 h-4 sm:w-6 sm:h-6 text-(--text-accent) group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform shrink-0" />
             </a>
           </div>
         </div>
 
         {/* Form Container */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 pt-10 sm:pt-12 border-t border-(--border-subtle)">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 pt-8 sm:pt-12 border-t border-(--border-subtle) w-full">
           <div className="lg:col-span-5 flex flex-col justify-between gap-6">
             <div>
               <DisplayHeading as="h3" size="sm">
@@ -210,8 +210,8 @@ export function Contact() {
               </BodyText>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-              <div className="p-4 rounded-sm bg-(--bg-surface) border border-(--border-subtle) shadow-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3.5 w-full">
+              <div className="h-full p-4 rounded-(--radius-card) bg-(--bg-surface) border border-(--border-subtle) shadow-sm flex flex-col justify-center">
                 <MonoLabel as="span" tone="muted" className="block">
                   Location
                 </MonoLabel>
@@ -224,11 +224,11 @@ export function Contact() {
                   {profile.contact.location} (Open to Remote & On-Site)
                 </BodyText>
               </div>
-              <div className="p-4 rounded-sm bg-(--bg-surface) border border-(--border-subtle) shadow-sm">
+              <div className="h-full p-4 rounded-(--radius-card) bg-(--bg-surface) border border-(--border-subtle) shadow-sm flex flex-col justify-center">
                 <MonoLabel as="span" tone="muted" className="block">
                   Availability
                 </MonoLabel>
-                <span className="text-xs sm:text-sm font-medium text-(--text-success) mt-1 flex items-center gap-2">
+                <span className="text-[0.78125rem] sm:text-[0.875rem] font-medium text-(--text-success) mt-1 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-(--text-success) animate-pulse shrink-0" />
                   <span>{profile.contact.status}</span>
                 </span>
@@ -237,7 +237,7 @@ export function Contact() {
           </div>
 
           {/* Interactive Form Using Reusable Validated Field Partials */}
-          <div className="lg:col-span-7 bg-(--bg-surface) p-5 sm:p-8 md:p-10 rounded-(--radius-card) border border-(--border-subtle) shadow-xl">
+          <div className="lg:col-span-7 bg-(--bg-surface) p-4 sm:p-8 md:p-10 rounded-(--radius-card) border border-(--border-subtle) shadow-xl w-full">
             {status === "success" ? (
               <div className="py-10 sm:py-12 flex flex-col items-center justify-center text-center">
                 <div className="w-14 h-14 rounded-full bg-(--bg-badge-highlight) border border-brand flex items-center justify-center mb-4">

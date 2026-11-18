@@ -5,7 +5,7 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import type { PortfolioDatabase } from "@/types/portfolio";
 import type { AdminPasswordSource } from "@/lib/auth";
 import type { SettingsSectionId } from "@/components/admin/layout/types";
-import { AdminCascade } from "@/components/motion/AdminMotion";
+import { AdminSlideView } from "@/components/motion/AdminMotion";
 import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import { Button } from "@/components/ui/Button";
 import { SettingsHub } from "./settings/SettingsHub";
@@ -77,6 +77,9 @@ export function SettingsManager({
     onSelectSection(nextSection);
   };
 
+  const slideDirection: "forward" | "back" =
+    activeSection === "hub" ? "back" : "forward";
+
   return (
     <div className="space-y-5 sm:space-y-6">
       {feedback && feedback.type === "error" && (
@@ -87,31 +90,37 @@ export function SettingsManager({
         />
       )}
 
-      <AdminCascade activeKey={activeSection} skipInitial>
-        {activeSection !== "hub" && activeMeta && (
+      <div className="overflow-x-clip">
+        <AdminSlideView
+          activeKey={activeSection}
+          direction={slideDirection}
+          distancePx={40}
+          skipInitial
+        >
+          {activeSection !== "hub" && activeMeta && (
           <div
             data-cascade
-            className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm px-3.5 sm:px-5 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 mb-5 sm:mb-6"
+            className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:px-5 sm:py-3.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 mb-4 sm:mb-6"
           >
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 onClick={() => handleNavigate("hub")}
                 aria-label="Back to all Settings"
-                className="font-mono text-xs h-8.5 px-2.5 sm:px-3 shrink-0"
+                className="font-mono text-xs h-9 pl-2.5 pr-3.5 gap-1 leading-none shrink-0"
               >
-                <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+                <ArrowLeft className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span>Settings</span>
               </Button>
 
               <ChevronRight
-                className="w-3.5 h-3.5 text-(--text-muted) shrink-0"
+                className="hidden sm:block w-3.5 h-3.5 text-(--text-muted) shrink-0"
                 aria-hidden="true"
               />
 
-              <span className="text-xs sm:text-sm font-semibold text-(--text-primary) truncate">
+              <span className="text-sm font-semibold text-(--text-primary) truncate">
                 {activeMeta.title}
               </span>
             </div>
@@ -190,7 +199,8 @@ export function SettingsManager({
             onFeedback={setFeedback}
           />
         )}
-      </AdminCascade>
+        </AdminSlideView>
+      </div>
     </div>
   );
 }

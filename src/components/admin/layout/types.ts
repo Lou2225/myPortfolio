@@ -18,7 +18,7 @@ export type AdminTab =
   | "inbox"
   | "settings";
 
-const ADMIN_TABS: readonly AdminTab[] = [
+export const ADMIN_TABS: readonly AdminTab[] = [
   "overview",
   "profile",
   "story",
@@ -27,6 +27,22 @@ const ADMIN_TABS: readonly AdminTab[] = [
   "inbox",
   "settings",
 ];
+
+/**
+ * Returns horizontal transition direction based on canonical CMS module order
+ * so bottom nav, sidebar, search, and browser history slide forward/back intuitively.
+ */
+export function getAdminTabDirection(
+  fromTab: AdminTab,
+  toTab: AdminTab
+): "forward" | "back" {
+  const fromIdx = ADMIN_TABS.indexOf(fromTab);
+  const toIdx = ADMIN_TABS.indexOf(toTab);
+  if (fromIdx === -1 || toIdx === -1 || toIdx >= fromIdx) {
+    return "forward";
+  }
+  return "back";
+}
 
 /**
  * Parses an arbitrary URL/storage string into a safe AdminTab, falling back to `"overview"`.

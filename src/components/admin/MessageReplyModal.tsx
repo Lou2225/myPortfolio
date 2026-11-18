@@ -150,10 +150,10 @@ export function MessageReplyModal({
       {activeMessage && (
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col max-h-[90dvh] overflow-hidden"
+          className="flex flex-col flex-1 min-h-0 overflow-hidden"
         >
           {/* Header */}
-          <div className="px-5 sm:px-6 py-4 border-b border-(--border-subtle) flex items-start justify-between gap-3 bg-(--bg-surface)">
+          <div className="px-4 sm:px-6 py-4 border-b border-(--border-subtle) flex items-start justify-between gap-3 bg-(--bg-surface) shrink-0">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="w-8 h-8 rounded-(--radius-control) bg-brand/15 border border-brand/35 flex items-center justify-center text-(--text-accent) shrink-0">
@@ -203,7 +203,7 @@ export function MessageReplyModal({
           </div>
 
           {/* Scrollable Body */}
-          <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 lou-scrollarea">
             {!emailConfigured && (
               <AdminAlertBanner
                 variant="offline"
@@ -278,29 +278,29 @@ export function MessageReplyModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="px-5 sm:px-6 py-4 border-t border-(--border-subtle) bg-(--bg-surface) flex flex-wrap items-center justify-between gap-2.5">
+          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-(--border-subtle) bg-(--bg-surface) flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
             <Button
               href={mailtoHref}
               variant={emailConfigured ? "outline" : "primary"}
               size="sm"
               className={
                 emailConfigured
-                  ? "h-10 px-4 font-mono text-xs"
-                  : "keep-white h-10 px-4 font-mono text-xs"
+                  ? "h-10 px-4 font-mono text-xs w-full sm:w-auto justify-center"
+                  : "keep-white h-10 px-4 font-mono text-xs w-full sm:w-auto justify-center"
               }
             >
               <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Open Mail Client</span>
             </Button>
 
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 onClick={onClose}
                 disabled={submitting}
-                className="h-10 px-4 font-mono text-xs"
+                className="h-10 px-4 font-mono text-xs flex-1 sm:flex-initial"
               >
                 Cancel
               </Button>
@@ -311,7 +311,7 @@ export function MessageReplyModal({
                   variant="primary"
                   size="sm"
                   disabled={submitting || !isOnline}
-                  className="keep-white h-10 px-4 font-mono text-xs"
+                  className="keep-white h-10 px-4 font-mono text-xs flex-[1.4] sm:flex-initial"
                 >
                   <Send className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{submitting ? "Sending..." : "Send Email Reply"}</span>

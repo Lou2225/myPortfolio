@@ -63,6 +63,22 @@ export function SettingsNavCard({
           <p className="text-xs text-(--text-muted) mt-0.5 line-clamp-2 sm:line-clamp-1">
             {subtitle}
           </p>
+          {(statusLabel || detailText) && (
+            <div className="flex sm:hidden flex-wrap items-center gap-2 mt-1.5">
+              {statusLabel && (
+                <StatusPill
+                  label={statusLabel}
+                  variant={statusVariant}
+                  size="xs"
+                />
+              )}
+              {detailText && (
+                <span className="text-[10px] font-mono text-(--text-muted) truncate">
+                  {detailText}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

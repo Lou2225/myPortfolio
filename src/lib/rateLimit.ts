@@ -10,13 +10,23 @@ const rateBuckets = new Map<string, MemoryRateBucket>();
 
 /**
  * Extracts normalized client IP from forwarding headers for telemetry & rate limits.
+ * Prefers trusted single-hop platform headers (`x-vercel-forwarded-for`, `x-real-ip`)
+ * before reading the rightmost proxy-appended entry of `x-forwarded-for`.
  */
 export function extractNormalizedClientIp(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for");
-  const realIp = headers.get("x-real-ip");
-  const rawIp =
-    (forwarded ? forwarded.split(",")[0]?.trim() : realIp?.trim()) ||
-    "127.0.0.1";
+  const vercelForwarded = headers.get("x-vercel-forwarded-for");
+  const vercelIp = vercelForwarded?.split(",")[0]?.trim();
+  const realIp = headers.get("x-real-ip")?.trim();
+  const forwardedParts = (headers.get("x-forwarded-for") || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const proxyAppendedIp =
+    forwardedParts.length > 0
+      ? forwardedParts[forwardedParts.length - 1]
+      : undefined;
+
+  const rawIp = vercelIp || realIp || proxyAppendedIp || "127.0.0.1";
   return rawIp.replace(/^::ffff:/i, "");
 }
 

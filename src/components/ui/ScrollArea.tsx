@@ -54,6 +54,9 @@ export function ScrollArea({
 
     const observer = new ResizeObserver(checkScrollEdges);
     observer.observe(el);
+    if (el.firstElementChild) {
+      observer.observe(el.firstElementChild);
+    }
 
     return () => {
       cancelAnimationFrame(rafId);

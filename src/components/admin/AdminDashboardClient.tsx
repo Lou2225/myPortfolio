@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PortfolioDatabase } from "@/types/portfolio";
@@ -23,7 +23,7 @@ import { AdminDashboardSkeleton } from "@/components/ui/Skeleton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ScrollToTop } from "@/components/ui/ScrollToTop";
-import { AdminCascade } from "@/components/motion/AdminMotion";
+import { AdminSlideView } from "@/components/motion/AdminMotion";
 import {
   announceBrandPortalStatus,
   setBrandPortalMeta,
@@ -37,6 +37,7 @@ import {
   AdminTab,
   SettingsSectionId,
   getAdminNavItems,
+  getAdminTabDirection,
   parseAdminTab,
   parseSettingsSection,
 } from "@/components/admin/layout/types";
@@ -91,6 +92,7 @@ export function AdminDashboardClient({
   const { isOnline } = useOfflineStatus();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
+  const [navDirection, setNavDirection] = useState<"forward" | "back">("forward");
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>(
     initialSettingsSection
   );
@@ -105,16 +107,20 @@ export function AdminDashboardClient({
     document.documentElement.classList.add(...tokens);
   }, []);
 
-  // Scroll module content back to the very top whenever active module changes
-  useEffect(() => {
-    if (prevTabRef.current === activeTab) return;
-    prevTabRef.current = activeTab;
+  const resetScrollImmediate = useCallback(() => {
     scrollTo(0, { immediate: true });
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
       document.documentElement.scrollTop = 0;
     }
-  }, [activeTab, scrollTo]);
+  }, [scrollTo]);
+
+  // Keep prevTabRef synchronized for direction lookups & fallback scroll resets
+  useEffect(() => {
+    if (prevTabRef.current === activeTab) return;
+    prevTabRef.current = activeTab;
+    resetScrollImmediate();
+  }, [activeTab, resetScrollImmediate]);
 
   const OFFLINE_GUARD_MESSAGE = "Offline — Reconnect to save changes";
 
@@ -122,33 +128,51 @@ export function AdminDashboardClient({
   useEffect(() => {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
-      setActiveTab(parseAdminTab(params.get("tab")));
+      const nextTab = parseAdminTab(params.get("tab"));
+      const currentTab = prevTabRef.current;
+      if (nextTab !== currentTab) {
+        setNavDirection(getAdminTabDirection(currentTab, nextTab));
+        resetScrollImmediate();
+      }
+      setActiveTab(nextTab);
       setSettingsSection(parseSettingsSection(params.get("section")));
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  }, [resetScrollImmediate]);
 
   /** Switch module and persist in URL `?tab=<module>` so hard refresh preserves exact location */
-  const handleSelectTab = useCallback((nextTab: AdminTab) => {
-    setActiveTab(nextTab);
-    setSettingsSection("hub");
-    setMutationError(null);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("tab", nextTab);
-      url.searchParams.delete("section");
-      window.history.replaceState(
-        window.history.state,
-        "",
-        `${url.pathname}${url.search}`
-      );
-    }
-  }, []);
+  const handleSelectTab = useCallback(
+    (nextTab: AdminTab) => {
+      const currentTab = prevTabRef.current;
+      if (nextTab !== currentTab) {
+        setNavDirection(getAdminTabDirection(currentTab, nextTab));
+        resetScrollImmediate();
+      }
+      setActiveTab(nextTab);
+      setSettingsSection("hub");
+      setMutationError(null);
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", nextTab);
+        url.searchParams.delete("section");
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${url.pathname}${url.search}`
+        );
+      }
+    },
+    [resetScrollImmediate]
+  );
 
   /** Drill into or return from a Settings sub-page while pushing browser history for smooth Back support */
   const handleSelectSettingsSection = useCallback(
     (nextSection: SettingsSectionId) => {
+      const currentTab = prevTabRef.current;
+      if (currentTab !== "settings") {
+        setNavDirection(getAdminTabDirection(currentTab, "settings"));
+      }
       setActiveTab("settings");
       setSettingsSection(nextSection);
       scrollTo(0, { immediate: true });
@@ -700,6 +724,17 @@ export function AdminDashboardClient({
   };
 
   const db = portfolioQuery.data?.data;
+  const projectsCount = db?.projects.length ?? 0;
+  const unreadMessages = db?.messages.filter((m) => !m.isRead).length ?? 0;
+  const navItems = useMemo(
+    () =>
+      getAdminNavItems({
+        projectsCount,
+        unreadMessagesCount: unreadMessages,
+      }),
+    [projectsCount, unreadMessages]
+  );
+
   const storageMode =
     portfolioQuery.data?.storageMode ||
     authQuery.data?.storageMode ||
@@ -729,26 +764,16 @@ export function AdminDashboardClient({
     );
   }
 
-  const unreadMessages = db.messages.filter((m) => !m.isRead).length;
-  const navItems = getAdminNavItems({
-    projectsCount: db.projects.length,
-    unreadMessagesCount: unreadMessages,
-  });
   const activeItem =
     navItems.find((item) => item.id === activeTab) || navItems[0];
 
   return (
-    <div className="min-h-screen bg-(--bg-canvas) text-(--text-primary) pb-28 md:pb-16 transition-colors duration-300">
+    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-(--bg-canvas) text-(--text-primary) pt-16 pb-32 md:pb-16 transition-colors duration-300">
       {/* Top Admin Navbar (Search, Live Clock, Theme Toggle, Notifications & Profile Dropdown) */}
       <AdminNavbar
         db={db}
         activeTab={activeTab}
         storageMode={storageMode}
-        deviceRegistered={deviceRegistered}
-        togglingDevice={toggleDeviceMutation.isPending}
-        resettingSeed={resetSeedMutation.isPending}
-        onToggleDevice={() => toggleDeviceMutation.mutate(!deviceRegistered)}
-        onResetSeed={handleResetToSeed}
         onLogout={handleLogout}
         onNavigateTab={handleSelectTab}
         onNavigateSettingsSection={handleSelectSettingsSection}
@@ -773,7 +798,7 @@ export function AdminDashboardClient({
       {/* Main Responsive Content Workspace */}
       <main
         className={cn(
-          "max-w-370 mx-auto px-3 sm:px-6 lg:px-10 pt-4 sm:pt-7 space-y-5 sm:space-y-6 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "max-w-370 mx-auto px-3 sm:px-6 lg:px-10 pt-4 sm:pt-7 space-y-5 sm:space-y-6 transition-[padding] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           sidebarExpanded
             ? "md:pl-62 lg:pl-64"
             : "md:pl-22 lg:pl-24"
@@ -796,16 +821,22 @@ export function AdminDashboardClient({
           />
         )}
 
-        {/* Active Module Header + Partial with Staggered Cascade Entrance */}
-        <AdminCascade activeKey={activeTab}>
-          <div data-cascade>
+        {/* Active Module Header + Partial with Reusable Smooth Directional Slide Transition */}
+        <div className="overflow-x-clip">
+          <AdminSlideView
+            activeKey={activeTab}
+            direction={navDirection}
+            distancePx={64}
+            duration={0.42}
+            skipInitial
+            className="space-y-4 sm:space-y-6"
+          >
             <SectionHeader
               eyebrow={`CMS MODULE // 0${navItems.findIndex((i) => i.id === activeTab) + 1}`}
               title={activeItem.label}
               description={activeItem.description}
               size="md"
             />
-          </div>
 
           {activeTab === "overview" && (
             <AnalyticsOverview
@@ -884,7 +915,8 @@ export function AdminDashboardClient({
               onSyncAuth={reloadAdminData}
             />
           )}
-        </AdminCascade>
+          </AdminSlideView>
+        </div>
       </main>
 
       <ConfirmModal

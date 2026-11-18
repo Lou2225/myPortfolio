@@ -39,21 +39,21 @@ export function StatusPill({
   };
 
   const sizeClasses = {
-    xs: "px-2 py-0.5 text-[10px]",
-    sm: "px-2.5 py-1 text-[11px]",
+    xs: "px-2 py-0.5 text-[0.625rem]",
+    sm: "px-2.5 py-1 text-[0.6875rem]",
   };
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-(--radius-control) border font-mono uppercase tracking-wider font-semibold leading-none shrink-0 select-none",
+        "inline-flex items-center gap-1.5 rounded-(--radius-control) border font-mono uppercase tracking-wider font-semibold leading-none whitespace-nowrap shrink-0 select-none",
         sizeClasses[size],
         variantClasses[variant],
         className
       )}
     >
       {icon}
-      <span>{label}</span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import type { TimeSeriesBucket } from "@/lib/analytics";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { Button } from "@/components/ui/Button";
-import { Tabs, type TabItem } from "@/components/ui/Tabs";
+import { InfoTooltip, Tooltip } from "@/components/ui/Tooltip";
+import { Magnetic } from "@/components/motion/Magnetic";
 import { shouldReduceMotion } from "@/lib/appearance";
 import { cn } from "@/lib/utils";
 import { Activity, BarChart2 } from "lucide-react";
@@ -17,21 +17,6 @@ export interface TrafficTrendChartProps {
 }
 
 type ChartRenderMode = "line" | "bars";
-
-const CHART_MODE_TABS: readonly TabItem<ChartRenderMode>[] = [
-  {
-    id: "line",
-    label: "Line",
-    icon: <Activity className="w-3 h-3" aria-hidden="true" />,
-    ariaLabel: "Line chart view",
-  },
-  {
-    id: "bars",
-    label: "Bars",
-    icon: <BarChart2 className="w-3 h-3" aria-hidden="true" />,
-    ariaLabel: "Bar chart view",
-  },
-];
 
 const SVG_H = 236;
 const PAD_L = 8;
@@ -268,95 +253,146 @@ export function TrafficTrendChart({
   const labelStride =
     series.length > 18 ? 5 : series.length > 10 ? 2 : 1;
 
+  const chartToggleLabel =
+    chartType === "line"
+      ? "Switch to Bar Chart View"
+      : "Switch to Line Chart View";
+
+  const seriesToggles = [
+    {
+      id: "views",
+      label: countMode === "sessions" ? "Sessions" : "Views",
+      value: activePoint ? activePoint.bucket.views : 0,
+      active: showViews,
+      toggle: () => setShowViews((v) => !v),
+      barClass: "bg-brand",
+      dotClass: "bg-brand",
+      valueClass: "text-(--text-accent)",
+    },
+    {
+      id: "clicks",
+      label: "Project Clicks",
+      value: activePoint ? activePoint.bucket.clicks : 0,
+      active: showClicks,
+      toggle: () => setShowClicks((v) => !v),
+      barClass: "bg-sky-400",
+      dotClass: "bg-sky-400",
+      valueClass: "text-sky-400",
+    },
+    {
+      id: "conversions",
+      label: "Goals & Inbox",
+      value: activePoint ? activePoint.convTotal : 0,
+      active: showConversions,
+      toggle: () => setShowConversions((v) => !v),
+      barClass: "bg-emerald-400",
+      dotClass: "bg-emerald-400",
+      valueClass: "text-emerald-400",
+    },
+  ] as const;
+
   return (
-    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <SectionHeader
-          eyebrow={`Chronological Telemetry · ${rangeLabel}`}
-          title="Traffic, Clicks & Conversions Trend"
-          size="sm"
-        />
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 space-y-4">
+      <SectionHeader
+        eyebrow={`Chronological Telemetry · ${rangeLabel}`}
+        title="Traffic, Clicks & Conversions Trend"
+        size="sm"
+        rightSlot={
+          <div className="flex items-center gap-2">
+            <InfoTooltip
+              label="Trend chart visualization & bucket intervals"
+              content="Displays hourly intervals on Today / Last 24 Hours and daily totals across wider windows. Tap the toggle icon to switch between Line and Bar views."
+            />
+            <Magnetic strength={0.18}>
+              <Tooltip content={chartToggleLabel} side="top">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChartType((prev) => (prev === "line" ? "bars" : "line"))
+                  }
+                  aria-label={chartToggleLabel}
+                  aria-pressed={chartType === "bars"}
+                  className="relative w-8.5 h-8.5 rounded-full bg-(--bg-surface-2) border border-(--border-strong) hover:border-brand text-(--text-primary) hover:text-(--text-accent) shadow-sm inline-flex items-center justify-center transition-colors duration-300 cursor-pointer select-none active:scale-95 shrink-0 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  <span className="relative inline-flex items-center justify-center w-3.5 h-3.5">
+                    <BarChart2
+                      aria-hidden="true"
+                      className={cn(
+                        "w-3.5 h-3.5 transition-all duration-500 ease-out",
+                        chartType === "line"
+                          ? "rotate-0 scale-100 opacity-100 text-(--text-accent)"
+                          : "rotate-90 scale-0 opacity-0 absolute"
+                      )}
+                    />
+                    <Activity
+                      aria-hidden="true"
+                      className={cn(
+                        "w-3.5 h-3.5 transition-all duration-500 ease-out",
+                        chartType === "bars"
+                          ? "rotate-0 scale-100 opacity-100 text-(--text-accent)"
+                          : "-rotate-90 scale-0 opacity-0 absolute"
+                      )}
+                    />
+                  </span>
+                </button>
+              </Tooltip>
+            </Magnetic>
+          </div>
+        }
+      />
 
-        <Tabs
-          items={CHART_MODE_TABS}
-          value={chartType}
-          onChange={setChartType}
-          ariaLabel="Chart visualization mode"
-          size="sm"
-          variant="accent"
-        />
-      </div>
-
-      {/* Unified Interactive Bucket Readout & Series Legend Toggles */}
+      {/* Unified 3-Column Hairline Bucket Readout & Series Toggles */}
       {activePoint && (
-        <div className="px-3.5 py-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
-            <span className="text-(--text-primary) font-semibold">
-              {activePoint.bucket.label}
+        <div className="rounded-(--radius-control) bg-(--bg-surface-2)/45 border border-(--border-subtle) overflow-hidden">
+          <div className="px-3 py-2 border-b border-(--border-subtle) bg-(--bg-surface-2)/80 flex items-center justify-between gap-2 text-xs font-mono">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
+              <span className="text-(--text-primary) font-semibold truncate">
+                {activePoint.bucket.label}
+              </span>
+            </div>
+            <span className="text-[0.625rem] text-(--text-muted) uppercase tracking-[0.12em] shrink-0">
+              Tap series
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant={showViews ? "secondary" : "ghost"}
-              size="sm"
-              aria-pressed={showViews}
-              onClick={() => setShowViews((v) => !v)}
-              className={cn(
-                "h-7 px-2.5 font-mono text-[11px]",
-                showViews
-                  ? "border-brand/45 bg-brand/10 text-(--text-primary)"
-                  : "border border-(--border-subtle) opacity-55"
-              )}
-            >
-              <span className="w-2 h-2 rounded-full bg-brand shrink-0" />
-              <span>{countMode === "sessions" ? "Sessions" : "Views"}:</span>
-              <strong className="text-(--text-accent) tabular-nums">
-                {activePoint.bucket.views}
-              </strong>
-            </Button>
-
-            <Button
-              type="button"
-              variant={showClicks ? "secondary" : "ghost"}
-              size="sm"
-              aria-pressed={showClicks}
-              onClick={() => setShowClicks((v) => !v)}
-              className={cn(
-                "h-7 px-2.5 font-mono text-[11px]",
-                showClicks
-                  ? "border-sky-500/45 bg-sky-500/10 text-(--text-primary)"
-                  : "border border-(--border-subtle) opacity-55"
-              )}
-            >
-              <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
-              <span>Project Clicks:</span>
-              <strong className="text-sky-400 tabular-nums">
-                {activePoint.bucket.clicks}
-              </strong>
-            </Button>
-
-            <Button
-              type="button"
-              variant={showConversions ? "secondary" : "ghost"}
-              size="sm"
-              aria-pressed={showConversions}
-              onClick={() => setShowConversions((v) => !v)}
-              className={cn(
-                "h-7 px-2.5 font-mono text-[11px]",
-                showConversions
-                  ? "border-emerald-500/45 bg-emerald-500/10 text-(--text-primary)"
-                  : "border border-(--border-subtle) opacity-55"
-              )}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-              <span>Goals &amp; Inbox:</span>
-              <strong className="text-emerald-400 tabular-nums">
-                {activePoint.convTotal}
-              </strong>
-            </Button>
+          <div className="grid grid-cols-3 divide-x divide-(--border-subtle)">
+            {seriesToggles.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={item.active}
+                onClick={item.toggle}
+                className={cn(
+                  "relative px-2.5 sm:px-3.5 py-2.5 text-left transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand min-w-0",
+                  item.active
+                    ? "bg-(--bg-surface-2)/65 hover:bg-(--bg-surface-2)"
+                    : "opacity-45 hover:opacity-75"
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute inset-x-0 top-0 h-0.5 transition-colors",
+                    item.active ? item.barClass : "bg-transparent"
+                  )}
+                />
+                <span className="flex items-center gap-1.5 text-[0.5625rem] sm:text-[0.625rem] font-mono uppercase tracking-[0.04em] sm:tracking-[0.12em] text-(--text-muted)">
+                  <span
+                    className={cn("w-1.5 h-1.5 rounded-full shrink-0", item.dotClass)}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </span>
+                <span
+                  className={cn(
+                    "mt-1 block font-mono text-base sm:text-xl font-bold leading-none tabular-nums",
+                    item.active ? item.valueClass : "text-(--text-muted)"
+                  )}
+                >
+                  {item.value}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       )}

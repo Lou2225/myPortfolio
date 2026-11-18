@@ -105,8 +105,24 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
       page.getByRole("heading", { name: /Administrator Login/i })
     ).not.toBeVisible({ timeout: 15000 });
 
-    // Navigate to Inbox tab cleanly.
+    // Verify ProfileDropdown omits Secret Logo Redirect & Reset Content controls.
+    await page
+      .getByRole("button", { name: /Open Administrator Profile Menu/i })
+      .click();
+    await expect(
+      page.getByRole("button", { name: /Logout of CMS/i })
+    ).toBeVisible({ timeout: 5000 });
+    await expect(
+      page.getByText(/Secret Logo Redirect/i)
+    ).not.toBeVisible();
+    await expect(
+      page.getByText(/Reset Content to Seed Defaults/i)
+    ).not.toBeVisible();
+    await page.keyboard.press("Escape");
+
+    // Navigate to Inbox tab cleanly and verify Sandbox sender label is absent.
     await page.goto("/admin?tab=inbox", { waitUntil: "networkidle" });
+    await expect(page.getByText(/Sandbox sender/i)).not.toBeVisible();
     const msgHeading = page.getByRole("heading", { name: inquirySubject });
     await expect(msgHeading).toBeVisible({ timeout: 15000 });
 
@@ -270,22 +286,46 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     expect(overflowCheck.scrollWidth).toBeLessThanOrEqual(overflowCheck.innerWidth);
     expect(overflowCheck.clipped).toEqual([]);
 
-    // Verify circular Up, Down, and Remove buttons keep consistent rounded-full geometry.
-    for (const label of ["Move role 1 earlier", "Move role 1 later", "Remove role 1"]) {
-      const btn = page.getByRole("button", { name: label });
-      await expect(btn).toBeVisible();
-      const shape = await btn.evaluate((el) => {
-        const style = getComputedStyle(el);
-        const rect = el.getBoundingClientRect();
-        return {
-          width: rect.width,
-          height: rect.height,
-          borderRadius: parseFloat(style.borderRadius),
-        };
-      });
-      expect(shape.width).toBeCloseTo(shape.height, 0);
-      expect(shape.borderRadius).toBeGreaterThanOrEqual(shape.width / 2 - 1);
-    }
+    // Verify circular 3-dots role action menu matches input height and no desktop drag handle exists.
+    const roleDragHandle = page.getByRole("button", {
+      name: /Drag or use arrow keys to reorder role 1/i,
+    });
+    await expect(roleDragHandle).toHaveCount(0);
+
+    const roleInput1 = page.getByRole("textbox", { name: /Role Title 01/i });
+    const roleMenuBtn = page.getByRole("button", { name: "Actions for role 1" });
+    await expect(roleMenuBtn).toBeVisible();
+    const roleFieldMetrics = await roleMenuBtn.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        borderRadius: parseFloat(style.borderRadius),
+      };
+    });
+    const roleInputBox = await roleInput1.boundingBox();
+    expect(roleInputBox).not.toBeNull();
+    expect(roleFieldMetrics.width).toBeCloseTo(roleFieldMetrics.height, 0);
+    expect(roleFieldMetrics.height).toBeCloseTo(roleInputBox!.height, 0);
+    expect(roleFieldMetrics.borderRadius).toBeGreaterThanOrEqual(
+      roleFieldMetrics.width / 2 - 1
+    );
+
+    await roleMenuBtn.click();
+    const roleMenu = page.getByRole("menu", { name: "Actions for role 1" });
+    await expect(roleMenu).toBeVisible({ timeout: 5000 });
+    await expect(
+      roleMenu.getByRole("menuitem", { name: /Move Earlier/i })
+    ).toBeVisible();
+    await expect(
+      roleMenu.getByRole("menuitem", { name: /Move Later/i })
+    ).toBeVisible();
+    await expect(
+      roleMenu.getByRole("menuitem", { name: /Remove Role/i })
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(roleMenu).not.toBeVisible({ timeout: 5000 });
 
     // Discard staged avatar draft so unsaved-changes guard stays clean before navigating.
     await page
@@ -349,6 +389,114 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
       return Boolean(w.__sawAdminSkeleton);
     });
     expect(sawSkeletonOnRevisit).toBe(false);
+
+    // Verify Trusted Devices & Cross-Device Pairing height-limited container and Load more button.
+    const mockedDevices = Array.from({ length: 5 }, (_, idx) => ({
+      id: `dev_mock_${idx + 1}`,
+      name: `Trusted Workstation ${idx + 1}`,
+      model: "Desktop Browser",
+      platform: "Windows",
+      osVersion: "11",
+      browser: "Chrome",
+      architecture: "x86_64",
+      cpuCores: 8,
+      gpuRenderer: null,
+      screenMetrics: "1920x1080",
+      timezone: "Asia/Manila",
+      deviceType: "desktop",
+      keyThumbprint: `K${idx + 1}`,
+      publicKeySpki: null,
+      ipMasked: "127.0.0.1",
+      userAgent: "Mozilla/5.0",
+      trustSource: "login",
+      status: "active",
+      createdAt: "2026-11-17T00:00:00.000Z",
+      lastSeenAt: "2026-11-17T00:00:00.000Z",
+      revokedAt: null,
+    }));
+    await page.route("**/api/admin/devices", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            sessionEpoch: 1,
+            stealthGateEnabled: false,
+            stealthKeyConfigured: false,
+            totpEnabled: false,
+            currentDeviceId: "dev_mock_1",
+            activeDeviceCount: 5,
+            devices: mockedDevices,
+            auditLog: [],
+            pendingPairings: [],
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/admin?tab=settings&section=security", {
+      waitUntil: "networkidle",
+    });
+    const trustedDevicesCard = page
+      .locator("div.rounded-sm")
+      .filter({
+        has: page.getByRole("heading", {
+          name: /Trusted Devices & Cross-Device Pairing/i,
+        }),
+      })
+      .first();
+    await expect(
+      trustedDevicesCard.getByText("Trusted Workstation 1")
+    ).toBeVisible({ timeout: 15000 });
+    await expect(
+      trustedDevicesCard.getByText("Trusted Workstation 3")
+    ).toBeVisible();
+    await expect(
+      trustedDevicesCard.getByText("Trusted Workstation 4")
+    ).not.toBeVisible();
+    await expect(
+      trustedDevicesCard.getByText("Showing 3 of 5 devices")
+    ).toBeVisible();
+
+    await trustedDevicesCard
+      .getByRole("button", { name: /^Load more$/i })
+      .click();
+    await expect(
+      trustedDevicesCard.getByText("Trusted Workstation 5")
+    ).toBeVisible();
+    await expect(
+      trustedDevicesCard.getByRole("button", { name: /^Load more$/i })
+    ).not.toBeVisible();
+    const scrollContainerBox = await trustedDevicesCard
+      .locator("[data-lenis-prevent]")
+      .first()
+      .boundingBox();
+    expect(scrollContainerBox).not.toBeNull();
+    if (scrollContainerBox) {
+      expect(scrollContainerBox.height).toBeLessThanOrEqual(365);
+    }
+
+    // Verify QR pairing modal layout has no localhost override UI and closes cleanly.
+    await page
+      .getByRole("button", { name: /Pair Device via QR \/ Link/i })
+      .click();
+    const qrDialog = page.getByRole("dialog", {
+      name: /Pair Mobile Device via QR/i,
+    });
+    await expect(qrDialog).toBeVisible({ timeout: 10000 });
+    await expect(
+      qrDialog.getByText(/Verification PIN \(Never Stored in QR\)/i)
+    ).toBeVisible();
+    await expect(qrDialog.getByText(/Running on localhost/i)).not.toBeVisible();
+    await expect(qrDialog.getByText(/QR Base Origin/i)).not.toBeVisible();
+    await qrDialog
+      .getByRole("button", { name: /Close QR pairing dialog/i })
+      .click();
+    await expect(qrDialog).not.toBeVisible({ timeout: 10000 });
+
+    await page.unroute("**/api/admin/devices");
   });
 
   test("operates Overview command filters, custom date picker, device/source slicers & unified KPI card", async ({
@@ -424,6 +572,23 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     await expect(kpiSection).toBeVisible({ timeout: 15000 });
     await expect(commandSection).toBeVisible({ timeout: 15000 });
 
+    // Verify right-edge operational tooltip renders horizontally inside viewport (never crushed vertically).
+    await commandSection
+      .getByRole("button", { name: /Refresh analytics time calculations/i })
+      .hover();
+    const syncTooltip = page.getByRole("tooltip", {
+      name: /Sync live time window/i,
+    });
+    await expect(syncTooltip).toBeVisible({ timeout: 5000 });
+    const tipBox = await syncTooltip.boundingBox();
+    const vw = page.viewportSize()?.width ?? 1280;
+    expect(tipBox).not.toBeNull();
+    if (tipBox) {
+      expect(tipBox.width).toBeGreaterThan(tipBox.height);
+      expect(tipBox.x).toBeGreaterThanOrEqual(8);
+      expect(tipBox.x + tipBox.width).toBeLessThanOrEqual(vw - 8);
+    }
+
     // Verify all 4 KPI sections inside the unified 1-card grid (Hero + 3 companion rows).
     await expect(kpiSection.getByText(/Unique Sessions/i)).toBeVisible();
     await expect(kpiSection.getByText(/Project Clicks/i)).toBeVisible();
@@ -444,13 +609,14 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
       .click();
     await page.getByRole("button", { name: /^Today$/i }).click();
 
-    // Switch Counting Methodology to Events then back to Sessions.
-    const modeTabs = commandSection.getByRole("tablist", {
-      name: /Counting methodology/i,
-    });
-    await modeTabs.getByRole("tab", { name: "Events" }).click();
+    // Toggle Counting Methodology between Sessions and Events views.
+    await commandSection
+      .getByRole("button", { name: /Switch to Events view/i })
+      .click();
     await expect(kpiSection.getByText(/Page Views/i)).toBeVisible();
-    await modeTabs.getByRole("tab", { name: "Sessions" }).click();
+    await commandSection
+      .getByRole("button", { name: /Switch to Sessions view/i })
+      .click();
     await expect(kpiSection.getByText(/Unique Sessions/i)).toBeVisible();
 
     // Multi-select Checkbox Slicers: check Desktop device + github.com source, verify checked state.

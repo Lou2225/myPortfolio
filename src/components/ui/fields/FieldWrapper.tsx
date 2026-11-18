@@ -14,6 +14,8 @@ export interface FieldWrapperProps {
   currentLength?: number;
   maxLength?: number;
   showCounter?: boolean;
+  /** Optional compact control rendered beside the counter in the field header row. */
+  headerAction?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }
@@ -29,6 +31,7 @@ export function FieldWrapper({
   currentLength,
   maxLength,
   showCounter = false,
+  headerAction,
   className,
   children,
 }: FieldWrapperProps) {
@@ -43,23 +46,28 @@ export function FieldWrapper({
       <div className="flex items-center justify-between gap-2">
         <label
           htmlFor={id}
-          className="text-[11px] font-mono uppercase tracking-[0.18em] text-(--text-secondary) font-medium flex items-center gap-1 select-none"
+          className="text-[11px] font-mono uppercase tracking-[0.18em] text-(--text-secondary) font-medium flex items-center gap-1 select-none min-w-0"
         >
-          <span>{label}</span>
-          {required && <span className="text-(--text-accent)">*</span>}
+          <span className="truncate">{label}</span>
+          {required && <span className="text-(--text-accent) shrink-0">*</span>}
         </label>
 
-        {showCounter && maxLength !== undefined && (
-          <span
-            className={cn(
-              "text-[10px] font-mono tabular-nums",
-              (currentLength ?? 0) >= maxLength
-                ? "text-(--text-accent) font-bold"
-                : "text-(--text-muted)"
+        {(headerAction || (showCounter && maxLength !== undefined)) && (
+          <div className="flex items-center gap-2 shrink-0">
+            {headerAction}
+            {showCounter && maxLength !== undefined && (
+              <span
+                className={cn(
+                  "text-[10px] font-mono tabular-nums",
+                  (currentLength ?? 0) >= maxLength
+                    ? "text-(--text-accent) font-bold"
+                    : "text-(--text-muted)"
+                )}
+              >
+                {currentLength ?? 0}/{maxLength}
+              </span>
             )}
-          >
-            {currentLength ?? 0}/{maxLength}
-          </span>
+          </div>
         )}
       </div>
 

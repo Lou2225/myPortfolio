@@ -34,6 +34,7 @@ import {
   verifyStealthRecoveryKey,
 } from "@/lib/security";
 import { POST as pairVerifyPost, PUT as pairVerifyPut } from "@/app/api/admin/devices/pair/verify/route";
+import { extractNormalizedClientIp } from "@/lib/rateLimit";
 import type { PairingChallenge } from "@/types/security";
 
 let tempDataDir = "";
@@ -223,5 +224,34 @@ describe("Security Rate Limiting, Stealth Keys & Pairing Abuse Guards", () => {
     expect(verifyStealthRecoveryKey("my-stealth-override-key", store)).toBe(true);
     expect(verifyStealthRecoveryKey("wrong-key", store)).toBe(false);
     expect(verifyStealthRecoveryKey("", store)).toBe(false);
+  });
+
+  it("prefers proxy-verified headers and rightmost x-forwarded-for entry in extractNormalizedClientIp", () => {
+    expect(
+      extractNormalizedClientIp(
+        new Headers({
+          "x-vercel-forwarded-for": "198.51.100.10",
+          "x-real-ip": "203.0.113.20",
+          "x-forwarded-for": "1.2.3.4, 203.0.113.30",
+        })
+      )
+    ).toBe("198.51.100.10");
+
+    expect(
+      extractNormalizedClientIp(
+        new Headers({
+          "x-real-ip": "::ffff:198.51.100.42",
+          "x-forwarded-for": "1.2.3.4, 203.0.113.50",
+        })
+      )
+    ).toBe("198.51.100.42");
+
+    expect(
+      extractNormalizedClientIp(
+        new Headers({
+          "x-forwarded-for": "10.0.0.1, 203.0.113.77",
+        })
+      )
+    ).toBe("203.0.113.77");
   });
 });

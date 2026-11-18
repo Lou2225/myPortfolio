@@ -21,10 +21,13 @@ import { FieldWrapper } from "./FieldWrapper";
 import { FIELD_SLOT_BUTTON_CLASS, getFieldControlClassName } from "./inputStyles";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ImageCropModal } from "@/components/ui/ImageCropModal";
-import { IconActionButton } from "@/components/ui/ActionButtons";
+import {
+  ActionMenuButton,
+  type ActionMenuItem,
+} from "@/components/ui/ActionMenuButton";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { TransformedImage } from "@/components/ui/TransformedImage";
-import { Tooltip, TruncatedText } from "@/components/ui/Tooltip";
+import { TruncatedText } from "@/components/ui/Tooltip";
 import { IMAGE_FILE_ACCEPT, validateImageFile } from "@/lib/validation";
 import {
   registerInstantImage,
@@ -185,7 +188,7 @@ export function ImageUploadField({
     if (!fileCheck.valid) {
       reportError(
         fileCheck.error ||
-          "Only image files (.png, .jpg, .webp, .avif, .svg, .ico) are permitted."
+        "Only image files (.png, .jpg, .webp, .avif, .svg, .ico) are permitted."
       );
       return;
     }
@@ -272,117 +275,131 @@ export function ImageUploadField({
           ? "w-24 h-24 sm:w-28 sm:h-28 rounded-2xl"
           : "w-16 h-16 rounded-xl";
 
+  const menuItems: ActionMenuItem[] = [];
+  if (editable && hasAnyImage) {
+    menuItems.push({
+      id: "crop",
+      label: "Resize & Frame",
+      icon: <Crop className="w-3.5 h-3.5 text-(--text-accent)" aria-hidden="true" />,
+      disabled: uploading,
+      onSelect: handleOpenExistingEditor,
+    });
+  }
+  if (
+    (pendingFile || isDraftModified || hasCustomTransform) &&
+    onRevertToSaved
+  ) {
+    menuItems.push({
+      id: "revert",
+      label: "Revert to Saved",
+      intent: "warning",
+      icon: <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />,
+      disabled: uploading,
+      onSelect: onRevertToSaved,
+    });
+  }
+  if (!required && hasAnyImage) {
+    menuItems.push({
+      id: "remove",
+      label: "Remove Image",
+      intent: "danger",
+      icon: <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />,
+      disabled: uploading,
+      onSelect: () => setConfirmClearOpen(true),
+    });
+  }
+
   const actionSlot = (
-    <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full">
-      <Magnetic strength={0.18}>
-        <label className={FIELD_SLOT_BUTTON_CLASS}>
-          {uploading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-(--text-accent)" />
-          ) : (
-            <Upload className="w-3.5 h-3.5 text-(--text-accent)" />
-          )}
-          <span>{uploading ? "Uploading..." : "Upload"}</span>
-          <input
-            type="file"
-            accept={IMAGE_FILE_ACCEPT}
-            disabled={uploading}
-            onChange={handleFileChange}
-            className="hidden"
-          />
-        </label>
-      </Magnetic>
-
-      {editable && hasAnyImage && (
-        <Tooltip content="Resize & frame image">
-          <IconActionButton
-            size="square"
-            label={`Resize and frame ${label}`}
-            disabled={uploading}
-            onClick={handleOpenExistingEditor}
-            icon={<Crop className="w-3.5 h-3.5" />}
-          />
-        </Tooltip>
-      )}
-
-      {(pendingFile || isDraftModified || hasCustomTransform) &&
-        onRevertToSaved && (
-          <Tooltip content="Revert draft changes back to saved original">
-            <IconActionButton
-              size="square"
-              label={`Revert ${label} to saved original`}
+    <div className="flex items-center gap-2 sm:gap-1.5 w-full sm:w-auto min-w-0 max-w-full">
+      <div className="flex-1 min-w-0 sm:flex-initial">
+        <Magnetic strength={0.18} fullWidth className="sm:w-auto">
+          <label
+            className={cn(
+              FIELD_SLOT_BUTTON_CLASS,
+              "w-full sm:w-auto justify-center"
+            )}
+          >
+            {uploading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-(--text-accent)" />
+            ) : (
+              <Upload className="w-3.5 h-3.5 text-(--text-accent)" />
+            )}
+            <span>{uploading ? "Uploading..." : "Upload"}</span>
+            <input
+              type="file"
+              accept={IMAGE_FILE_ACCEPT}
               disabled={uploading}
-              onClick={onRevertToSaved}
-              className="hover:bg-amber-500/15 hover:border-amber-500/45 hover:text-amber-300"
-              icon={<RotateCcw className="w-3.5 h-3.5" />}
+              onChange={handleFileChange}
+              className="hidden"
             />
-          </Tooltip>
-        )}
+          </label>
+        </Magnetic>
+      </div>
 
-      {!required && hasAnyImage && (
-        <Tooltip content={`Remove ${label}`}>
-          <IconActionButton
-            size="square"
-            intent="danger"
-            label={`Remove ${label}`}
-            onClick={() => setConfirmClearOpen(true)}
-            icon={<Trash2 className="w-3.5 h-3.5" />}
-          />
-        </Tooltip>
+      {menuItems.length > 0 && (
+        <ActionMenuButton
+          label={`Actions for ${label}`}
+          size="square"
+          disabled={uploading}
+          items={menuItems}
+        />
       )}
     </div>
   );
 
   return (
     <div className={cn("space-y-2.5 min-w-0", className)}>
-      <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-5 min-w-0">
-        {/* Placeholder Preview Frame */}
-        <div
-          style={
-            hasAnyImage && previewFit === "contain"
-              ? {
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3.5 sm:gap-5 min-w-0">
+        {/* Placeholder Preview Frame (centered showcase stage on mobile, inline left on sm+) */}
+        <div className="flex items-center justify-center py-3 px-4 rounded-(--radius-control) bg-(--bg-surface-2)/35 border border-(--border-subtle)/60 sm:block sm:p-0 sm:bg-transparent sm:border-0 sm:rounded-none shrink-0">
+          <div
+            style={
+              hasAnyImage && previewFit === "contain"
+                ? {
                   backgroundImage:
                     "linear-gradient(45deg, rgba(128,128,128,0.12) 25%, transparent 25%), linear-gradient(-45deg, rgba(128,128,128,0.12) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(128,128,128,0.12) 75%), linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.12) 75%)",
                   backgroundSize: "12px 12px",
                   backgroundPosition: "0 0, 0 6px, 6px -6px, -6px 0px",
                 }
-              : undefined
-          }
-          className={cn(
-            "shrink-0 bg-(--bg-surface-2) border shadow-inner overflow-hidden flex items-center justify-center relative group",
-            showPendingPill
-              ? "border-amber-400/70"
-              : "border-(--border-strong)",
-            previewFrameClass
-          )}
-        >
-          {hasAnyImage ? (
-            <>
-              <TransformedImage
-                src={activePreviewSrc}
-                alt={previewAlt}
-                transform={transform}
-                defaultFit={previewFit}
-                defaultPosition={previewShape === "squircle" ? "top" : "center"}
-                className="w-full h-full"
-              />
-              {editable && (
-                <button
-                  type="button"
-                  onClick={handleOpenExistingEditor}
-                  disabled={uploading}
-                  aria-label={`Resize and frame ${label}`}
-                  className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-white cursor-pointer"
-                >
-                  <Crop className="w-4 h-4 text-(--text-accent)" />
-                  <span className="text-[9px] font-mono uppercase tracking-wider">
-                    Resize / Edit
-                  </span>
-                </button>
-              )}
-            </>
-          ) : (
-            <ImageIcon className="w-7 h-7 text-(--text-muted)" />
-          )}
+                : undefined
+            }
+            className={cn(
+              "shrink-0 bg-(--bg-surface-2) border shadow-inner overflow-hidden flex items-center justify-center relative group",
+              showPendingPill
+                ? "border-amber-400/70"
+                : "border-(--border-strong)",
+              previewFrameClass
+            )}
+          >
+            {hasAnyImage ? (
+              <>
+                <TransformedImage
+                  src={activePreviewSrc}
+                  alt={previewAlt}
+                  transform={transform}
+                  defaultFit={previewFit}
+                  defaultPosition={previewShape === "squircle" ? "top" : "center"}
+                  className="w-full h-full"
+                />
+                {editable && (
+                  <button
+                    type="button"
+                    onClick={handleOpenExistingEditor}
+                    disabled={uploading}
+                    aria-label={`Resize and frame ${label}`}
+                    className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-white cursor-pointer"
+                  >
+                    <Crop className="w-4 h-4 text-(--text-accent)" />
+                    <span className="text-[9px] font-mono uppercase tracking-wider">
+                      Resize / Edit
+                    </span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <ImageIcon className="w-7 h-7 text-(--text-muted)" />
+            )}
+          </div>
         </div>
 
         {/* URL Input or Staged Local File Readout + Action Row (never overflows half-width cards) */}
@@ -437,15 +454,15 @@ export function ImageUploadField({
 
           {(pendingFile
             ? hint ||
-              "Staged in draft placeholder — click Save & Publish at the top to upload & apply sitewide."
+            "Staged in draft placeholder — click Save & Publish at the top to upload & apply sitewide."
             : hint) && (
-            <p className="text-[11px] text-(--text-muted)">
-              {pendingFile
-                ? hint ||
+              <p className="text-[11px] text-(--text-muted) leading-relaxed">
+                {pendingFile
+                  ? hint ||
                   "Staged in draft placeholder — click Save & Publish at the top to upload & apply sitewide."
-                : hint}
-            </p>
-          )}
+                  : hint}
+              </p>
+            )}
         </div>
       </div>
 

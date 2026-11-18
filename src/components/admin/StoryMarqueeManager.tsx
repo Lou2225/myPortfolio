@@ -4,10 +4,19 @@ import React, { useMemo, useRef, useState } from "react";
 import { Pillar, Profile, SectionHeaders } from "@/types/portfolio";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { FieldSlotButton } from "@/components/ui/ActionButtons";
 import {
-  FieldSlotButton,
-  ReorderActionGroup,
-} from "@/components/ui/ActionButtons";
+  ActionMenuButton,
+  buildReorderMenuItems,
+} from "@/components/ui/ActionMenuButton";
+import { AdminModuleHeaderBar } from "@/components/admin/AdminModuleHeaderBar";
+import {
+  AdminMobileStepView,
+  MobileStepItem,
+  useStepNavigation,
+} from "@/components/admin/AdminMobileStepView";
+import { SortableTextRow } from "@/components/admin/SortableTextRow";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
@@ -23,14 +32,26 @@ import {
 import { findDuplicateValues, swapArrayItem } from "@/lib/utils";
 import { validateStoryDraft, validateSubject } from "@/lib/validation";
 import { useValidationFollower } from "@/lib/validationFollow";
-import {
-  AlertTriangle,
-  BookOpen,
-  Loader2,
-  Plus,
-  RotateCcw,
-  Save,
-} from "lucide-react";
+import { BookOpen, Plus, Save } from "lucide-react";
+
+type StoryStep = 0 | 1 | 2;
+
+const STORY_STEPS: readonly {
+  step: StoryStep;
+  code: string;
+  shortTitle: string;
+}[] = [
+  { step: 0, code: "01", shortTitle: "Story" },
+  { step: 1, code: "02", shortTitle: "Pillars" },
+  { step: 2, code: "03", shortTitle: "Marquee" },
+];
+
+function classifyStoryErrorStep(errorMessage: string): StoryStep {
+  const lower = errorMessage.toLowerCase();
+  if (lower.includes("marquee") || lower.includes("statement ")) return 2;
+  if (lower.includes("pillar")) return 1;
+  return 0;
+}
 
 interface StoryMarqueeManagerProps {
   profile: Profile;
@@ -73,6 +94,9 @@ export function StoryMarqueeManager({
   const formRef = useRef<HTMLFormElement>(null);
   const { isOnline } = useOfflineStatus();
   const offline = !isOnline;
+  const isMobileOrTablet = useMediaQuery("(max-width: 1023px)");
+  const { activeStep, stepDirection, switchStep } =
+    useStepNavigation<StoryStep>(0);
   const { followFirstInvalid, followNextInvalid } = useValidationFollower();
 
   const initialEyebrow =
@@ -161,6 +185,40 @@ export function StoryMarqueeManager({
   );
 
   const liveErrorsCount = liveValidation.errors.length;
+  const stepHasError: Record<StoryStep, boolean> = {
+    0: false,
+    1: false,
+    2: false,
+  };
+  if (forceTouched && liveErrorsCount > 0) {
+    for (const err of liveValidation.errors) {
+      stepHasError[classifyStoryErrorStep(err)] = true;
+    }
+  }
+  const firstErrorStep: StoryStep | null =
+    liveErrorsCount > 0
+      ? classifyStoryErrorStep(liveValidation.errors[0])
+      : null;
+
+  const mobileSteps: MobileStepItem[] = STORY_STEPS.map((item) => ({
+    code: item.code,
+    shortTitle: item.shortTitle,
+    hasError: stepHasError[item.step],
+  }));
+
+  const jumpToValidationIssue = (mode: "first" | "next") => {
+    if (isMobileOrTablet && firstErrorStep !== null && !stepHasError[activeStep]) {
+      switchStep(firstErrorStep);
+    } else if (isMobileOrTablet && mode === "first" && firstErrorStep !== null) {
+      switchStep(firstErrorStep);
+    }
+    window.requestAnimationFrame(() =>
+      mode === "first"
+        ? followFirstInvalid(formRef.current)
+        : followNextInvalid(formRef.current)
+    );
+  };
+
   const activeErrorBanner =
     apiError ??
     (validationBannerActive && liveErrorsCount > 0
@@ -435,7 +493,7 @@ export function StoryMarqueeManager({
         detail:
           liveValidation.errors[0] || "Review required Story & Marquee fields",
       });
-      window.requestAnimationFrame(() => followFirstInvalid(formRef.current));
+      jumpToValidationIssue("first");
       return;
     }
 
@@ -451,122 +509,11 @@ export function StoryMarqueeManager({
     });
   };
 
-  return (
-    <form
-      ref={formRef}
-      onSubmit={handleSubmit}
-      noValidate
-      className="space-y-8"
-    >
-      {/* Header & Sticky Save Bar */}
-      <div
-        data-sticky-ceiling="true"
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 sticky top-16 z-20 shadow-xl"
-      >
-        <div className="flex items-start sm:items-center gap-3 min-w-0">
-          <BookOpen
-            className="w-5 h-5 text-(--text-accent) shrink-0 mt-0.5 sm:mt-0"
-            aria-hidden="true"
-          />
-          <div className="min-w-0">
-            <h2 className="font-display text-xl sm:text-2xl uppercase tracking-tight text-(--text-primary)">
-              Story, 4 Pillars & Marquee Ticker
-            </h2>
-            <p className="text-xs text-(--text-muted)">
-              Edit your origin narrative paragraphs, core engineering pillars, and infinite marquee statements.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          {liveErrorsCount > 0 && (
-            <Button
-              type="button"
-              variant="danger"
-              size="md"
-              onClick={() => {
-                setForceTouched(true);
-                setValidationBannerActive(true);
-                window.requestAnimationFrame(() =>
-                  followNextInvalid(formRef.current)
-                );
-              }}
-              className="h-10 px-3.5 font-mono text-[11px] bg-(--bg-badge-highlight) border-brand/45 text-(--text-accent) hover:bg-brand/22"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>
-                {liveErrorsCount} {liveErrorsCount === 1 ? "Issue" : "Issues"} · Follow
-              </span>
-            </Button>
-          )}
-
-          {hasUnsavedChanges && (
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              disabled={saving}
-              onClick={handleDiscardDraft}
-              className="h-10 px-4 font-mono text-xs bg-(--bg-surface-2)"
-            >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>Discard</span>
-            </Button>
-          )}
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={saving}
-            className="h-10 px-6 text-xs tracking-[0.16em]"
-          >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
-            ) : (
-              <Save className="w-4 h-4 shrink-0" aria-hidden="true" />
-            )}
-            <span>Save & Publish</span>
-          </Button>
-        </div>
-      </div>
-
-      {offline && (
-        <AdminAlertBanner
-          variant="offline"
-          message="You are offline."
-          detail="Draft edits stay safe locally, but publishing Story & Principles requires an active connection."
-        />
-      )}
-
-      {activeErrorBanner && (
-        <AdminAlertBanner
-          variant="error"
-          message={apiError ? "Save Blocked:" : "Check Required Fields:"}
-          detail={activeErrorBanner}
-          actionLabel={liveErrorsCount > 0 ? "Follow Issue" : undefined}
-          onAction={
-            liveErrorsCount > 0
-              ? () => {
-                  setForceTouched(true);
-                  window.requestAnimationFrame(() =>
-                    followFirstInvalid(formRef.current)
-                  );
-                }
-              : undefined
-          }
-          onDismiss={() => {
-            setValidationBannerActive(false);
-            setApiError(null);
-          }}
-        />
-      )}
-
-      {/* Origin Story Section */}
-      <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-6 space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-(--border-subtle) pb-3">
-          <div className="flex items-center gap-2.5">
-            <h3 className="font-display text-xl uppercase tracking-tight text-(--text-primary)">
+  const storySectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-(--border-subtle) pb-3">
+          <div className="flex items-center justify-between sm:justify-start gap-2.5">
+            <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary)">
               1. Chapter 01 — The Origin Narrative
             </h3>
             <StatusPill
@@ -581,7 +528,7 @@ export function StoryMarqueeManager({
             variant="secondary"
             size="sm"
             onClick={handleAddParagraph}
-            className="font-mono tracking-wider border-(--border-strong)"
+            className="w-full sm:w-auto font-mono tracking-wider border-(--border-strong)"
           >
             <Plus className="w-3.5 h-3.5 text-(--text-accent)" aria-hidden="true" />
             <span>Add Paragraph</span>
@@ -623,21 +570,24 @@ export function StoryMarqueeManager({
           {storyBody.map((paragraph, idx) => (
             <div
               key={storyIds[idx] ?? idx}
-              className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-sm p-4 space-y-2.5"
+              className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-(--radius-control) p-3.5 sm:p-4 space-y-2.5"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-mono uppercase tracking-widest text-(--text-accent)">
                   Origin Segment #{idx + 1}
                 </span>
-                <ReorderActionGroup
-                  index={idx}
-                  total={storyBody.length}
-                  itemLabel={`Paragraph ${String(idx + 1).padStart(2, "0")}`}
-                  canRemove={storyBody.length > 1}
+                <ActionMenuButton
+                  label={`Actions for Paragraph ${String(idx + 1).padStart(2, "0")}`}
                   size="compact"
-                  onMoveUp={() => handleMoveParagraph(idx, -1)}
-                  onMoveDown={() => handleMoveParagraph(idx, 1)}
-                  onRemove={() => handleRemoveParagraph(idx)}
+                  items={buildReorderMenuItems({
+                    index: idx,
+                    total: storyBody.length,
+                    onMoveUp: () => handleMoveParagraph(idx, -1),
+                    onMoveDown: () => handleMoveParagraph(idx, 1),
+                    removeLabel: "Remove Paragraph",
+                    canRemove: storyBody.length > 1,
+                    onRemove: () => handleRemoveParagraph(idx),
+                  })}
                 />
               </div>
 
@@ -656,19 +606,21 @@ export function StoryMarqueeManager({
                 minLength={20}
                 maxLength={900}
                 showCounter
+                expandableOnMobile
                 forceTouched={forceTouched}
               />
             </div>
           ))}
         </div>
       </div>
+  );
 
-      {/* 4 Core Pillars */}
-      <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-6 space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-(--border-subtle) pb-3">
-          <div className="flex items-center gap-2.5">
-            <h3 className="font-display text-xl uppercase tracking-tight text-(--text-primary)">
-              2. Core Engineering & Analytics Pillars
+  const pillarsSectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-(--border-subtle) pb-3">
+          <div className="flex items-center justify-between sm:justify-start gap-2.5">
+            <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary)">
+              2. Core Engineering &amp; Analytics Pillars
             </h3>
             <StatusPill
               label={`${draftPillars.length} ${draftPillars.length === 1 ? "pillar" : "pillars"}`}
@@ -682,14 +634,14 @@ export function StoryMarqueeManager({
             variant="secondary"
             size="sm"
             onClick={handleAddPillar}
-            className="font-mono tracking-wider border-(--border-strong)"
+            className="w-full sm:w-auto font-mono tracking-wider border-(--border-strong)"
           >
             <Plus className="w-3.5 h-3.5 text-(--text-accent)" aria-hidden="true" />
             <span>Add Pillar</span>
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {draftPillars.map((pillar, idx) => {
             const codeKey = pillar.number.trim().toLowerCase();
             const titleKey = pillar.title.trim().toLowerCase();
@@ -700,21 +652,24 @@ export function StoryMarqueeManager({
             return (
               <div
                 key={pillarIds[idx] ?? idx}
-                className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-sm p-4 space-y-3"
+                className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-(--radius-control) p-3.5 sm:p-4 space-y-3"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-mono uppercase tracking-widest text-(--text-accent)">
                     Pillar Card #{idx + 1}
                   </span>
-                  <ReorderActionGroup
-                    index={idx}
-                    total={draftPillars.length}
-                    itemLabel={`Pillar #${idx + 1}`}
-                    canRemove={draftPillars.length > 1}
+                  <ActionMenuButton
+                    label={`Actions for Pillar #${idx + 1}`}
                     size="compact"
-                    onMoveUp={() => handleMovePillar(idx, -1)}
-                    onMoveDown={() => handleMovePillar(idx, 1)}
-                    onRemove={() => handleRemovePillar(idx)}
+                    items={buildReorderMenuItems({
+                      index: idx,
+                      total: draftPillars.length,
+                      onMoveUp: () => handleMovePillar(idx, -1),
+                      onMoveDown: () => handleMovePillar(idx, 1),
+                      removeLabel: "Remove Pillar",
+                      canRemove: draftPillars.length > 1,
+                      onRemove: () => handleRemovePillar(idx),
+                    })}
                   />
                 </div>
 
@@ -788,6 +743,7 @@ export function StoryMarqueeManager({
                   minLength={15}
                   maxLength={360}
                   showCounter
+                  expandableOnMobile
                   forceTouched={forceTouched}
                 />
               </div>
@@ -795,11 +751,12 @@ export function StoryMarqueeManager({
           })}
         </div>
       </div>
+  );
 
-      {/* Infinite Marquee Principles */}
-      <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-6 space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-(--border-subtle) pb-3">
-          <h3 className="font-display text-xl uppercase tracking-tight text-(--text-primary)">
+  const marqueeSectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+        <div className="border-b border-(--border-subtle) pb-3 flex items-center justify-between gap-2">
+          <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) min-w-0">
             3. Infinite Marquee Ticker Statements
           </h3>
           <StatusPill
@@ -811,25 +768,24 @@ export function StoryMarqueeManager({
 
         <ScrollArea
           maxHeight={420}
-          viewportClassName="grid grid-cols-1 md:grid-cols-2 gap-4 pr-2 py-0.5 items-start"
+          viewportClassName="grid grid-cols-1 lg:grid-cols-2 gap-4 pr-2 py-0.5 items-start"
         >
           {draftMarquee.map((statement, idx) => {
             const norm = statement.trim().toLowerCase();
             const isDup = norm !== "" && duplicateMarqueeItems.has(norm);
+            const rowKey = marqueeIds[idx] ?? `marquee-${idx}`;
 
             return (
-              <TextField
-                key={marqueeIds[idx] ?? idx}
-                id={`marquee-statement-${marqueeIds[idx] ?? idx}`}
+              <SortableTextRow
+                key={rowKey}
+                id={`marquee-statement-${rowKey}`}
                 label={`Statement ${String(idx + 1).padStart(2, "0")}`}
+                itemNoun="statement"
+                removeLabel="Remove Statement"
+                index={idx}
+                totalCount={draftMarquee.length}
                 value={statement}
-                onChange={(val) => {
-                  setDraftMarquee((prev) =>
-                    prev.map((item, i) => (i === idx ? val : item))
-                  );
-                }}
                 placeholder="E.G. ARCHITECT THE DATABASE"
-                required
                 minLength={3}
                 maxLength={60}
                 showCounter
@@ -841,30 +797,20 @@ export function StoryMarqueeManager({
                     ? "Duplicate statement — update or remove one copy."
                     : undefined
                 }
-                leftSlot={
-                  <span className="text-xs font-mono text-(--text-accent)">
-                    {String(idx + 1).padStart(2, "0")}
-                  </span>
-                }
-                rightSlot={
-                  <ReorderActionGroup
-                    index={idx}
-                    total={draftMarquee.length}
-                    itemLabel={`statement ${idx + 1}`}
-                    canRemove={draftMarquee.length > 1}
-                    size="field"
-                    onMoveUp={() => handleMoveTicker(idx, -1)}
-                    onMoveDown={() => handleMoveTicker(idx, 1)}
-                    onRemove={() => handleRemoveTicker(idx)}
-                  />
-                }
+                onChange={(val) => {
+                  setDraftMarquee((prev) =>
+                    prev.map((item, i) => (i === idx ? val : item))
+                  );
+                }}
+                onMove={(dir) => handleMoveTicker(idx, dir === "up" ? -1 : 1)}
+                onRemove={() => handleRemoveTicker(idx)}
               />
             );
           })}
         </ScrollArea>
 
         <div
-          className="max-w-lg pt-2"
+          className="max-w-lg pt-3 border-t border-(--border-subtle)/60"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -887,12 +833,16 @@ export function StoryMarqueeManager({
             showCounter
             mono
             uppercase
+            wrapRightSlotOnMobile
             hint={
               tickerFeedback ??
               "Press Enter or click Add Statement to append to the infinite ticker."
             }
             rightSlot={
-              <FieldSlotButton onClick={handleAddTicker}>
+              <FieldSlotButton
+                onClick={handleAddTicker}
+                className="w-full sm:w-auto justify-center"
+              >
                 <Plus
                   className="w-3.5 h-3.5 text-(--text-accent)"
                   aria-hidden="true"
@@ -903,6 +853,88 @@ export function StoryMarqueeManager({
           />
         </div>
       </div>
+  );
+
+  const storyPanels = [storySectionNode, pillarsSectionNode, marqueeSectionNode];
+
+  return (
+    <form
+      ref={formRef}
+      onSubmit={handleSubmit}
+      noValidate
+      className="space-y-4 sm:space-y-8"
+    >
+      {/* Header & Sticky Save Bar */}
+      <AdminModuleHeaderBar
+        icon={<BookOpen className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
+        title="Story, 4 Pillars & Marquee Ticker"
+        tooltipLabel="Story pillars & ticker rules"
+        tooltipContent="Edit the multi-paragraph narrative, reorder the 4 architectural pillars, and curate marquee ticker statements before saving to publish."
+        subtitle="Edit your origin narrative paragraphs, core engineering pillars, and infinite marquee statements."
+        liveErrorsCount={liveErrorsCount}
+        onFollowIssue={() => {
+          setForceTouched(true);
+          setValidationBannerActive(true);
+          jumpToValidationIssue("next");
+        }}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onDiscard={handleDiscardDraft}
+        saving={saving}
+      />
+
+      {offline && (
+        <AdminAlertBanner
+          variant="offline"
+          message="You are offline."
+          detail="Draft edits stay safe locally, but publishing Story & Principles requires an active connection."
+        />
+      )}
+
+      {activeErrorBanner && (
+        <AdminAlertBanner
+          variant="error"
+          message={apiError ? "Save Blocked:" : "Check Required Fields:"}
+          detail={activeErrorBanner}
+          actionLabel={liveErrorsCount > 0 ? "Follow Issue" : undefined}
+          onAction={
+            liveErrorsCount > 0
+              ? () => {
+                  setForceTouched(true);
+                  jumpToValidationIssue("first");
+                }
+              : undefined
+          }
+          onDismiss={() => {
+            setValidationBannerActive(false);
+            setApiError(null);
+          }}
+        />
+      )}
+
+      {isMobileOrTablet ? (
+        <AdminMobileStepView
+          ariaLabel="Story and marquee sections"
+          steps={mobileSteps}
+          activeStep={activeStep}
+          direction={stepDirection}
+          onChangeStep={(next) => switchStep(next as StoryStep)}
+          finalAction={{
+            label: saving ? "Saving..." : "Save & Publish",
+            type: "submit",
+            variant: "primary",
+            disabled: saving,
+            icon: <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
+          }}
+        >
+          {storyPanels[activeStep] ?? storyPanels[0]}
+        </AdminMobileStepView>
+      ) : (
+        <div className="space-y-6 sm:space-y-8">
+          {storySectionNode}
+          {pillarsSectionNode}
+          {marqueeSectionNode}
+        </div>
+      )}
 
       <ConfirmModal
         open={Boolean(confirmState)}

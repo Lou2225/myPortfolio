@@ -20,36 +20,44 @@ export function ConversionFunnelCard({ summary }: ConversionFunnelCardProps) {
   const { funnel, kpis, mode } = summary;
 
   return (
-    <div className="h-full bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-6 flex flex-col justify-between gap-5">
+    <div className="h-full bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 flex flex-col justify-between gap-5">
       <div>
         <SectionHeader
           eyebrow="Business Analytics · True Funnel"
           title="Chapter Reach & Conversion Funnel"
           size="sm"
           className="mb-4"
-          rightSlot={<BarChart3 className="w-5 h-5 text-(--text-accent)" />}
+          rightSlot={
+            <div className="flex items-center gap-2">
+              <InfoTooltip
+                label="True funnel conversion logic"
+                content="Anchors every chapter milestone against entry traffic inside the active filter window so you can spot drop-off between Story, Stack, Projects, and Contact goals."
+              />
+              <BarChart3 className="w-5 h-5 text-(--text-accent)" />
+            </div>
+          }
         />
 
         {/* North-Star Conversion Rates */}
-        <div className="grid grid-cols-3 gap-2.5 mb-5">
-          <div className="p-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle)">
-            <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-(--text-muted) block">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 mb-5">
+          <div className="p-2 sm:p-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) min-w-0">
+            <span className="text-[0.5625rem] sm:text-[0.625rem] font-mono uppercase tracking-[0.08em] sm:tracking-[0.14em] text-(--text-muted) block leading-tight">
               Scroll Completion
             </span>
             <span className="font-mono text-sm sm:text-base font-semibold text-(--text-primary) tabular-nums">
               {kpis.scrollCompletionPct.toFixed(1)}%
             </span>
           </div>
-          <div className="p-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle)">
-            <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-(--text-muted) block">
+          <div className="p-2 sm:p-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) min-w-0">
+            <span className="text-[0.5625rem] sm:text-[0.625rem] font-mono uppercase tracking-[0.08em] sm:tracking-[0.14em] text-(--text-muted) block leading-tight">
               Project CTR
             </span>
             <span className="font-mono text-sm sm:text-base font-semibold text-(--text-primary) tabular-nums">
               {kpis.projectCtrPct.toFixed(1)}%
             </span>
           </div>
-          <div className="p-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle)">
-            <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-(--text-muted) block">
+          <div className="p-2 sm:p-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) min-w-0">
+            <span className="text-[0.5625rem] sm:text-[0.625rem] font-mono uppercase tracking-[0.08em] sm:tracking-[0.14em] text-(--text-muted) block leading-tight">
               Lead Conv Rate
             </span>
             <span className="font-mono text-sm sm:text-base font-semibold text-(--text-accent) tabular-nums">

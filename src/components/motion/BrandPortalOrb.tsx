@@ -31,6 +31,7 @@ export interface BrandPortalOrbProps {
   isAdminRoute: boolean;
   isRegisteredDevice: boolean;
   isAnimating: boolean;
+  isSlideTransition?: boolean;
   onOrbAction: () => void;
 }
 
@@ -62,6 +63,7 @@ export function BrandPortalOrb({
   isAdminRoute,
   isRegisteredDevice,
   isAnimating,
+  isSlideTransition = false,
   onOrbAction,
 }: BrandPortalOrbProps) {
   const { profile, updatedAt } = usePortfolio();
@@ -140,7 +142,7 @@ export function BrandPortalOrb({
   let ambientLabel = "Portfolio Live";
   let ambientDetail = isRegisteredDevice
     ? "Click orb to open CMS"
-    : "Click orb to scroll top";
+    : profile?.contact?.status?.trim() || "Systems operational";
 
   if (!isOnline) {
     ambientTone = "offline";
@@ -300,14 +302,23 @@ export function BrandPortalOrb({
       : `Open Portfolio Manager (${activeLabel})`
     : activeLabel;
 
-  const canNavigateOrScroll = isRegisteredDevice || !isAdminRoute;
+  const canNavigate = isRegisteredDevice;
   const showDesktopAdmin = isAdminRoute;
-  const showMobileAdmin = isAdminRoute && (isAnimating || isExpanded);
+  const showMobileAdmin =
+    isAdminRoute && ((isAnimating && !isSlideTransition) || isExpanded);
+
+  const orbZIndex = isSlideTransition
+    ? 140
+    : isAdminRoute || isAnimating
+    ? 9995
+    : 140;
 
   return (
     <div
+      style={{ zIndex: orbZIndex }}
       className={cn(
-        "fixed left-4 z-2147483647 items-center select-none pointer-events-none",
+        "fixed left-4 items-center select-none pointer-events-none transition-[opacity,transform] duration-220 ease-out",
+        isSlideTransition && "opacity-0 scale-95",
         showDesktopAdmin ? "bottom-22 md:bottom-4" : "bottom-4",
         showDesktopAdmin
           ? showMobileAdmin
@@ -344,13 +355,22 @@ export function BrandPortalOrb({
           {/* Left: 40x40 Circular Brand Monogram Orb */}
           <div
             ref={logoButtonRef}
-            onClick={canNavigateOrScroll && !isAnimating ? onOrbAction : undefined}
-            role={canNavigateOrScroll ? "button" : undefined}
-            tabIndex={canNavigateOrScroll ? 0 : undefined}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
+            onClick={
+              canNavigate && !isAnimating
+                ? (e) => {
+                    e.currentTarget.blur();
+                    setFocused(false);
+                    setHovered(false);
+                    onOrbAction();
+                  }
+                : undefined
+            }
+            role={canNavigate ? "button" : undefined}
+            tabIndex={canNavigate ? 0 : undefined}
+            onFocus={canNavigate ? () => setFocused(true) : undefined}
+            onBlur={canNavigate ? () => setFocused(false) : undefined}
             onKeyDown={
-              canNavigateOrScroll
+              canNavigate
                 ? (e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
@@ -359,10 +379,10 @@ export function BrandPortalOrb({
                   }
                 : undefined
             }
-            aria-label={orbAriaLabel}
+            aria-label={canNavigate ? orbAriaLabel : undefined}
             className={cn(
               "relative w-10 h-10 rounded-full shrink-0 flex items-center justify-center p-0.5 will-change-transform transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
-              canNavigateOrScroll && !isAnimating
+              canNavigate && !isAnimating
                 ? "cursor-pointer hover:scale-105 active:scale-95"
                 : "cursor-default"
             )}

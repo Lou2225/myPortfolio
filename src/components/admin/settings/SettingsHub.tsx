@@ -241,7 +241,7 @@ export function SettingsHub({
       {/* Administrator Identity Card (Clean Rectangular Status Container) */}
       <div
         data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4"
+        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4"
       >
         <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-(--bg-surface-2) border border-brand/40 flex items-center justify-center shrink-0 font-display text-lg sm:text-xl text-(--text-accent)">
@@ -249,14 +249,16 @@ export function SettingsHub({
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-sm sm:text-base text-(--text-primary) truncate">
+              <p className="font-semibold text-sm sm:text-base text-(--text-primary)">
                 {db.profile.fullName}
+                <span className="inline-flex align-middle ml-1.5">
+                  <InfoTooltip
+                    label="Administrator workspace posture"
+                    content="Changes saved inside any module immediately revalidate ISR routes and persist to your active database engine (Supabase PostgreSQL or Local JSON)."
+                  />
+                </span>
               </p>
               <StatusPill label="Administrator" variant="accent" size="xs" />
-              <InfoTooltip
-                label="Administrator workspace posture"
-                content="Changes saved inside any module immediately revalidate ISR routes and persist to your active database engine (Supabase PostgreSQL or Local JSON)."
-              />
             </div>
             <p className="text-xs font-mono text-(--text-muted) truncate mt-0.5">
               {db.profile.contact.email} · Last sync{" "}
@@ -271,7 +273,7 @@ export function SettingsHub({
       {/* Reusable "Find a setting" Search Command Bar */}
       <div
         data-cascade
-        className="mt-4 relative z-30 bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4"
+        className="mt-4 relative z-30 bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5"
       >
         <SearchCommandBar
           ref={searchBarRef}

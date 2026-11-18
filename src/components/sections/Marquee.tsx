@@ -1,3 +1,6 @@
+"use client";
+
+import { usePortfolio } from "@/context/PortfolioContext";
 import { MarqueeSpeedMode } from "@/types/portfolio";
 
 const MARQUEE_DURATION_BY_SPEED: Record<MarqueeSpeedMode, string> = {
@@ -15,7 +18,9 @@ export function Marquee({
   marqueePrinciples,
   marqueeSpeed = "normal",
 }: MarqueeProps) {
-  const duration = MARQUEE_DURATION_BY_SPEED[marqueeSpeed] ?? "24s";
+  const { appearance } = usePortfolio();
+  const activeSpeed = appearance?.marqueeSpeed ?? marqueeSpeed;
+  const duration = MARQUEE_DURATION_BY_SPEED[activeSpeed] ?? "24s";
 
   return (
     <section

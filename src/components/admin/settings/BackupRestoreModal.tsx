@@ -148,15 +148,15 @@ export function BackupRestoreModal({
       ariaLabelledBy="backup-restore-title"
       maxWidthClassName="max-w-xl"
     >
-      <div className="p-5 sm:p-6 space-y-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-(--border-subtle) flex items-start justify-between gap-3 shrink-0">
+          <div className="min-w-0">
             <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-(--text-accent) block">
               Selective Snapshot Restore
             </span>
             <h3
               id="backup-restore-title"
-              className="font-display text-2xl uppercase tracking-tight text-(--text-primary) mt-0.5"
+              className="font-display text-xl sm:text-2xl uppercase tracking-tight text-(--text-primary) mt-0.5"
             >
               Review Restore Scope
             </h3>
@@ -173,113 +173,117 @@ export function BackupRestoreModal({
             disabled={restoring}
             onClick={onCancel}
             aria-label="Close restore preview"
+            className="shrink-0"
           >
             <X className="w-4 h-4" />
           </Button>
         </div>
 
-        {/* Integrity & Rollback Guarantee */}
-        <div className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs font-mono">
-            {integrityStatus === "verified" ? (
-              <>
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="text-(--text-primary)">
-                  SHA-256 checksum matches backup payload
-                </span>
-              </>
-            ) : integrityStatus === "mismatch" ? (
-              <>
-                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-                <span className="text-rose-400">
-                  SHA-256 mismatch — file may be modified or corrupted
-                </span>
-              </>
-            ) : (
-              <>
-                <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-(--text-secondary)">
-                  Schema-checked on server prior to applying
-                </span>
-              </>
-            )}
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 lou-scrollarea">
+          {/* Integrity & Rollback Guarantee */}
+          <div className="p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2 text-xs font-mono">
+              {integrityStatus === "verified" ? (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-(--text-primary)">
+                    SHA-256 checksum matches backup payload
+                  </span>
+                </>
+              ) : integrityStatus === "mismatch" ? (
+                <>
+                  <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="text-rose-400">
+                    SHA-256 mismatch — file may be modified or corrupted
+                  </span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-(--text-secondary)">
+                    Schema-checked on server prior to applying
+                  </span>
+                </>
+              )}
+            </div>
+            <StatusPill
+              label={
+                integrityStatus === "verified"
+                  ? "Verified v2"
+                  : integrityStatus === "mismatch"
+                    ? "Tampered"
+                    : "Legacy Format"
+              }
+              variant={
+                integrityStatus === "verified"
+                  ? "success"
+                  : integrityStatus === "mismatch"
+                    ? "danger"
+                    : "warning"
+              }
+              size="xs"
+            />
           </div>
-          <StatusPill
-            label={
-              integrityStatus === "verified"
-                ? "Verified v2"
-                : integrityStatus === "mismatch"
-                  ? "Tampered"
-                  : "Legacy Format"
-            }
-            variant={
-              integrityStatus === "verified"
-                ? "success"
-                : integrityStatus === "mismatch"
-                  ? "danger"
-                  : "warning"
-            }
-            size="xs"
-          />
-        </div>
 
-        {/* Checkboxes per Domain */}
-        <div className="space-y-2">
-          <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-(--text-muted) block">
-            Choose Sections to Overwrite
-          </span>
+          {/* Checkboxes per Domain */}
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-(--text-muted) block">
+              Choose Sections to Overwrite
+            </span>
 
-          <div className="grid grid-cols-1 gap-2">
-            {SECTION_OPTIONS.map((opt) => {
-              const available = opt.isAvailable(incomingCounts);
-              const checked = available && sections[opt.key];
+            <div className="grid grid-cols-1 gap-2">
+              {SECTION_OPTIONS.map((opt) => {
+                const available = opt.isAvailable(incomingCounts);
+                const checked = available && sections[opt.key];
 
-              return (
-                <button
-                  key={opt.key}
-                  type="button"
-                  disabled={!available || restoring}
-                  onClick={() => toggleSection(opt.key, available)}
-                  className={`w-full text-left p-3 rounded-sm border flex items-center justify-between gap-3 transition-colors ${
-                    !available
-                      ? "bg-(--bg-surface-2)/50 border-(--border-subtle) opacity-55 cursor-not-allowed"
-                      : checked
-                        ? "bg-(--bg-badge-highlight)/35 border-brand/45 cursor-pointer"
-                        : "bg-(--bg-surface-2) border-(--border-subtle) hover:border-(--border-strong) cursor-pointer"
-                  }`}
-                >
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    {checked ? (
-                      <CheckSquare className="w-4 h-4 text-(--text-accent) shrink-0 mt-0.5" />
-                    ) : (
-                      <Square className="w-4 h-4 text-(--text-muted) shrink-0 mt-0.5" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-(--text-primary)">
-                        {opt.label}
-                      </p>
-                      <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
-                        {opt.detail(incomingCounts, currentCounts)}
-                      </p>
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    disabled={!available || restoring}
+                    onClick={() => toggleSection(opt.key, available)}
+                    className={`w-full text-left p-3 rounded-(--radius-control) border flex items-center justify-between gap-3 transition-colors ${
+                      !available
+                        ? "bg-(--bg-surface-2)/50 border-(--border-subtle) opacity-55 cursor-not-allowed"
+                        : checked
+                          ? "bg-(--bg-badge-highlight)/35 border-brand/45 cursor-pointer"
+                          : "bg-(--bg-surface-2) border-(--border-subtle) hover:border-(--border-strong) cursor-pointer"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      {checked ? (
+                        <CheckSquare className="w-4 h-4 text-(--text-accent) shrink-0 mt-0.5" />
+                      ) : (
+                        <Square className="w-4 h-4 text-(--text-muted) shrink-0 mt-0.5" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-(--text-primary)">
+                          {opt.label}
+                        </p>
+                        <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
+                          {opt.detail(incomingCounts, currentCounts)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          <p className="text-[11px] text-(--text-muted)">
+            Safety guarantee: Your current live database is automatically saved to the Server Snapshot Vault right before this restore executes.
+          </p>
         </div>
 
-        <p className="text-[11px] text-(--text-muted)">
-          Safety guarantee: Your current live database is automatically saved to the Server Snapshot Vault right before this restore executes.
-        </p>
-
-        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-(--border-subtle)">
+        <div className="px-4 sm:px-6 py-3.5 bg-(--bg-surface-2) flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-2.5 border-t border-(--border-subtle) shrink-0">
           <Button
             type="button"
             variant="secondary"
             size="sm"
             disabled={restoring}
             onClick={onCancel}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -290,8 +294,9 @@ export function BackupRestoreModal({
             size="sm"
             disabled={!canConfirm}
             onClick={() => void onConfirm(sections)}
+            className="w-full sm:w-auto"
           >
-            {restoring && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {restoring && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
             <span>Publish Selected Sections Live</span>
           </Button>
         </div>

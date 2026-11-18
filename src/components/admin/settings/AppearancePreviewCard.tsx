@@ -18,9 +18,11 @@ export interface AppearancePreviewCardProps {
   draft: AppearanceConfig;
   effectiveTheme: PortfolioTheme;
   isDirty: boolean;
+  /** Omit outer card chrome & header when rendered inside a collapsible drawer. */
+  embedded?: boolean;
 }
 
-const FONT_STYLE_MAP: Record<
+export const FONT_PAIRING_STYLE_MAP: Record<
   AppearanceConfig["fontPairing"],
   { display: string; sans: string }
 > = {
@@ -42,6 +44,7 @@ export function AppearancePreviewCard({
   draft,
   effectiveTheme,
   isDirty,
+  embedded = false,
 }: AppearancePreviewCardProps) {
   const palette = useMemo(
     () => resolveAccentPalette(resolveAccentBaseHex(draft)),
@@ -74,7 +77,7 @@ export function AppearancePreviewCard({
     ? "rgba(17, 17, 20, 0.14)"
     : "rgba(243, 241, 234, 0.12)";
   const accentText = isLight ? palette.textOnLight : palette.textOnDark;
-  const fonts = FONT_STYLE_MAP[draft.fontPairing];
+  const fonts = FONT_PAIRING_STYLE_MAP[draft.fontPairing];
 
   const textureStyle: React.CSSProperties =
     draft.canvasTexture === "grid"
@@ -97,37 +100,43 @@ export function AppearancePreviewCard({
 
   return (
     <div
-      data-cascade
-      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-sm"
+      data-cascade={!embedded || undefined}
+      className={cn(
+        "space-y-3.5 sm:space-y-5",
+        !embedded &&
+          "bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 shadow-sm"
+      )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pb-3 sm:pb-3.5 border-b border-(--border-subtle)">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <Eye className="w-4 h-4 text-(--text-accent) shrink-0" />
-          <div className="min-w-0">
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-(--text-accent) block">
-              Real-Time Design System Stage
-            </span>
-            <p className="text-xs text-(--text-muted) truncate">
-              {fontMeta.displayLabel} + {fontMeta.sansLabel} · {radiusMeta.name}{" "}
-              ({radiusMeta.pxCard}) · {draft.canvasTexture} texture
-            </p>
+      {!embedded && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pb-3 sm:pb-3.5 border-b border-(--border-subtle)">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Eye className="w-4 h-4 text-(--text-accent) shrink-0" />
+            <div className="min-w-0">
+              <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-(--text-accent) block">
+                Real-Time Design System Stage
+              </span>
+              <p className="text-xs text-(--text-muted) truncate">
+                {fontMeta.displayLabel} + {fontMeta.sansLabel} · {radiusMeta.name}{" "}
+                ({radiusMeta.pxCard}) · {draft.canvasTexture} texture
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <StatusPill
+              label={isDirty ? "Draft Preview Active" : "Published"}
+              variant={isDirty ? "warning" : "success"}
+              size="xs"
+              icon={<Sparkles className="w-3 h-3" />}
+            />
+            <StatusPill
+              label={isLight ? "Daylight Bone" : "Obsidian Dark"}
+              variant="neutral"
+              size="xs"
+            />
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusPill
-            label={isDirty ? "Draft Preview Active" : "Published"}
-            variant={isDirty ? "warning" : "success"}
-            size="xs"
-            icon={<Sparkles className="w-3 h-3" />}
-          />
-          <StatusPill
-            label={isLight ? "Daylight Bone" : "Obsidian Dark"}
-            variant="neutral"
-            size="xs"
-          />
-        </div>
-      </div>
+      )}
 
       {/* Live Scaled Mini Portfolio Viewport */}
       <div
@@ -224,8 +233,8 @@ export function AppearancePreviewCard({
                 className="px-3 py-1.5 border text-[10px] font-mono uppercase tracking-[0.14em]"
               >
                 {draft.projectsLayout === "staggered"
-                  ? "Staggered Offset"
-                  : "Aligned Grid"}
+                  ? "Spotlight Deck"
+                  : "2-Col Grid"}
               </span>
             </div>
           </div>
@@ -272,16 +281,16 @@ export function AppearancePreviewCard({
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <p
                     style={{ fontFamily: fonts.display, color: inkPrimary }}
-                    className="text-sm uppercase leading-none"
+                    className="text-sm uppercase leading-none truncate"
                   >
                     Enterprise Telemetry Core
                   </p>
                   <p
                     style={{ color: inkMuted }}
-                    className="text-[10px] font-mono mt-0.5"
+                    className="text-[10px] font-mono mt-0.5 truncate"
                   >
                     Next.js · Supabase · GSAP
                   </p>
@@ -302,7 +311,7 @@ export function AppearancePreviewCard({
       </div>
 
       {/* Live WCAG 2.1 Contrast Safety Strip */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-[11px] font-mono">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-1 text-[11px] font-mono">
         <div className="flex flex-wrap items-center gap-2">
           {lowContrastWarning ? (
             <span className="inline-flex items-center gap-1.5 text-amber-400">
@@ -319,7 +328,7 @@ export function AppearancePreviewCard({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <StatusPill
             label={`Dark ${palette.contrastOnDarkCanvas}:1`}
             variant={palette.contrastOnDarkCanvas >= 4.5 ? "success" : "warning"}

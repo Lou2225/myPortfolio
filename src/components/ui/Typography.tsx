@@ -59,11 +59,11 @@ export function DisplayHeading({
   children,
 }: DisplayHeadingProps) {
   const sizeStyles = {
-    hero: "text-4xl sm:text-6xl md:text-7xl lg:text-8xl leading-[0.94]",
-    xl: "text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[0.96]",
-    lg: "text-3xl sm:text-4xl md:text-5xl leading-[1.02]",
-    md: "text-2xl sm:text-3xl leading-[1.05]",
-    sm: "text-xl sm:text-2xl leading-[1.08]",
+    hero: "text-[clamp(2.125rem,6.5vw,5.5rem)] leading-[0.94]",
+    xl: "text-[clamp(1.875rem,5.2vw,4.5rem)] leading-[0.96]",
+    lg: "text-[clamp(1.625rem,4vw,3.125rem)] leading-[1.02]",
+    md: "text-[clamp(1.25rem,2.6vw,1.875rem)] leading-[1.06]",
+    sm: "text-[clamp(1.0625rem,2vw,1.5rem)] leading-[1.08]",
   };
 
   const toneStyles = {
@@ -106,10 +106,10 @@ export function BodyText({
   children,
 }: BodyTextProps) {
   const sizeStyles = {
-    lg: "text-base sm:text-lg leading-relaxed",
-    md: "text-sm sm:text-base leading-relaxed",
-    sm: "text-xs sm:text-sm leading-relaxed",
-    xs: "text-xs leading-relaxed",
+    lg: "text-[clamp(0.9375rem,0.86rem+0.3vw,1.125rem)] leading-relaxed",
+    md: "text-[clamp(0.84375rem,0.79rem+0.22vw,1rem)] leading-relaxed",
+    sm: "text-[clamp(0.78125rem,0.74rem+0.16vw,0.875rem)] leading-relaxed",
+    xs: "text-[clamp(0.71875rem,0.69rem+0.12vw,0.75rem)] leading-relaxed",
   };
 
   const toneStyles = {
@@ -179,14 +179,15 @@ export function TechBadge({
   className,
 }: TechBadgeProps) {
   const sizeStyles = {
-    sm: "px-2.5 py-1 text-[11px]",
-    md: "px-3 py-1.5 text-xs",
+    sm: "h-[1.875rem] px-2.5 text-[calc(0.6875rem*var(--public-scale,1))]",
+    md: "h-[2.125rem] px-3 text-[calc(0.75rem*var(--public-scale,1))]",
   };
 
   return (
     <span
+      title={label}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-(--radius-control) border font-mono transition-colors duration-300",
+        "inline-flex items-center gap-1.5 rounded-(--radius-control) border font-mono whitespace-nowrap min-w-0 transition-colors duration-300",
         sizeStyles[size],
         highlight
           ? "bg-(--bg-badge-highlight) border-brand/45 text-(--text-primary) font-semibold shadow-xs"
@@ -197,7 +198,7 @@ export function TechBadge({
       {highlight && (
         <CheckCircle2 className="w-3.5 h-3.5 text-(--text-accent) shrink-0" />
       )}
-      <span>{label}</span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }

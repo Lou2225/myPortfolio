@@ -111,25 +111,25 @@ export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
   return (
     <div
       data-lenis-prevent
-      className="fixed inset-0 z-50 h-dvh w-full overflow-hidden bg-(--bg-canvas) text-(--text-primary) flex flex-col justify-between px-6 py-5 sm:px-10 sm:py-7 select-none"
+      className="fixed inset-0 z-50 h-dvh w-full overflow-y-auto overflow-x-clip bg-(--bg-canvas) text-(--text-primary) flex flex-col justify-between gap-4 px-4 py-4 sm:px-8 sm:py-6 [@media(max-height:640px)]:py-3 select-none"
     >
-      <div className="max-w-7xl w-full mx-auto flex items-center justify-between shrink-0">
+      <div className="max-w-7xl w-full mx-auto flex items-center justify-between gap-2 shrink-0">
         <Button
           href="/"
           variant="ghost"
           size="sm"
           slideDirection="left"
-          className="px-3 -ml-3"
+          className="px-2.5 sm:px-3 -ml-2 sm:-ml-3"
         >
           <ArrowLeft className="w-4 h-4 text-(--text-accent)" />
           <span>Back to Public Portfolio</span>
         </Button>
-        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-(--text-muted)">
+        <span className="hidden min-[400px]:inline text-[0.625rem] sm:text-[0.6875rem] font-mono uppercase tracking-[0.2em] text-(--text-muted) whitespace-nowrap">
           Restricted Access
         </span>
       </div>
 
-      <div className="max-w-md w-full mx-auto bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-6 sm:p-8 shadow-2xl my-auto">
+      <div className="max-w-md w-full mx-auto bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-8 [@media(max-height:640px)]:p-5 shadow-2xl my-auto">
         <div className="w-11 h-11 rounded-full bg-(--bg-badge-highlight) border border-brand/40 flex items-center justify-center mb-5">
           {requiresTotp ? (
             <KeyRound className="w-5 h-5 text-(--text-accent)" />

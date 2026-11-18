@@ -8,8 +8,12 @@ import {
 import { StorageReadError, StorageWriteError } from "@/lib/db";
 import {
   appendSecurityAudit,
+  checkSecurityRateLimit,
+  clearSecurityRateBucket,
   extractRequestNetworkInfo,
   mutateAdminSecurityStore,
+  readAdminSecurityStore,
+  recordSecurityRateFailure,
 } from "@/lib/security";
 import {
   buildOtpAuthUri,
@@ -76,6 +80,21 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "confirm-setup") {
+      const setupRateKey = `totp-setup:${reqInfo.ipRateKey}`;
+      const preStore = await readAdminSecurityStore();
+      const setupRate = checkSecurityRateLimit(preStore, setupRateKey);
+      if (!setupRate.allowed) {
+        return NextResponse.json(
+          {
+            error: `Too many invalid verification attempts. Retry in ${setupRate.retryAfterSec}s.`,
+          },
+          {
+            status: 429,
+            headers: { "Retry-After": String(setupRate.retryAfterSec) },
+          }
+        );
+      }
+
       const cleanCode = (body.code || "").replace(/\D/g, "");
       if (cleanCode.length !== 6) {
         return NextResponse.json(
@@ -111,18 +130,26 @@ export async function POST(request: Request) {
           token: cleanCode,
         });
         if (!verified.valid || verified.matchedStep === null) {
+          const penalized = recordSecurityRateFailure(store, setupRateKey, {
+            maxFailures: 6,
+          });
+          const blocked =
+            penalized.loginFailures[setupRateKey]?.blockedUntil != null;
           outcome = {
             ok: false,
-            status: 400,
-            error: "6-digit Authenticator code did not match. Check device clock and retry.",
+            status: blocked ? 429 : 400,
+            error: blocked
+              ? "Too many incorrect 2FA codes. Wait 15 minutes and retry."
+              : "6-digit Authenticator code did not match. Check device clock and retry.",
           };
-          return store;
+          return penalized;
         }
 
         outcome = { ok: true };
+        const clearedStore = clearSecurityRateBucket(store, setupRateKey);
         return appendSecurityAudit(
           {
-            ...store,
+            ...clearedStore,
             totpEnabled: true,
             totpSecretEnc: store.totpPendingSecretEnc,
             totpPendingSecretEnc: null,
@@ -151,6 +178,21 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "disable") {
+      const disableRateKey = `totp-disable:${reqInfo.ipRateKey}`;
+      const preStore = await readAdminSecurityStore();
+      const disableRate = checkSecurityRateLimit(preStore, disableRateKey);
+      if (!disableRate.allowed) {
+        return NextResponse.json(
+          {
+            error: `Too many incorrect password checks. Retry in ${disableRate.retryAfterSec}s.`,
+          },
+          {
+            status: 429,
+            headers: { "Retry-After": String(disableRate.retryAfterSec) },
+          }
+        );
+      }
+
       if (!body.currentPassword) {
         return NextResponse.json(
           { error: "Enter your administrator password to disable Authenticator 2FA." },
@@ -160,16 +202,41 @@ export async function POST(request: Request) {
 
       const pwdCheck = await verifyAdminCredential(body.currentPassword);
       if (!pwdCheck.valid) {
+        let nowBlocked = false;
+        await mutateAdminSecurityStore((store) => {
+          const penalized = recordSecurityRateFailure(store, disableRateKey, {
+            maxFailures: 5,
+          });
+          nowBlocked =
+            penalized.loginFailures[disableRateKey]?.blockedUntil != null;
+          return appendSecurityAudit(penalized, {
+            action: nowBlocked ? "login_blocked" : "login_failed",
+            actorDeviceId: ctx.currentDeviceId,
+            targetDeviceId: null,
+            deviceLabel: "Authenticator App (TOTP)",
+            ipMasked: reqInfo.ipMasked,
+            outcome: "blocked",
+            detail: nowBlocked
+              ? "Blocked repeated wrong password attempts while trying to disable 2FA."
+              : "Incorrect password submitted while trying to disable Authenticator 2FA.",
+          });
+        });
+
         return NextResponse.json(
-          { error: "Administrator password is incorrect." },
-          { status: 401 }
+          {
+            error: nowBlocked
+              ? "Too many incorrect password attempts. Cooldown active for 15 minutes."
+              : "Administrator password is incorrect.",
+          },
+          { status: nowBlocked ? 429 : 401 }
         );
       }
 
-      const updated = await mutateAdminSecurityStore((store) =>
-        appendSecurityAudit(
+      const updated = await mutateAdminSecurityStore((store) => {
+        const cleared = clearSecurityRateBucket(store, disableRateKey);
+        return appendSecurityAudit(
           {
-            ...store,
+            ...cleared,
             totpEnabled: false,
             totpSecretEnc: null,
             totpPendingSecretEnc: null,
@@ -184,8 +251,8 @@ export async function POST(request: Request) {
             outcome: "info",
             detail: "Disabled Authenticator app 2FA enforcement.",
           }
-        )
-      );
+        );
+      });
 
       return NextResponse.json({
         success: true,

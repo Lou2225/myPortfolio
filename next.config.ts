@@ -23,6 +23,7 @@ const globalCspDirectives = [
   `img-src 'self' blob: data: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""}`,
   "font-src 'self' data:",
   `connect-src 'self' https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""} https://psgc.gitlab.io`,
+  "frame-src 'self' blob: https://drive.google.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -60,7 +61,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: "/((?!api/resume).*)",
         headers: [
           {
             key: "Content-Security-Policy",
@@ -81,6 +82,24 @@ const nextConfig: NextConfig = {
           {
             key: "Permissions-Policy",
             value: "geolocation=(), microphone=()",
+          },
+        ],
+      },
+      {
+        source: "/api/resume",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "default-src 'self'; object-src 'self'; frame-ancestors 'self'",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
           },
         ],
       },

@@ -16,12 +16,12 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
     <section
       id="impact"
       aria-label="Impact Metrics"
-      className="scroll-mt-16 w-full py-12 sm:py-24 lg:py-32 px-4 sm:px-6 md:px-10 border-b border-(--border-subtle) bg-(--bg-canvas)"
+      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)"
     >
-      <div className="max-w-7xl mx-auto flex flex-col gap-8 sm:gap-16">
+      <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 sm:gap-12">
         {/* Header */}
         <div>
-          <Eyebrow withDot className="mb-3">
+          <Eyebrow withDot className="mb-2.5">
             {sectionHeaders.impactEyebrow}
           </Eyebrow>
           <DisplayHeading as="h2" size="lg">
@@ -29,30 +29,30 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
           </DisplayHeading>
         </div>
 
-        {/* 4-up Metrics Grid */}
-        <div>
-          <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border-t border-(--border-subtle)">
+        {/* Uniform 2x2 Mobile / 4-Column Desktop Metrics Grid */}
+        <div className="w-full">
+          <dl className="grid grid-cols-2 lg:grid-cols-4 border-t border-(--border-subtle) w-full">
             {impactMetrics.map((stat, i) => (
               <div
                 key={stat.label}
-                className={`impact-stat-cell flex flex-col justify-between py-6 sm:py-8 lg:py-10 border-b border-(--border-subtle) ${
+                className={`impact-stat-cell flex flex-col justify-between py-5 sm:py-8 lg:py-10 border-b border-(--border-subtle) ${
                   i !== 0
                     ? "lg:border-l lg:border-(--border-subtle) lg:pl-6 xl:pl-8"
                     : ""
                 } ${
                   i % 2 === 1
-                    ? "sm:border-l sm:border-(--border-subtle) sm:pl-6 lg:pl-6 xl:pl-8"
-                    : "sm:pr-6 lg:pr-4"
+                    ? "border-l border-(--border-subtle) pl-4 sm:pl-6 lg:pl-6 xl:pl-8"
+                    : "pr-4 sm:pr-6 lg:pr-4"
                 } group`}
               >
-                <dd className="font-display text-5xl sm:text-6xl xl:text-7xl uppercase tracking-tight text-(--text-primary) group-hover:text-(--text-accent) transition-colors duration-300">
+                <dd className="font-display text-[clamp(2.125rem,6vw,4.5rem)] leading-[0.95] uppercase tracking-tight text-(--text-primary) group-hover:text-(--text-accent) transition-colors duration-300 tabular-nums">
                   {stat.prefix}
                   {stat.value}
                   <span className="text-(--text-accent)">
                     {stat.suffix}
                   </span>
                 </dd>
-                <dt className="mt-3 sm:mt-4">
+                <dt className="mt-2.5 sm:mt-4">
                   <DisplayHeading as="span" size="sm" className="block">
                     {stat.label}
                   </DisplayHeading>

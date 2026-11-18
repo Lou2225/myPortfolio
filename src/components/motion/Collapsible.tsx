@@ -24,9 +24,9 @@ export interface CollapsibleProps {
   id?: string;
 }
 
-const COLLAPSIBLE_DURATION_MS = 300;
-const COLLAPSIBLE_SETTLE_MS = 320;
-const FOLLOW_SCROLL_DURATION_MS = 460;
+const COLLAPSIBLE_DURATION_MS = 380;
+const COLLAPSIBLE_SETTLE_MS = 400;
+const FOLLOW_SCROLL_DURATION_MS = 380;
 
 /**
  * Reusable 60–120 FPS Accordion / Expandable Container.
@@ -64,8 +64,8 @@ export function Collapsible({
     if (!triggerEl || !panelEl) return undefined;
 
     const computeDesiredY = () => {
-      const topClearance = measureStickyCeilingPx(164, 12);
-      const bottomClearance = 28;
+      const topClearance = measureStickyCeilingPx(76, 12);
+      const bottomClearance = window.innerWidth < 768 ? 96 : 28;
       const viewportHeight = window.innerHeight;
       const currentScrollY = window.scrollY;
 
@@ -132,6 +132,7 @@ export function Collapsible({
     };
 
     const startY = window.scrollY;
+    const stableTargetY = computeDesiredY();
     const startTime = performance.now();
     const easeOutExpand = (t: number) => 1 - Math.pow(1 - t, 4);
 
@@ -156,18 +157,20 @@ export function Collapsible({
       const t = Math.min(elapsed / FOLLOW_SCROLL_DURATION_MS, 1);
       const eased = easeOutExpand(t);
 
-      const targetY = computeDesiredY();
+      const liveTargetY = Math.round(
+        stableTargetY * 0.75 + computeDesiredY() * 0.25
+      );
       const maxScrollNow = Math.max(
         0,
         document.documentElement.scrollHeight - window.innerHeight
       );
-      const interpolated = startY + (targetY - startY) * eased;
+      const interpolated = startY + (liveTargetY - startY) * eased;
       const nextY = Math.max(
         0,
         Math.min(t === 1 ? Math.round(interpolated) : interpolated, maxScrollNow)
       );
 
-      if (Math.abs(targetY - startY) >= 4) {
+      if (Math.abs(liveTargetY - startY) >= 4) {
         scrollTo(nextY, { immediate: true });
       }
 
@@ -177,6 +180,15 @@ export function Collapsible({
         followRafRef.current = null;
         cleanupListeners();
         refreshScroll();
+        const finalTarget = computeDesiredY();
+        const finalMax = Math.max(
+          0,
+          document.documentElement.scrollHeight - window.innerHeight
+        );
+        const clampedFinal = Math.max(0, Math.min(finalTarget, finalMax));
+        if (Math.abs(clampedFinal - window.scrollY) > 6) {
+          scrollTo(clampedFinal, { duration: 0.18 });
+        }
       }
     };
 
@@ -301,7 +313,7 @@ export function Collapsible({
       ref={rootRef}
       id={id}
       className={cn(
-        "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "grid transition-[grid-template-rows,opacity] duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
         open
           ? "grid-rows-[1fr] opacity-100"
           : "grid-rows-[0fr] opacity-0 pointer-events-none",
@@ -320,7 +332,7 @@ export function Collapsible({
         <div
           ref={panelRef}
           className={cn(
-            "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform",
+            "transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform",
             open ? "translate-y-0" : "-translate-y-2",
             contentClassName
           )}

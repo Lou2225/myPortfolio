@@ -45,17 +45,17 @@ export interface DevicePairClientProps {
 function extractChallengeIdFromInput(rawValue: string): string | null {
   const trimmed = rawValue.trim();
   if (!trimmed) return null;
-  if (/^[a-f0-9-]{16,128}$/i.test(trimmed)) {
+  if (/^[A-Za-z0-9_-]{16,128}$/.test(trimmed)) {
     return trimmed;
   }
   try {
     const parsed = new URL(trimmed);
     const param = parsed.searchParams.get("challenge")?.trim();
-    if (param && /^[a-f0-9-]{16,128}$/i.test(param)) {
+    if (param && /^[A-Za-z0-9_-]{16,128}$/.test(param)) {
       return param;
     }
   } catch {
-    const match = trimmed.match(/[?&]challenge=([a-f0-9-]{16,128})/i);
+    const match = trimmed.match(/[?&]challenge=([A-Za-z0-9_-]{16,128})/);
     if (match?.[1]) {
       return match[1];
     }
@@ -299,10 +299,10 @@ export function DevicePairClient({ challengeId }: DevicePairClientProps) {
   const secs = String(challengeState.remainingSec % 60).padStart(2, "0");
 
   return (
-    <main className="min-h-dvh bg-(--bg-canvas) text-(--text-primary) px-4 py-8 flex items-center justify-center">
-      <div className="max-w-md w-full bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-6 sm:p-7 shadow-2xl space-y-5">
+    <main className="min-h-dvh w-full max-w-full overflow-x-clip bg-(--bg-canvas) text-(--text-primary) px-3 py-4 sm:px-4 sm:py-8 flex items-center justify-center">
+      <div className="max-w-md w-full bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-7 shadow-2xl space-y-4 sm:space-y-5">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
           <div className="flex items-center gap-3">
             <span className="w-10 h-10 rounded-(--radius-control) bg-(--bg-badge-highlight) border border-brand/40 flex items-center justify-center shrink-0 text-(--text-accent)">
               <Smartphone className="w-5 h-5" />

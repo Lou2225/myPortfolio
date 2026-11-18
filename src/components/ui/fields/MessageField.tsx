@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useId, useState } from "react";
+import { Maximize2 } from "lucide-react";
 import { FieldWrapper } from "./FieldWrapper";
+import { MessageFocusModal } from "./MessageFocusModal";
 import { sanitizeTextInput, validateMessage } from "@/lib/inputValidation";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +20,8 @@ export interface MessageFieldProps {
   maxLength?: number;
   showCounter?: boolean;
   forceTouched?: boolean;
+  /** Show a mobile-only `Focus` expand trigger in the label row for fullscreen distraction-free writing. */
+  expandableOnMobile?: boolean;
   hint?: string;
   className?: string;
   textareaClassName?: string;
@@ -37,6 +41,7 @@ export function MessageField({
   maxLength = 2000,
   showCounter = true,
   forceTouched = false,
+  expandableOnMobile = false,
   hint,
   className,
   textareaClassName,
@@ -46,6 +51,7 @@ export function MessageField({
   const fieldId = id || `message-field-${autoId}`;
   const [blurredWithContent, setBlurredWithContent] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [focusModalOpen, setFocusModalOpen] = useState(false);
 
   const validation = validateMessage(value, {
     label,
@@ -92,48 +98,89 @@ export function MessageField({
     (forceTouched || (blurredWithContent && value.trim().length > 0));
 
   return (
-    <FieldWrapper
-      id={fieldId}
-      label={label}
-      required={required}
-      touched={shouldShowError}
-      valid={validation.valid}
-      error={validation.error}
-      hint={hint}
-      currentLength={value.length}
-      maxLength={maxLength}
-      showCounter={showCounter}
-      className={className}
-    >
-      <textarea
+    <>
+      <FieldWrapper
         id={fieldId}
-        name={`field_${autoId.replace(/:/g, "")}`}
-        rows={rows}
-        autoComplete="off"
-        autoCorrect="off"
-        spellCheck={false}
-        data-lpignore="true"
-        data-1p-ignore="true"
-        data-form-type="other"
-        data-lenis-prevent
-        value={value}
-        onChange={handleChange}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        placeholder={placeholder}
+        label={label}
         required={required}
+        touched={shouldShowError}
+        valid={validation.valid}
+        error={validation.error}
+        hint={hint}
+        currentLength={value.length}
         maxLength={maxLength}
-        disabled={disabled}
-        aria-invalid={shouldShowError}
-        aria-describedby={shouldShowError ? `${fieldId}-error` : undefined}
-        className={cn(
-          "theme-input lou-scrollarea w-full bg-[#17171b] border rounded-(--radius-control) px-3.5 py-2.5 text-sm text-(--text-primary) placeholder:text-(--text-muted) focus:outline-none transition-colors resize-none overflow-y-auto disabled:opacity-50",
-          shouldShowError
-            ? "border-brand/70 focus:border-brand"
-            : "border-(--border-subtle) focus:border-brand",
-          textareaClassName
-        )}
-      />
-    </FieldWrapper>
+        showCounter={showCounter}
+        className={className}
+        headerAction={
+          expandableOnMobile && !disabled ? (
+            <button
+              type="button"
+              onClick={() => setFocusModalOpen(true)}
+              aria-label={`Open distraction-free focus editor for ${label}`}
+              className="md:hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-(--bg-badge-highlight) border border-brand/35 hover:border-brand text-[10px] font-mono uppercase tracking-wider text-(--text-accent) transition-colors cursor-pointer"
+            >
+              <Maximize2 className="w-2.5 h-2.5" aria-hidden="true" />
+              <span>Focus</span>
+            </button>
+          ) : undefined
+        }
+      >
+        <textarea
+          id={fieldId}
+          name={`field_${autoId.replace(/:/g, "")}`}
+          rows={rows}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-form-type="other"
+          data-lenis-prevent
+          value={value}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          required={required}
+          maxLength={maxLength}
+          disabled={disabled}
+          aria-invalid={shouldShowError}
+          aria-describedby={shouldShowError ? `${fieldId}-error` : undefined}
+          className={cn(
+            "theme-input lou-scrollarea w-full bg-[#17171b] border rounded-(--radius-control) px-3.5 py-2.5 text-sm text-(--text-primary) placeholder:text-(--text-muted) focus:outline-none transition-colors resize-none overflow-y-auto disabled:opacity-50",
+            shouldShowError
+              ? "border-brand/70 focus:border-brand"
+              : "border-(--border-subtle) focus:border-brand",
+            textareaClassName
+          )}
+        />
+      </FieldWrapper>
+
+      {expandableOnMobile && (
+        <MessageFocusModal
+          open={focusModalOpen}
+          label={label}
+          initialValue={value}
+          placeholder={placeholder}
+          required={required}
+          minLength={minLength}
+          maxLength={maxLength}
+          hint={hint}
+          onCancel={() => setFocusModalOpen(false)}
+          onApply={(nextValue) => {
+            onChange(nextValue);
+            setBlurredWithContent(nextValue.length > 0);
+            const nextCheck = validateMessage(nextValue, {
+              label,
+              minLength,
+              maxLength,
+              required,
+            });
+            onValidChange?.(nextCheck.valid);
+            setFocusModalOpen(false);
+          }}
+        />
+      )}
+    </>
   );
 }

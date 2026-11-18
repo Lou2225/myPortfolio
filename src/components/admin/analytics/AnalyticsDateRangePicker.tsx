@@ -199,8 +199,8 @@ export function AnalyticsDateRangePicker({
       portal
       align="start"
       minWidth={410}
-      widthClassName="w-[calc(100vw-2rem)] sm:w-[424px]"
-      overflowMode="none"
+      widthClassName="w-[calc(100vw-1.5rem)] sm:w-[424px]"
+      overflowMode="auto"
       onOpenChange={handleOpenChange}
       trigger={({ isOpen, toggle }) => (
         <Button

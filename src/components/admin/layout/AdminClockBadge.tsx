@@ -120,7 +120,7 @@ export function AdminClockBadge({ className }: AdminClockBadgeProps) {
   }
 
   return (
-    <Tooltip content={formatted.tooltipText} side="bottom">
+    <Tooltip content={formatted.tooltipText} side="bottom" toggleOnClick>
       <div
         role="timer"
         aria-live="off"

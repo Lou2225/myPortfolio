@@ -25,6 +25,10 @@ export interface TextFieldProps {
   forceTouched?: boolean;
   leftSlot?: React.ReactNode;
   rightSlot?: React.ReactNode;
+  /** Optional wrapper around only the input control box (e.g. mobile SwipeRevealRow matching field height). */
+  renderInputControl?: (controlNode: React.ReactNode) => React.ReactNode;
+  /** When true, wraps `rightSlot` onto a full-width row below the input on `< sm` viewports. */
+  wrapRightSlotOnMobile?: boolean;
   hint?: string;
   className?: string;
   inputClassName?: string;
@@ -49,6 +53,8 @@ export function TextField({
   forceTouched = false,
   leftSlot,
   rightSlot,
+  renderInputControl,
+  wrapRightSlotOnMobile = false,
   hint,
   className,
   inputClassName,
@@ -122,43 +128,57 @@ export function TextField({
       showCounter={showCounter}
       className={className}
     >
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 min-w-0">
-          {leftSlot && (
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none select-none">
-              {leftSlot}
-            </span>
-          )}
-          <input
-            id={fieldId}
-            name={`field_${autoId.replace(/:/g, "")}`}
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            data-lpignore="true"
-            data-1p-ignore="true"
-            data-form-type="other"
-            value={value}
-            onChange={handleChange}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            placeholder={placeholder}
-            required={required}
-            maxLength={maxLength}
-            disabled={disabled}
-            aria-invalid={shouldShowError}
-            aria-describedby={shouldShowError ? `${fieldId}-error` : undefined}
-            className={getFieldControlClassName({
-              hasError: shouldShowError,
-              hasLeftIcon: Boolean(leftSlot),
-              mono,
-              className: uppercase
-                ? `uppercase ${inputClassName || ""}`.trim()
-                : inputClassName,
-            })}
-          />
-        </div>
+      <div
+        className={
+          wrapRightSlotOnMobile
+            ? "flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+            : "flex items-center gap-2"
+        }
+      >
+        {(() => {
+          const inputControl = (
+            <div className="relative flex-1 min-w-0">
+              {leftSlot && (
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none select-none">
+                  {leftSlot}
+                </span>
+              )}
+              <input
+                id={fieldId}
+                name={`field_${autoId.replace(/:/g, "")}`}
+                type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                value={value}
+                onChange={handleChange}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                placeholder={placeholder}
+                required={required}
+                maxLength={maxLength}
+                disabled={disabled}
+                aria-invalid={shouldShowError}
+                aria-describedby={shouldShowError ? `${fieldId}-error` : undefined}
+                className={getFieldControlClassName({
+                  hasError: shouldShowError,
+                  hasLeftIcon: Boolean(leftSlot),
+                  mono,
+                  className: uppercase
+                    ? `uppercase ${inputClassName || ""}`.trim()
+                    : inputClassName,
+                })}
+              />
+            </div>
+          );
+
+          return renderInputControl
+            ? renderInputControl(inputControl)
+            : inputControl;
+        })()}
         {rightSlot}
       </div>
     </FieldWrapper>

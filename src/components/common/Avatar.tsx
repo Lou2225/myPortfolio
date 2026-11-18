@@ -34,7 +34,7 @@ export function Avatar({
   return (
     <div
       className={cn(
-        "relative h-[43svh] sm:h-[52svh] md:h-[60svh] lg:h-[70svh] xl:h-[74svh] max-h-190 min-h-60 aspect-3/4 max-w-[86vw] flex items-end justify-center select-none pointer-events-auto group",
+        "relative h-[clamp(17.5rem,44svh,26rem)] sm:h-[clamp(18rem,52svh,34rem)] lg:h-[clamp(22rem,62svh,46rem)] [@media(max-height:640px)]:h-[clamp(14rem,47svh,21rem)] aspect-3/4 max-w-[92vw] flex items-end justify-center select-none pointer-events-auto group",
         className
       )}
     >

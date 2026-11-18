@@ -36,8 +36,8 @@ export function ProjectCaseStudyView({
   const { trackEvent } = usePortfolio();
 
   return (
-    <main className="lou-public-root min-h-screen w-full bg-(--bg-canvas) text-(--text-primary) pt-28 sm:pt-32 pb-20 sm:pb-28 px-4 sm:px-6 md:px-10">
-      <article className="max-w-5xl mx-auto space-y-10 sm:space-y-12">
+    <main className="lou-public-root min-h-screen w-full bg-(--bg-canvas) text-(--text-primary) pt-24 sm:pt-32 pb-20 sm:pb-28 px-(--gutter)">
+      <article className="max-w-5xl mx-auto w-full space-y-8 sm:space-y-12">
         {/* Back Breadcrumb */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Button
@@ -192,14 +192,19 @@ export function ProjectCaseStudyView({
         {/* Technology Stack */}
         <section
           aria-label="Technology Stack"
-          className="p-6 sm:p-8 rounded-(--radius-card) bg-(--bg-surface) border border-(--border-subtle) space-y-4"
+          className="p-5 sm:p-8 rounded-(--radius-card) bg-(--bg-surface) border border-(--border-subtle) space-y-4 w-full"
         >
           <MonoLabel as="span" tone="muted" className="block">
             03 // Production Tech Stack
           </MonoLabel>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 w-full">
             {project.stack.map((tech) => (
-              <TechBadge key={tech} label={tech} size="md" />
+              <TechBadge
+                key={tech}
+                label={tech}
+                size="md"
+                className="w-full justify-center text-center"
+              />
             ))}
           </div>
         </section>

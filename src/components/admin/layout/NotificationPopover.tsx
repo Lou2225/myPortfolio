@@ -29,8 +29,11 @@ export function NotificationPopover({
 
   return (
     <DropdownPopover
+      portal
       align="end"
-      widthClassName="w-80 sm:w-96"
+      minWidth={320}
+      estimatedHeight={380}
+      overflowMode="clip"
       trigger={({ isOpen, toggle }) => (
         <Magnetic strength={0.2}>
           <button
@@ -89,7 +92,10 @@ export function NotificationPopover({
           </div>
 
           {/* Scrollable Notification Feed */}
-          <ScrollArea maxHeight="300px" className="divide-y divide-(--border-subtle)">
+          <ScrollArea
+            maxHeight="min(300px, calc(100dvh - 14rem))"
+            className="divide-y divide-(--border-subtle)"
+          >
             {unreadMessages.length > 0 ? (
               <div className="p-2 space-y-1">
                 <p className="px-2 py-1 text-[9px] font-mono uppercase tracking-[0.2em] text-(--text-accent) font-semibold">

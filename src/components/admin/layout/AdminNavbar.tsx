@@ -15,11 +15,6 @@ export interface AdminNavbarProps {
   db: PortfolioDatabase;
   activeTab: AdminTab;
   storageMode: "local-json" | "supabase";
-  deviceRegistered: boolean;
-  togglingDevice: boolean;
-  resettingSeed: boolean;
-  onToggleDevice: () => void;
-  onResetSeed: () => void;
   onLogout: () => void;
   onNavigateTab: (tab: AdminTab) => void;
   onNavigateSettingsSection: (section: SettingsSectionId) => void;
@@ -29,11 +24,6 @@ export function AdminNavbar({
   db,
   activeTab,
   storageMode,
-  deviceRegistered,
-  togglingDevice,
-  resettingSeed,
-  onToggleDevice,
-  onResetSeed,
   onLogout,
   onNavigateTab,
   onNavigateSettingsSection,
@@ -41,10 +31,10 @@ export function AdminNavbar({
   return (
     <header
       data-sticky-ceiling="true"
-      className="admin-navbar-surface sticky top-0 z-40 h-16 bg-(--bg-canvas)/90 backdrop-blur-xl border-b border-(--border-subtle) px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-2 sm:gap-3"
+      className="admin-navbar-surface fixed top-0 inset-x-0 z-40 h-16 [transform:translate3d(0,0,0)] [backface-visibility:hidden] bg-(--bg-canvas)/90 backdrop-blur-xl border-b border-(--border-subtle) px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-2 sm:gap-3"
     >
       {/* Left: Brand Monogram, CMS Title & Closely Anchored Global Search */}
-      <div className="flex items-center gap-2.5 sm:gap-3.5 lg:gap-4 flex-1 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3.5 lg:gap-4 flex-1 min-w-0">
         <Magnetic strength={0.2}>
           <button
             type="button"
@@ -59,7 +49,7 @@ export function AdminNavbar({
               transform={db.profile.monogramTransform}
               alt="Portfolio CMS monogram"
               className={cn(
-                "w-9 h-9 sm:w-10 sm:h-10 rounded-full text-brand-contrast font-display text-sm tracking-wider transition-all duration-300",
+                "w-8.5 h-8.5 sm:w-10 sm:h-10 rounded-full text-brand-contrast font-display text-sm tracking-wider transition-all duration-300",
                 db.profile.monogramImageUrl
                   ? "border border-brand/70 bg-transparent shadow-[0_6px_18px_var(--accent-glow)] hover:border-brand"
                   : "bg-linear-to-br from-brand to-brand-deep shadow-[0_6px_18px_var(--accent-glow)]"
@@ -68,7 +58,7 @@ export function AdminNavbar({
           </button>
         </Magnetic>
 
-        <span className="font-display text-base sm:text-lg uppercase tracking-tight text-(--text-primary) truncate">
+        <span className="font-display text-[15px] min-[390px]:text-lg uppercase tracking-tight text-(--text-primary) truncate">
           Portfolio CMS
         </span>
 
@@ -100,11 +90,6 @@ export function AdminNavbar({
         <ProfileDropdown
           profile={db.profile}
           storageMode={storageMode}
-          deviceRegistered={deviceRegistered}
-          togglingDevice={togglingDevice}
-          resettingSeed={resettingSeed}
-          onToggleDevice={onToggleDevice}
-          onResetSeed={onResetSeed}
           onLogout={onLogout}
           onNavigateTab={onNavigateTab}
         />

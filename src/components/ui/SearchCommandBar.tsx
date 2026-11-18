@@ -15,6 +15,7 @@ import {
 import gsap from "gsap";
 import { ChevronRight, Search, X } from "lucide-react";
 import { shouldReduceMotion } from "@/lib/appearance";
+import { createSearchRowStaggerTween } from "@/lib/searchMotion";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TextField } from "@/components/ui/fields/TextField";
@@ -68,7 +69,7 @@ export interface SearchCommandBarProps<TMeta = unknown> {
 /**
  * Highlights case-insensitive substring matches using the CMS accent badge highlight tokens.
  */
-function renderHighlightedSearchText(
+export function renderHighlightedSearchText(
   text: string,
   query: string
 ): ReactNode {
@@ -248,21 +249,15 @@ export function SearchCommandBar<TMeta = unknown>({
     if (shouldReduceMotion()) return;
 
     const ctx = gsap.context(() => {
-      const rows = inner.querySelectorAll<HTMLElement>("[data-rec-row]");
-      if (rows.length === 0) return;
-      gsap.fromTo(
-        rows,
-        { opacity: 0.45, y: 5 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.22,
-          stagger: 0.018,
-          ease: "power2.out",
-          force3D: true,
-          clearProps: "transform,opacity",
-        }
-      );
+      createSearchRowStaggerTween(inner, {
+        selector: "[data-rec-row]",
+        maxRows: 16,
+        fromOpacity: 0.45,
+        fromY: 5,
+        duration: 0.22,
+        stagger: 0.018,
+        ease: "power2.out",
+      });
     }, inner);
 
     return () => ctx.revert();

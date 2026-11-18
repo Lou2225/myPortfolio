@@ -281,8 +281,13 @@ export function PsgcAddressFields({
           type="button"
           onClick={handleToggleConfiguring}
           aria-expanded={isConfiguring}
+          aria-label={
+            isConfiguring
+              ? "Collapse PSGC location picker"
+              : "Expand PSGC location picker"
+          }
           className={cn(
-            "w-full text-left rounded-(--radius-control) bg-(--bg-surface-2) border px-3.5 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors group",
+            "w-full text-left rounded-(--radius-control) bg-(--bg-surface-2) border px-3 sm:px-3.5 py-2.5 flex items-start sm:items-center justify-between gap-2.5 sm:gap-3 cursor-pointer transition-colors group",
             hasIncompletePsgc
               ? "border-brand"
               : isConfiguring
@@ -290,40 +295,32 @@ export function PsgcAddressFields({
                 : "border-(--border-subtle) hover:border-brand/60"
           )}
         >
-          <div className="flex items-center gap-3 min-w-0">
-            <MapPin className="w-4 h-4 text-(--text-accent) shrink-0" />
+          <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+            <MapPin className="w-4 h-4 text-(--text-accent) shrink-0 mt-0.5 sm:mt-0" />
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-(--text-muted)">
-                  Public Location Display
-                </span>
-                {address?.cityCode && (
-                  <span className="px-1.5 py-0.5 rounded-(--radius-control) bg-brand/10 border border-brand/30 text-[9px] font-mono text-(--text-accent)">
-                    PSGC {address.barangayCode || address.cityCode}
-                  </span>
-                )}
-              </div>
+              <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-(--text-muted) block">
+                Public Location Display
+              </span>
               <TruncatedText
                 text={formattedLocation || "Philippines"}
-                className="text-xs sm:text-sm font-medium text-(--text-primary) block mt-0.5"
+                clampClassName="whitespace-normal wrap-break-word sm:truncate"
+                className="text-xs sm:text-sm font-medium text-(--text-primary) leading-snug block mt-0.5"
               />
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-(--text-muted) group-hover:text-(--text-accent) shrink-0">
-            <span>{isConfiguring ? "Done" : "Configure"}</span>
-            <ChevronDown
-              className={cn(
-                "w-4 h-4 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                isConfiguring && "rotate-180 text-(--text-accent)"
-              )}
-            />
-          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              "w-4 h-4 text-(--text-muted) group-hover:text-(--text-accent) shrink-0 mt-0.5 sm:mt-0 transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+              isConfiguring && "rotate-180 text-(--text-accent)"
+            )}
+          />
         </button>
 
         {hasIncompletePsgc && !isConfiguring && (
           <p role="alert" className="text-[11px] font-mono text-(--text-accent) mt-1.5">
-            PSGC selection incomplete — click above to finish picking City / Municipality.
+            PSGC selection incomplete — tap above to finish picking City / Municipality.
           </p>
         )}
       </div>
@@ -337,121 +334,122 @@ export function PsgcAddressFields({
         followSignal={followSignal}
         contentClassName="pt-3.5"
       >
-        <div className="rounded-(--radius-control) bg-(--bg-surface-2)/60 border border-(--border-subtle) p-4 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-(--border-subtle)">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-(--text-secondary)">
-                Search & Select Philippine Standard Geographic Code
-              </span>
+        <div className="rounded-(--radius-control) bg-(--bg-surface-2)/60 border border-(--border-subtle) p-3 sm:p-4 space-y-3.5 sm:space-y-4">
+          <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-(--border-subtle)">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-(--text-secondary) truncate">
+              PSGC Directory
+            </span>
 
-              <div className="flex items-center gap-3">
-                {psgcErrorMessage && (
-                  <button
-                    type="button"
-                    onClick={handleRetryPsgc}
-                    tabIndex={isConfiguring ? 0 : -1}
-                    className="text-[11px] font-mono text-(--text-accent) hover:underline inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>Retry PSGC</span>
-                  </button>
-                )}
-                {regionCode && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmResetOpen(true)}
-                    tabIndex={isConfiguring ? 0 : -1}
-                    className="text-[11px] font-mono text-(--text-muted) hover:text-rose-400 inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Remove Address</span>
-                  </button>
-                )}
-              </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {psgcErrorMessage && (
+                <button
+                  type="button"
+                  onClick={handleRetryPsgc}
+                  tabIndex={isConfiguring ? 0 : -1}
+                  className="text-[11px] font-mono text-(--text-accent) hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Retry</span>
+                </button>
+              )}
+              {regionCode && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmResetOpen(true)}
+                  tabIndex={isConfiguring ? 0 : -1}
+                  aria-label="Remove PSGC Address"
+                  className="text-[11px] font-mono text-rose-500 hover:text-rose-400 bg-rose-500/12 hover:bg-rose-500/20 border border-rose-500/35 px-2.5 py-1 rounded-(--radius-control) inline-flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Remove</span>
+                </button>
+              )}
             </div>
+          </div>
 
-            {psgcErrorMessage && (
-              <p className="text-[11px] font-mono text-(--text-accent) bg-brand/10 border border-brand/30 rounded-(--radius-control) px-3 py-2">
-                {psgcErrorMessage} Showing saved location while PSGC directory is offline.
-              </p>
-            )}
+          {psgcErrorMessage && (
+            <p className="text-[11px] font-mono text-(--text-accent) bg-brand/10 border border-brand/30 rounded-(--radius-control) px-3 py-2">
+              {psgcErrorMessage} Showing saved location while PSGC directory is offline.
+            </p>
+          )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-              <SearchableSelectField
-                label="PSGC Region"
-                value={regionCode}
-                options={regionOptions}
-                onChange={handleRegionChange}
-                placeholder="Select Region..."
-                searchPlaceholder="Search region (e.g. NCR, Region IV-A)..."
-                loading={regionsQuery.isFetching}
-                required={false}
-                disabled={!isConfiguring}
-                forceTouched={forceTouched}
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+            <SearchableSelectField
+              label="PSGC Region"
+              value={regionCode}
+              options={regionOptions}
+              onChange={handleRegionChange}
+              placeholder="Select Region..."
+              searchPlaceholder="Search region (e.g. NCR, Region IV-A)..."
+              loading={regionsQuery.isFetching}
+              required={false}
+              disabled={!isConfiguring}
+              forceTouched={forceTouched}
+            />
 
-              <SearchableSelectField
-                key={`province-${regionCode || "empty"}`}
-                label="PSGC Province"
-                value={provinceCode}
-                options={provinceOptions}
-                onChange={handleProvinceChange}
-                placeholder={
-                  !regionCode
-                    ? "Select Region first..."
-                    : isNcrOrDirectRegion
-                      ? "Not applicable (NCR / Direct Cities)"
-                      : "Select Province..."
-                }
-                searchPlaceholder="Search province..."
-                loading={provincesQuery.isFetching}
-                required={requiresSubLevels && !isNcrOrDirectRegion}
-                disabled={!isConfiguring || !regionCode || isNcrOrDirectRegion}
-                forceTouched={cascadeForceTouched}
-              />
+            <SearchableSelectField
+              key={`province-${regionCode || "empty"}`}
+              label="PSGC Province"
+              value={provinceCode}
+              options={provinceOptions}
+              onChange={handleProvinceChange}
+              placeholder={
+                !regionCode
+                  ? "Select Region first..."
+                  : isNcrOrDirectRegion
+                    ? "Not applicable (NCR / Direct Cities)"
+                    : "Select Province..."
+              }
+              searchPlaceholder="Search province..."
+              loading={provincesQuery.isFetching}
+              required={requiresSubLevels && !isNcrOrDirectRegion}
+              disabled={!isConfiguring || !regionCode || isNcrOrDirectRegion}
+              forceTouched={cascadeForceTouched}
+            />
 
-              <SearchableSelectField
-                key={`city-${regionCode || "empty"}-${provinceCode || "empty"}`}
-                label="City / Municipality"
-                value={cityCode}
-                options={cityOptions}
-                onChange={handleCityChange}
-                placeholder={
-                  !regionCode
-                    ? "Select Region first..."
-                    : !isNcrOrDirectRegion && !provinceCode
-                      ? "Select Province first..."
-                      : "Select City / Municipality..."
-                }
-                searchPlaceholder="Search city or municipality..."
-                loading={citiesQuery.isFetching}
-                required={requiresSubLevels}
-                disabled={
-                  !isConfiguring ||
-                  !regionCode ||
-                  (!isNcrOrDirectRegion && !provinceCode)
-                }
-                forceTouched={cascadeForceTouched}
-              />
+            <SearchableSelectField
+              key={`city-${regionCode || "empty"}-${provinceCode || "empty"}`}
+              label="City / Municipality"
+              value={cityCode}
+              options={cityOptions}
+              onChange={handleCityChange}
+              placeholder={
+                !regionCode
+                  ? "Select Region first..."
+                  : !isNcrOrDirectRegion && !provinceCode
+                    ? "Select Province first..."
+                    : "Select City / Municipality..."
+              }
+              searchPlaceholder="Search city or municipality..."
+              loading={citiesQuery.isFetching}
+              required={requiresSubLevels}
+              disabled={
+                !isConfiguring ||
+                !regionCode ||
+                (!isNcrOrDirectRegion && !provinceCode)
+              }
+              forceTouched={cascadeForceTouched}
+            />
 
-              <SearchableSelectField
-                key={`barangay-${cityCode || "empty"}`}
-                label="Barangay (Optional)"
-                value={barangayCode}
-                options={barangayOptions}
-                onChange={handleBarangayChange}
-                placeholder={
-                  !cityCode
-                    ? "Select City first..."
-                    : "Select Barangay (Optional)..."
-                }
-                searchPlaceholder="Search barangay..."
-                loading={barangaysQuery.isFetching}
-                required={false}
-                allowClear
-                disabled={!isConfiguring || !cityCode}
-                forceTouched={cascadeForceTouched}
-              />
-            </div>
+            <SearchableSelectField
+              key={`barangay-${cityCode || "empty"}`}
+              label="Barangay (Optional)"
+              value={barangayCode}
+              options={barangayOptions}
+              onChange={handleBarangayChange}
+              placeholder={
+                !cityCode
+                  ? "Select City first..."
+                  : "Select Barangay (Optional)..."
+              }
+              searchPlaceholder="Search barangay..."
+              loading={barangaysQuery.isFetching}
+              required={false}
+              allowClear
+              disabled={!isConfiguring || !cityCode}
+              forceTouched={cascadeForceTouched}
+            />
+          </div>
         </div>
       </Collapsible>
 

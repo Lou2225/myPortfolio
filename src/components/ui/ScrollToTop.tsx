@@ -117,7 +117,7 @@ export function ScrollToTop({
         className ||
           (isAdminRoute
             ? "bottom-22 right-4 md:bottom-8 md:right-8 z-30"
-            : "bottom-6 right-5 sm:bottom-8 sm:right-8 z-40"),
+            : "bottom-4 right-4 sm:bottom-8 sm:right-8 z-40"),
         visible
           ? "opacity-100 translate-y-0 pointer-events-auto"
           : "opacity-0 translate-y-6 pointer-events-none"
@@ -130,7 +130,7 @@ export function ScrollToTop({
           aria-label="Scroll back to top"
           title="Scroll back to top"
           className={cn(
-            "relative w-12 h-12 rounded-full bg-(--bg-surface) border border-(--border-strong) hover:border-brand text-(--text-primary) hover:text-(--text-accent) shadow-lg flex items-center justify-center cursor-pointer group active:scale-95 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+            "relative w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-(--bg-surface) border border-(--border-strong) hover:border-brand text-(--text-primary) hover:text-(--text-accent) shadow-lg flex items-center justify-center cursor-pointer group active:scale-95 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
             visible && "backdrop-blur-xl"
           )}
         >

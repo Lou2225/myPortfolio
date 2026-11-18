@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TooltipSide = "top" | "bottom" | "left" | "right";
-
-interface TooltipCoords {
-  top: number;
-  left: number;
-  transform: string;
-}
 
 function measureIsElementTruncated(el: HTMLElement | null): boolean {
   if (!el) return false;
@@ -30,41 +31,59 @@ function measureIsElementTruncated(el: HTMLElement | null): boolean {
   return false;
 }
 
-function computeTooltipCoords(
-  el: HTMLElement,
+function resolveTooltipPosition(
+  triggerRect: DOMRect,
+  tipRect: DOMRect,
   preferredSide?: TooltipSide
-): TooltipCoords {
-  const rect = el.getBoundingClientRect();
+): { x: number; y: number } {
+  const pad = 12;
+  const gap = 8;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  const clampX = (rawX: number) =>
+    Math.max(pad, Math.min(vw - tipRect.width - pad, rawX));
+  const clampY = (rawY: number) =>
+    Math.max(pad, Math.min(vh - tipRect.height - pad, rawY));
 
   if (preferredSide === "right") {
+    const fitsRight = triggerRect.right + 10 + tipRect.width <= vw - pad;
+    const rawX = fitsRight
+      ? triggerRect.right + 10
+      : triggerRect.left - tipRect.width - 10;
     return {
-      top: rect.top + rect.height / 2,
-      left: Math.min(window.innerWidth - 24, rect.right + 10),
-      transform: "translate(0, -50%)",
+      x: clampX(rawX),
+      y: clampY(triggerRect.top + (triggerRect.height - tipRect.height) / 2),
     };
   }
 
   if (preferredSide === "left") {
+    const fitsLeft = triggerRect.left - 10 - tipRect.width >= pad;
+    const rawX = fitsLeft
+      ? triggerRect.left - tipRect.width - 10
+      : triggerRect.right + 10;
     return {
-      top: rect.top + rect.height / 2,
-      left: Math.max(24, rect.left - 10),
-      transform: "translate(-100%, -50%)",
+      x: clampX(rawX),
+      y: clampY(triggerRect.top + (triggerRect.height - tipRect.height) / 2),
     };
   }
 
-  const centerX = rect.left + rect.width / 2;
-  const clampedX = Math.max(24, Math.min(window.innerWidth - 24, centerX));
-  const useBottom =
-    preferredSide === "bottom" ||
-    (preferredSide !== "top" && rect.top < 84);
+  const centeredX = triggerRect.left + (triggerRect.width - tipRect.width) / 2;
+  const x = clampX(centeredX);
 
-  return {
-    top: useBottom ? rect.bottom + 8 : rect.top - 8,
-    left: clampedX,
-    transform: useBottom
-      ? "translate(-50%, 0)"
-      : "translate(-50%, -100%)",
-  };
+  const topY = triggerRect.top - tipRect.height - gap;
+  const bottomY = triggerRect.bottom + gap;
+  const fitsTop = topY >= pad;
+  const fitsBottom = bottomY + tipRect.height <= vh - pad;
+
+  let y: number;
+  if (preferredSide === "bottom") {
+    y = fitsBottom || !fitsTop ? bottomY : topY;
+  } else {
+    y = fitsTop || !fitsBottom ? topY : bottomY;
+  }
+
+  return { x, y: clampY(y) };
 }
 
 export interface TooltipProps {
@@ -79,6 +98,8 @@ export interface TooltipProps {
   className?: string;
   children: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
   onlyWhenTruncated?: boolean;
+  /** Toggle visibility directly on tap/click (useful for mobile InfoTooltip triggers). */
+  toggleOnClick?: boolean;
   delayMs?: number;
   maxWidthClassName?: string;
 }
@@ -96,14 +117,16 @@ export function Tooltip({
   className,
   children,
   onlyWhenTruncated = false,
+  toggleOnClick = false,
   delayMs = 120,
   maxWidthClassName = "max-w-xs sm:max-w-sm",
 }: TooltipProps) {
   const tooltipId = useId();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerElRef = useRef<HTMLElement | null>(null);
+  const tooltipElRef = useRef<HTMLDivElement | null>(null);
+  const openedByClickRef = useRef(false);
   const [visible, setVisible] = useState(false);
-  const [coords, setCoords] = useState<TooltipCoords | null>(null);
 
   const resolvedText = (content ?? label ?? "").trim();
 
@@ -112,6 +135,7 @@ export function Tooltip({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    openedByClickRef.current = false;
     setVisible(false);
   }, []);
 
@@ -129,21 +153,83 @@ export function Tooltip({
         const el = triggerElRef.current;
         if (!el || !document.contains(el)) return;
         if (onlyWhenTruncated && !measureIsElementTruncated(el)) return;
-        setCoords(computeTooltipCoords(el, side));
         setVisible(true);
       }, delayMs);
     },
-    [disabled, resolvedText, delayMs, onlyWhenTruncated, side]
+    [disabled, resolvedText, delayMs, onlyWhenTruncated]
   );
+
+  const toggleTooltipOnClick = useCallback(
+    (target: HTMLElement) => {
+      if (disabled || !resolvedText) return;
+      triggerElRef.current = target;
+
+      if (onlyWhenTruncated && !measureIsElementTruncated(target)) {
+        return;
+      }
+
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+
+      if (visible && openedByClickRef.current) {
+        openedByClickRef.current = false;
+        setVisible(false);
+        return;
+      }
+
+      openedByClickRef.current = true;
+      setVisible(true);
+    },
+    [disabled, resolvedText, onlyWhenTruncated, visible]
+  );
+
+  useLayoutEffect(() => {
+    if (!visible) return;
+    const triggerEl = triggerElRef.current;
+    const tipEl = tooltipElRef.current;
+    if (!triggerEl || !tipEl) return;
+
+    const maxAllowedWidth = Math.max(160, window.innerWidth - 24);
+    tipEl.style.maxWidth = "";
+    let tipRect = tipEl.getBoundingClientRect();
+    if (tipRect.width > maxAllowedWidth) {
+      tipEl.style.maxWidth = `${maxAllowedWidth}px`;
+      tipRect = tipEl.getBoundingClientRect();
+    }
+
+    const { x, y } = resolveTooltipPosition(
+      triggerEl.getBoundingClientRect(),
+      tipRect,
+      side
+    );
+    tipEl.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+    tipEl.style.opacity = "1";
+  }, [visible, side, resolvedText, badge]);
 
   useEffect(() => {
     if (!visible) return;
     const handleDismiss = () => hideTooltip();
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (triggerElRef.current?.contains(target)) return;
+      if (tooltipElRef.current?.contains(target)) return;
+      hideTooltip();
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") hideTooltip();
+    };
     window.addEventListener("scroll", handleDismiss, { capture: true, passive: true });
     window.addEventListener("resize", handleDismiss, { passive: true });
+    document.addEventListener("pointerdown", handlePointerDown, { capture: true });
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("scroll", handleDismiss, { capture: true });
       window.removeEventListener("resize", handleDismiss);
+      document.removeEventListener("pointerdown", handlePointerDown, { capture: true });
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [visible, hideTooltip]);
 
@@ -160,9 +246,18 @@ export function Tooltip({
       className={cn("inline-flex", className)}
       aria-describedby={isDisabledVisible ? tooltipId : undefined}
       onMouseEnter={(e) => showTooltip(e.currentTarget)}
-      onMouseLeave={hideTooltip}
+      onMouseLeave={() => {
+        if (!openedByClickRef.current) hideTooltip();
+      }}
       onFocus={(e) => showTooltip(e.currentTarget)}
       onBlur={hideTooltip}
+      onClick={
+        toggleOnClick
+          ? (e) => {
+              toggleTooltipOnClick(e.currentTarget);
+            }
+          : undefined
+      }
     >
       {children}
     </div>
@@ -177,7 +272,7 @@ export function Tooltip({
       },
       onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
         children.props.onMouseLeave?.(e);
-        hideTooltip();
+        if (!openedByClickRef.current) hideTooltip();
       },
       onFocus: (e: React.FocusEvent<HTMLElement>) => {
         children.props.onFocus?.(e);
@@ -187,6 +282,13 @@ export function Tooltip({
         children.props.onBlur?.(e);
         hideTooltip();
       },
+      onClick: (e: React.MouseEvent<HTMLElement>) => {
+        const target = e.currentTarget;
+        children.props.onClick?.(e);
+        if (toggleOnClick) {
+          toggleTooltipOnClick(target);
+        }
+      },
     })
   );
 
@@ -194,19 +296,19 @@ export function Tooltip({
     <>
       {triggerNode}
       {isDisabledVisible &&
-        coords &&
         typeof document !== "undefined" &&
         createPortal(
           <div
+            ref={tooltipElRef}
             id={tooltipId}
             role="tooltip"
             style={{
-              top: coords.top,
-              left: coords.left,
-              transform: coords.transform,
+              top: 0,
+              left: 0,
+              opacity: 0,
             }}
             className={cn(
-              "fixed z-150 pointer-events-none px-3 py-2 rounded-lg bg-(--bg-surface-2) text-(--text-primary) border border-(--border-strong) shadow-[0_12px_32px_rgba(0,0,0,0.45)] text-xs leading-relaxed whitespace-normal wrap-break-word inline-flex items-center gap-2 transition-opacity duration-150",
+              "fixed z-150 pointer-events-none px-3 py-2 rounded-lg bg-(--bg-surface-2) text-(--text-primary) border border-(--border-strong) shadow-[0_12px_32px_rgba(0,0,0,0.45)] text-xs leading-relaxed whitespace-normal wrap-break-word w-max inline-flex items-center gap-2 transition-opacity duration-150",
               maxWidthClassName
             )}
           >
@@ -274,6 +376,7 @@ export function InfoTooltip({
       content={content}
       side={side}
       maxWidthClassName={maxWidthClassName}
+      toggleOnClick
     >
       <button
         type="button"
@@ -283,7 +386,7 @@ export function InfoTooltip({
           e.stopPropagation();
         }}
         className={cn(
-          "inline-flex items-center justify-center w-5 h-5 rounded-full text-(--text-muted) hover:text-(--text-accent) hover:bg-(--bg-surface-2) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand transition-colors shrink-0 cursor-help",
+          "inline-flex items-center justify-center w-6 h-6 -m-0.5 rounded-full text-(--text-muted) hover:text-(--text-accent) hover:bg-(--bg-surface-2) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand transition-colors shrink-0 cursor-help touch-manipulation",
           className
         )}
       >

@@ -20,12 +20,12 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
     <section
       id="story"
       aria-label="About and Origin Story"
-      className="scroll-mt-16 w-full py-12 sm:py-24 lg:py-32 px-4 sm:px-6 md:px-10 border-b border-(--border-subtle) bg-(--bg-canvas)"
+      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)"
     >
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 lg:gap-16">
+      <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-12 lg:gap-16">
         {/* Left Column: Origin Narrative */}
         <div className="lg:col-span-5 flex flex-col justify-start">
-          <Eyebrow withDot className="mb-4">
+          <Eyebrow withDot className="mb-2.5 sm:mb-3">
             {sectionHeaders.storyEyebrow}
           </Eyebrow>
 
@@ -33,7 +33,7 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
             {profile.storyHeading}
           </DisplayHeading>
 
-          <div className="mt-6 sm:mt-8 space-y-4">
+          <div className="mt-4 sm:mt-7 space-y-3.5 sm:space-y-4">
             {profile.storyBody.map((paragraph, i) => (
               <BodyText key={i} size="md" tone="secondary">
                 {paragraph}
@@ -41,24 +41,24 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
             ))}
           </div>
 
-          <div className="mt-8 pt-6 sm:pt-8 border-t border-(--border-subtle) flex flex-wrap items-center gap-5 sm:gap-6">
-            <div className="text-center">
+          <div className="mt-5 sm:mt-8 py-3.5 sm:py-5 border-y border-(--border-subtle) grid grid-cols-3 divide-x divide-(--border-subtle) w-full text-center">
+            <div className="px-2">
               <DisplayHeading as="span" size="sm" className="block">
                 {displayAge}
               </DisplayHeading>
-              <MonoLabel tone="muted" className="block text-center">
+              <MonoLabel tone="muted" className="block mt-0.5">
                 Age
               </MonoLabel>
             </div>
-            <div className="w-px h-8 bg-(--border-subtle)" />
-            <div>
+            <div className="px-2">
               <DisplayHeading as="span" size="sm" className="block">
                 {profile.education.graduationYear}
               </DisplayHeading>
-              <MonoLabel tone="muted">Graduating</MonoLabel>
+              <MonoLabel tone="muted" className="block mt-0.5">
+                Graduating
+              </MonoLabel>
             </div>
-            <div className="w-px h-8 bg-(--border-subtle)" />
-            <div>
+            <div className="px-2">
               <DisplayHeading
                 as="span"
                 size="sm"
@@ -67,18 +67,20 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
               >
                 Full-Stack
               </DisplayHeading>
-              <MonoLabel tone="muted">Focus</MonoLabel>
+              <MonoLabel tone="muted" className="block mt-0.5">
+                Focus
+              </MonoLabel>
             </div>
           </div>
         </div>
 
         {/* Right Column: Core Pillars */}
         <div className="lg:col-span-7 flex flex-col justify-center">
-          <ul className="divide-y divide-(--border-subtle) border-y border-(--border-subtle)">
+          <ul className="divide-y divide-(--border-subtle) border-y border-(--border-subtle) w-full">
             {pillars.map((pillar) => (
               <li
                 key={pillar.number}
-                className="story-pillar-item py-6 sm:py-8 flex flex-col sm:flex-row sm:items-baseline gap-3 sm:gap-8 group px-3 sm:px-4 -mx-3 sm:-mx-4 transition-colors duration-300 rounded-sm"
+                className="story-pillar-item py-4 sm:py-7 flex flex-row items-baseline gap-3.5 sm:gap-7 group px-1 sm:px-4 transition-colors duration-300 rounded-sm"
               >
                 <DisplayHeading
                   as="span"
@@ -88,14 +90,14 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
                 >
                   {pillar.number}
                 </DisplayHeading>
-                <div>
+                <div className="min-w-0 flex-1">
                   <DisplayHeading as="h3" size="sm" hoverAccent>
                     {pillar.title}
                   </DisplayHeading>
                   <BodyText
                     size="sm"
                     tone="secondary"
-                    className="mt-2 max-w-xl"
+                    className="mt-1.5 sm:mt-2 max-w-xl"
                   >
                     {pillar.description}
                   </BodyText>

@@ -42,13 +42,13 @@ export function AdminSidebar({
   return (
     <aside
       aria-label="Portfolio CMS Module Rail"
-      className="hidden md:flex fixed left-0 top-14 bottom-14 z-40 flex-col items-start justify-center pointer-events-none select-none"
+      className="hidden md:flex fixed left-0 top-14 bottom-10 [@media(min-height:680px)]:bottom-14 [@media(max-height:640px)]:top-16 [@media(max-height:640px)]:bottom-2 z-40 flex-col items-start justify-center pointer-events-none select-none"
     >
       {/* Unified Sculpted Sidebar Container (Curves are integral to the container body) */}
       <div
         className={cn(
-          "pointer-events-auto relative flex flex-col justify-between pt-12 pb-12 px-2.5 text-brand-contrast drop-shadow-[10px_14px_34px_var(--accent-glow)] transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          expanded ? "w-57" : "w-17 lg:w-18.5"
+          "pointer-events-auto relative flex flex-col justify-between pt-8 pb-8 lg:pt-11 lg:pb-11 [@media(max-height:640px)]:pt-6 [@media(max-height:640px)]:pb-6 px-3 text-brand-contrast drop-shadow-[10px_14px_34px_var(--accent-glow)] transition-[width] duration-420 ease-[cubic-bezier(0.22,1,0.36,1)] max-h-full will-change-[width]",
+          expanded ? "w-57" : "w-17"
         )}
       >
         {/* Continuous One-Piece Sculpted S-Curve SVG Body & Specular Border */}
@@ -90,22 +90,22 @@ export function AdminSidebar({
 
         {/* Module Navigation Stack with Shared Sliding Active Indicator & ScrollArea */}
         <ScrollArea
-          maxHeight="calc(100vh - 230px)"
+          maxHeight="calc(100dvh - 11.5rem)"
           scrollbarVariant="hidden"
           fadeEdges={false}
           className="my-auto w-full"
           viewportClassName="overflow-visible"
         >
           <nav className="relative flex flex-col gap-2 w-full">
-            {/* Shared GPU-Accelerated Active Squircle Indicator (Drops Down / Glides Up) */}
+            {/* Shared GPU-Accelerated Active Squircle Indicator (Drops/Glides Vertically + Stretches Smoothly Horizontally) */}
             <div
               aria-hidden="true"
               style={{
                 transform: `translate3d(0, ${activeIndex * ITEM_STRIDE_PX}px, 0)`,
               }}
               className={cn(
-                "pointer-events-none absolute top-0 left-0 right-0 h-11 rounded-2xl bg-(--bg-surface) shadow-[0_8px_22px_rgba(0,0,0,0.35)] transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform",
-                !expanded && "w-11 lg:w-12 mx-auto"
+                "pointer-events-none absolute top-0 left-0 h-11 rounded-2xl bg-(--bg-surface) shadow-[0_8px_22px_rgba(0,0,0,0.35)] [transition:transform_500ms_cubic-bezier(0.34,1.56,0.64,1),width_420ms_cubic-bezier(0.22,1,0.36,1)] will-change-transform",
+                expanded ? "w-full" : "w-11"
               )}
             />
 
@@ -120,36 +120,60 @@ export function AdminSidebar({
                   badge={item.badge}
                   side="right"
                   disabled={expanded}
-                  className="w-full justify-center"
+                  className="w-full"
                 >
-                  <Magnetic strength={expanded ? 0.08 : 0.2} fullWidth={expanded}>
+                  <Magnetic strength={expanded ? 0.08 : 0.2} fullWidth>
                     <button
                       type="button"
                       onClick={() => onSelectTab(item.id)}
                       aria-label={item.label}
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
-                        "relative z-10 h-11 rounded-2xl flex items-center transition-all duration-200 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
-                        expanded
-                          ? "w-full px-3 gap-3 justify-start"
-                          : "w-11 lg:w-12 justify-center mx-auto",
+                        "relative z-10 h-11 w-full rounded-2xl flex items-center justify-start transition-colors duration-200 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
                         isActive
                           ? "text-(--text-accent) font-semibold"
                           : "text-brand-contrast/90 hover:text-brand-contrast hover:bg-white/12"
                       )}
                     >
-                      <Icon
-                        className={cn(
-                          "w-5 h-5 shrink-0 transition-transform duration-300",
-                          isActive ? "scale-110 text-(--text-accent)" : "text-brand-contrast"
-                        )}
-                      />
+                      {/* Fixed 44x44 Icon Track prevents icons from snapping horizontally on expand/collapse */}
+                      <span className="relative w-11 h-11 shrink-0 flex items-center justify-center">
+                        <Icon
+                          className={cn(
+                            "w-5 h-5 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+                            isActive ? "scale-110 text-(--text-accent)" : "text-brand-contrast"
+                          )}
+                        />
 
-                      {/* Inline Label when Expanded */}
-                      {expanded && (
+                        {item.badge !== undefined && (
+                          <BadgeCounter
+                            count={item.badge}
+                            size="sm"
+                            floating
+                            onAccentSurface={!isActive}
+                            variant={isActive ? "inverted" : "alert"}
+                            className={cn(
+                              "pointer-events-none transition-[opacity,transform] duration-200 ease-out",
+                              expanded
+                                ? "opacity-0 scale-75"
+                                : "opacity-100 scale-100"
+                            )}
+                          />
+                        )}
+                      </span>
+
+                      {/* Inline Label & Badge smoothly fade & glide alongside container expansion */}
+                      <span
+                        aria-hidden={!expanded}
+                        className={cn(
+                          "flex items-center gap-2 min-w-0 flex-1 overflow-hidden transition-[opacity,transform,max-width,padding] duration-360 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                          expanded
+                            ? "opacity-100 translate-x-0 max-w-44 pr-2.5"
+                            : "opacity-0 -translate-x-2 max-w-0 pr-0 pointer-events-none"
+                        )}
+                      >
                         <span
                           className={cn(
-                            "text-xs tracking-wide truncate flex-1 text-left transition-colors duration-200",
+                            "text-xs tracking-wide whitespace-nowrap truncate flex-1 text-left transition-colors duration-200",
                             isActive
                               ? "text-(--text-accent) font-semibold"
                               : "text-brand-contrast"
@@ -157,18 +181,16 @@ export function AdminSidebar({
                         >
                           {item.label}
                         </span>
-                      )}
 
-                      {/* Reusable Unified Theme-Proof Badge Counter */}
-                      {item.badge !== undefined && (
-                        <BadgeCounter
-                          count={item.badge}
-                          size="sm"
-                          floating={!expanded}
-                          onAccentSurface={!isActive}
-                          variant={isActive ? "inverted" : "alert"}
-                        />
-                      )}
+                        {item.badge !== undefined && (
+                          <BadgeCounter
+                            count={item.badge}
+                            size="sm"
+                            onAccentSurface={!isActive}
+                            variant={isActive ? "inverted" : "alert"}
+                          />
+                        )}
+                      </span>
                     </button>
                   </Magnetic>
                 </Tooltip>
@@ -178,35 +200,48 @@ export function AdminSidebar({
         </ScrollArea>
 
         {/* Bottom Expand / Collapse Toggle Button */}
-        <div className="mt-3 pt-2 border-t border-white/15 flex justify-center">
+        <div className="mt-3 pt-2 border-t border-white/15">
           <Tooltip
             label={expanded ? "Collapse Sidebar" : "Expand Sidebar"}
             side="right"
             disabled={expanded}
-            className="w-full justify-center"
+            className="w-full"
           >
-            <Magnetic strength={expanded ? 0.08 : 0.2} fullWidth={expanded}>
+            <Magnetic strength={expanded ? 0.08 : 0.2} fullWidth>
               <button
                 type="button"
                 onClick={onToggleExpand}
                 aria-label={expanded ? "Collapse Sidebar" : "Expand Sidebar"}
-                className={cn(
-                  "h-9 rounded-xl text-white/85 hover:text-white hover:bg-white/15 transition-all active:scale-95 flex items-center cursor-pointer",
-                  expanded
-                    ? "w-full px-3 gap-2.5 justify-start"
-                    : "w-9 justify-center"
-                )}
+                className="h-9 w-full rounded-xl text-white/85 hover:text-white hover:bg-white/15 transition-colors duration-200 active:scale-95 flex items-center justify-start overflow-hidden cursor-pointer"
               >
-                {expanded ? (
-                  <>
-                    <PanelLeftClose className="w-4 h-4 shrink-0" />
-                    <span className="text-[11px] font-mono uppercase tracking-wider">
-                      Collapse Rail
-                    </span>
-                  </>
-                ) : (
-                  <PanelLeftOpen className="w-4 h-4 shrink-0" />
-                )}
+                <span className="relative w-11 h-9 shrink-0 flex items-center justify-center">
+                  <PanelLeftOpen
+                    className={cn(
+                      "w-4 h-4 absolute transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                      expanded ? "opacity-0 scale-75 rotate-12" : "opacity-100 scale-100 rotate-0"
+                    )}
+                    aria-hidden="true"
+                  />
+                  <PanelLeftClose
+                    className={cn(
+                      "w-4 h-4 absolute transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                      expanded ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-75 -rotate-12"
+                    )}
+                    aria-hidden="true"
+                  />
+                </span>
+
+                <span
+                  aria-hidden={!expanded}
+                  className={cn(
+                    "text-[11px] font-mono uppercase tracking-wider whitespace-nowrap overflow-hidden transition-[opacity,transform,max-width,padding] duration-360 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    expanded
+                      ? "opacity-100 translate-x-0 max-w-36 pr-3"
+                      : "opacity-0 -translate-x-2 max-w-0 pr-0 pointer-events-none"
+                  )}
+                >
+                  Collapse Rail
+                </span>
               </button>
             </Magnetic>
           </Tooltip>

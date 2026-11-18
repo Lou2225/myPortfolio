@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HardDrive,
@@ -24,11 +24,17 @@ import type {
   SectionFootprint,
 } from "@/lib/backups";
 import type { RestoreSectionFlags } from "@/lib/validation";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import {
   useOfflineStatus,
   isNetworkOffline,
 } from "@/components/pwa/OfflineManager";
 import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
+import {
+  AdminMobileStepView,
+  MobileStepItem,
+  useStepNavigation,
+} from "@/components/admin/AdminMobileStepView";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
@@ -39,6 +45,8 @@ import { TruncatedText, InfoTooltip } from "@/components/ui/Tooltip";
 import { AnimatedCounter, AnimatedBar } from "@/components/motion/AdminMotion";
 import { BackupRestoreModal, type BackupSectionCounts } from "./BackupRestoreModal";
 import type { SettingsFeedback } from "./types";
+
+type DatabaseStep = 0 | 1 | 2;
 
 interface SystemOverviewResponse {
   health: DatabaseHealthReport;
@@ -85,6 +93,9 @@ export function DatabaseBackupSettings({
 }: DatabaseBackupSettingsProps) {
   const { isOnline } = useOfflineStatus();
   const queryClient = useQueryClient();
+  const isMobileOrTablet = useMediaQuery("(max-width: 1023px)");
+  const { activeStep, stepDirection, switchStep } =
+    useStepNavigation<DatabaseStep>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [checkpointLabel, setCheckpointLabel] = useState("");
@@ -433,412 +444,463 @@ export function DatabaseBackupSettings({
 
   const health = systemQuery.data?.health;
   const footprints = systemQuery.data?.footprints;
-  const snapshots = systemQuery.data?.snapshots || [];
+  const snapshots = useMemo(
+    () => systemQuery.data?.snapshots || [],
+    [systemQuery.data?.snapshots]
+  );
 
-  return (
-    <div className="space-y-6">
-      {/* 1. Storage Engine Health & Portability */}
-      <div
-        data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 space-y-5"
-      >
-        <SectionHeader
-          eyebrow="Engine Health & Data Portability"
-          title="Database Health, Export & Selective Import"
-          description="Verify live storage reachability, export sanitized content or complete archives with SHA-256 checksums, or selectively restore files."
-          size="sm"
-          rightSlot={
-            <div className="flex items-center gap-2">
-              <InfoTooltip
-                label="Backup checksum & restore safety"
-                content="Exports bundle a SHA-256 integrity hash. Content-Only omits analytics logs & inbox messages; Full Archive exports every table. Selective Import saves a pre-restore checkpoint before writing."
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={systemQuery.isFetching}
-                onClick={() => void systemQuery.refetch()}
-              >
-                <RefreshCw
-                  className={`w-3.5 h-3.5 ${
-                    systemQuery.isFetching ? "animate-spin" : ""
-                  }`}
-                />
-                <span>Probe Health</span>
-              </Button>
-            </div>
-          }
-        />
+  const databaseSteps = useMemo<readonly MobileStepItem[]>(
+    () => [
+      { code: "01", shortTitle: "Health" },
+      {
+        code: "02",
+        shortTitle:
+          snapshots.length > 0 ? `Vault (${snapshots.length})` : "Vault",
+      },
+      { code: "03", shortTitle: "Schema" },
+    ],
+    [snapshots.length]
+  );
 
-        {health?.warning && (
-          <div className="p-3.5 rounded-sm bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300">
-            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{health.warning}</span>
-          </div>
-        )}
+  /* 1. Storage Engine Health & Portability */
+  const healthSectionNode = (
+    <div
+      data-cascade
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5"
+    >
+      <SectionHeader
+        eyebrow="Engine Health & Data Portability"
+        title="Database Health, Export & Selective Import"
+        description="Verify live storage reachability, export sanitized content or complete archives with SHA-256 checksums, or selectively restore files."
+        size="sm"
+        stackRightOnMobile
+        tooltip={
+          <InfoTooltip
+            label="Backup checksum & restore safety"
+            content="Exports bundle a SHA-256 integrity hash. Content-Only omits analytics logs & inbox messages; Full Archive exports every table. Selective Import saves a pre-restore checkpoint before writing."
+          />
+        }
+        rightSlot={
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={systemQuery.isFetching || !isOnline}
+            onClick={() => void systemQuery.refetch()}
+            className="w-full sm:w-auto"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 shrink-0 ${
+                systemQuery.isFetching ? "animate-spin" : ""
+              }`}
+            />
+            <span>Probe Health</span>
+          </Button>
+        }
+      />
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
-          <div className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-(--text-muted) block">
-              Active Engine
+      {health?.warning && (
+        <div className="p-3.5 rounded-(--radius-control) bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 leading-relaxed">
+          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{health.warning}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs font-mono">
+        <div className="col-span-2 sm:col-span-1 p-3 sm:p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) space-y-1.5 min-w-0">
+          <span className="text-[10px] uppercase tracking-wider text-(--text-muted) block">
+            Active Engine
+          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-(--text-primary) font-semibold truncate">
+              {storageMode === "supabase"
+                ? "Supabase PostgreSQL"
+                : "Local Hybrid JSON"}
             </span>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-(--text-primary) font-semibold">
-                {storageMode === "supabase"
-                  ? "Supabase PostgreSQL"
-                  : "Local Hybrid JSON"}
-              </span>
-              <StatusPill
-                label={
-                  health?.status === "healthy"
-                    ? "Healthy"
-                    : health?.status === "degraded"
-                      ? "Degraded"
-                      : health?.status === "offline"
-                        ? "Offline"
-                        : "Ready"
-                }
-                variant={
-                  health?.status === "degraded"
-                    ? "warning"
+            <StatusPill
+              label={
+                health?.status === "healthy"
+                  ? "Healthy"
+                  : health?.status === "degraded"
+                    ? "Degraded"
                     : health?.status === "offline"
-                      ? "danger"
-                      : "success"
-                }
-                size="xs"
-              />
-            </div>
+                      ? "Offline"
+                      : "Ready"
+              }
+              variant={
+                health?.status === "degraded"
+                  ? "warning"
+                  : health?.status === "offline"
+                    ? "danger"
+                    : "success"
+              }
+              size="xs"
+            />
           </div>
+        </div>
 
-          <div className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-(--text-muted) block">
-              Probe Latency &amp; Payload
-            </span>
-            <div className="flex items-center gap-2 text-(--text-primary)">
-              <Activity className="w-3.5 h-3.5 text-(--text-accent)" />
-              <span>
-                {health ? `${health.latencyMs} ms` : "—"} ·{" "}
-                {footprints ? formatByteSize(footprints.totalBytes) : "—"}
-              </span>
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-(--text-muted) block">
-              Last Database Sync
-            </span>
-            <span
-              suppressHydrationWarning
-              className="text-(--text-primary) block truncate"
-            >
-              {new Date(db.updatedAt).toLocaleString()}
+        <div className="p-3 sm:p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) space-y-1.5 min-w-0">
+          <span className="text-[10px] uppercase tracking-wider text-(--text-muted) block truncate">
+            Latency &amp; Size
+          </span>
+          <div className="flex items-center gap-1.5 text-(--text-primary) min-w-0">
+            <Activity className="w-3.5 h-3.5 text-(--text-accent) shrink-0" />
+            <span className="truncate">
+              {health ? `${health.latencyMs} ms` : "—"} ·{" "}
+              {footprints ? formatByteSize(footprints.totalBytes) : "—"}
             </span>
           </div>
         </div>
 
-        {health && storageMode === "supabase" && (
-          <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
-            <StatusPill
-              label={
-                health.tables.analyticsEventsV2
-                  ? "analytics_events v2"
-                  : health.tables.analyticsEvents
-                    ? "analytics_events (missing v2 cols)"
-                    : "analytics_events missing"
-              }
-              variant={
-                health.tables.analyticsEventsV2
-                  ? "success"
-                  : health.tables.analyticsEvents
-                    ? "warning"
-                    : "danger"
-              }
-              size="xs"
-            />
-            <StatusPill
-              label={
-                health.tables.contactMessagesV2
-                  ? "contact_messages v2"
-                  : health.tables.contactMessages
-                    ? "contact_messages (missing v2 cols)"
-                    : "contact_messages missing"
-              }
-              variant={
-                health.tables.contactMessagesV2
-                  ? "success"
-                  : health.tables.contactMessages
-                    ? "warning"
-                    : "danger"
-              }
-              size="xs"
-            />
-            <StatusPill
-              label={
-                health.storage.exists
-                  ? `Bucket ${health.storage.bucket} (${health.storage.isPublic ? "Public" : "Private"})`
-                  : `Bucket ${health.storage.bucket} missing`
-              }
-              variant={
-                health.storage.exists && health.storage.isPublic
-                  ? "success"
-                  : "warning"
-              }
-              size="xs"
-            />
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-(--border-subtle)">
-          <Button
-            type="button"
-            onClick={() => void handleExportJson("content-only")}
-            variant="primary"
-            size="sm"
+        <div className="p-3 sm:p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) space-y-1.5 min-w-0">
+          <span className="text-[10px] uppercase tracking-wider text-(--text-muted) block truncate">
+            Last DB Sync
+          </span>
+          <span
+            suppressHydrationWarning
+            className="text-(--text-primary) block truncate"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Content Only (.json)</span>
-          </Button>
-
-          <Button
-            type="button"
-            onClick={() => void handleExportJson("full")}
-            variant="secondary"
-            size="sm"
-          >
-            <HardDrive className="w-3.5 h-3.5 text-(--text-accent)" />
-            <span>Export Full Archive</span>
-          </Button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            onChange={handleImportJson}
-            className="hidden"
-          />
-
-          <Button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={restoring}
-            variant="secondary"
-            size="sm"
-          >
-            {restoring ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Upload className="w-3.5 h-3.5 text-(--text-accent)" />
-            )}
-            <span>Import &amp; Selective Restore</span>
-          </Button>
+            {new Date(db.updatedAt).toLocaleString()}
+          </span>
         </div>
       </div>
 
-      {/* 2. Server Snapshot Vault (Rolling 10 Checkpoints) */}
-      <div
-        data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 space-y-5"
-      >
-        <SectionHeader
-          eyebrow="Rollback Protection"
-          title="Server Snapshot Vault"
-          description="Maintains up to 10 rolling server checkpoints (auto-saved before resets & restores, or created manually)."
+      {health && storageMode === "supabase" && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+          <StatusPill
+            label={
+              health.tables.analyticsEventsV2
+                ? "analytics_events v2"
+                : health.tables.analyticsEvents
+                  ? "analytics_events (missing v2 cols)"
+                  : "analytics_events missing"
+            }
+            variant={
+              health.tables.analyticsEventsV2
+                ? "success"
+                : health.tables.analyticsEvents
+                  ? "warning"
+                  : "danger"
+            }
+            size="xs"
+          />
+          <StatusPill
+            label={
+              health.tables.contactMessagesV2
+                ? "contact_messages v2"
+                : health.tables.contactMessages
+                  ? "contact_messages (missing v2 cols)"
+                  : "contact_messages missing"
+            }
+            variant={
+              health.tables.contactMessagesV2
+                ? "success"
+                : health.tables.contactMessages
+                  ? "warning"
+                  : "danger"
+            }
+            size="xs"
+          />
+          <StatusPill
+            label={
+              health.storage.exists
+                ? `Bucket ${health.storage.bucket} (${health.storage.isPublic ? "Public" : "Private"})`
+                : `Bucket ${health.storage.bucket} missing`
+            }
+            variant={
+              health.storage.exists && health.storage.isPublic
+                ? "success"
+                : "warning"
+            }
+            size="xs"
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 pt-2.5 border-t border-(--border-subtle)">
+        <Button
+          type="button"
+          onClick={() => void handleExportJson("content-only")}
+          variant="primary"
           size="sm"
-          rightSlot={
-            <div className="flex items-center gap-2">
-              <InfoTooltip
-                label="Server Snapshot Vault rotation"
-                content="Stores up to 10 rolling full-state server backups with SHA-256 checksums. Oldest manual snapshots rotate automatically when full."
-              />
-              <History className="w-5 h-5 text-(--text-accent)" />
-            </div>
-          }
+          className="w-full sm:w-auto"
+        >
+          <Download className="w-3.5 h-3.5 shrink-0" />
+          <span>Export Content Only (.json)</span>
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => void handleExportJson("full")}
+          variant="secondary"
+          size="sm"
+          className="w-full sm:w-auto"
+        >
+          <HardDrive className="w-3.5 h-3.5 text-(--text-accent) shrink-0" />
+          <span>Export Full Archive</span>
+        </Button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          onChange={handleImportJson}
+          className="hidden"
         />
 
-        <form
-          onSubmit={handleCreateSnapshot}
-          className="flex flex-col sm:flex-row sm:items-end gap-3"
+        <Button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={restoring || !isOnline}
+          variant="secondary"
+          size="sm"
+          className="w-full sm:w-auto"
         >
-          <div className="flex-1 min-w-0">
-            <TextField
-              id="snapshot-checkpoint-label"
-              label="Checkpoint Label"
-              value={checkpointLabel}
-              onChange={(val) => setCheckpointLabel(val.slice(0, 80))}
-              placeholder="e.g., Before Q4 Portfolio Redesign"
-              required={false}
-              minLength={0}
-              maxLength={80}
-            />
-          </div>
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={creatingSnapshot || !isOnline}
-            className="sm:mb-0.5 shrink-0"
-          >
-            {creatingSnapshot ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <BookmarkPlus className="w-3.5 h-3.5" />
-            )}
-            <span>Create Checkpoint</span>
-          </Button>
-        </form>
+          {restoring ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          ) : (
+            <Upload className="w-3.5 h-3.5 text-(--text-accent) shrink-0" />
+          )}
+          <span>Import &amp; Selective Restore</span>
+        </Button>
+      </div>
+    </div>
+  );
 
-        {snapshots.length === 0 ? (
-          <div className="p-4 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) text-xs font-mono text-(--text-muted)">
-            No checkpoints in vault yet. Click &ldquo;Create Checkpoint&rdquo; above or run a Factory Reset / JSON Restore to save your first recovery point.
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {snapshots.map((snap) => (
-              <div
-                key={snap.id}
-                className="p-3.5 sm:p-4 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-(--text-primary) truncate">
-                      {snap.label}
-                    </span>
-                    <StatusPill
-                      label={
-                        snap.trigger === "pre-reset"
-                          ? "Pre-Reset"
-                          : snap.trigger === "pre-restore"
-                            ? "Pre-Restore"
-                            : "Manual"
-                      }
-                      variant={
-                        snap.trigger === "manual" ? "accent" : "warning"
-                      }
-                      size="xs"
-                    />
-                    <StatusPill
-                      label={formatByteSize(snap.sizeBytes)}
-                      variant="neutral"
-                      size="xs"
-                    />
-                  </div>
-                  <p className="text-[11px] font-mono text-(--text-muted)">
-                    <span suppressHydrationWarning>
-                      {new Date(snap.createdAt).toLocaleString()}
-                    </span>{" "}
-                    · {snap.counts.projects} projects · {snap.counts.skills}{" "}
-                    skills · {snap.counts.messages} msgs · SHA{" "}
-                    {snap.sha256.slice(0, 8)}
-                  </p>
-                </div>
+  /* 2. Server Snapshot Vault (Rolling 10 Checkpoints) */
+  const vaultSectionNode = (
+    <div
+      data-cascade
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5"
+    >
+      <SectionHeader
+        eyebrow="Rollback Protection"
+        title="Server Snapshot Vault"
+        description="Maintains up to 10 rolling server checkpoints (auto-saved before resets & restores, or created manually)."
+        size="sm"
+        tooltip={
+          <InfoTooltip
+            label="Server Snapshot Vault rotation"
+            content="Stores up to 10 rolling full-state server backups with SHA-256 checksums. Oldest manual snapshots rotate automatically when full."
+          />
+        }
+        rightSlot={<History className="w-5 h-5 text-(--text-accent)" />}
+      />
 
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      setPendingRestore({
-                        kind: "snapshot",
-                        snapshotId: snap.id,
-                        sourceLabel: snap.label,
-                        integrityStatus: "verified",
-                        incomingCounts: {
-                          projects: snap.counts.projects,
-                          skills: snap.counts.skills,
-                          pillars: snap.counts.pillars,
-                          messages: snap.counts.messages,
-                          analytics: snap.counts.analytics,
-                        },
-                      })
+      <form
+        onSubmit={handleCreateSnapshot}
+        className="flex flex-col sm:flex-row sm:items-end gap-3"
+      >
+        <div className="flex-1 min-w-0">
+          <TextField
+            id="snapshot-checkpoint-label"
+            label="Checkpoint Label"
+            value={checkpointLabel}
+            onChange={(val) => setCheckpointLabel(val.slice(0, 80))}
+            placeholder="e.g., Before Q4 Portfolio Redesign"
+            required={false}
+            minLength={0}
+            maxLength={80}
+          />
+        </div>
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          disabled={creatingSnapshot || !isOnline}
+          className="w-full sm:w-auto sm:mb-0.5 shrink-0"
+        >
+          {creatingSnapshot ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          ) : (
+            <BookmarkPlus className="w-3.5 h-3.5 shrink-0" />
+          )}
+          <span>Create Checkpoint</span>
+        </Button>
+      </form>
+
+      {snapshots.length === 0 ? (
+        <div className="p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) text-xs font-mono text-(--text-muted) leading-relaxed">
+          No checkpoints in vault yet. Click &ldquo;Create Checkpoint&rdquo; above
+          or run a Factory Reset / JSON Restore to save your first recovery point.
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {snapshots.map((snap) => (
+            <div
+              key={snap.id}
+              className="p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="text-sm font-semibold text-(--text-primary) truncate max-w-full">
+                    {snap.label}
+                  </span>
+                  <StatusPill
+                    label={
+                      snap.trigger === "pre-reset"
+                        ? "Pre-Reset"
+                        : snap.trigger === "pre-restore"
+                          ? "Pre-Restore"
+                          : "Manual"
                     }
-                  >
-                    <RotateCcw className="w-3 h-3 text-(--text-accent)" />
-                    <span>Restore</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      window.open(
-                        `/api/admin/system?downloadSnapshot=${encodeURIComponent(
-                          snap.id
-                        )}`,
-                        "_blank"
-                      );
-                    }}
-                    aria-label={`Download ${snap.label} JSON`}
-                  >
-                    <Download className="w-3 h-3" />
-                    <span>JSON</span>
-                  </Button>
-
-                  <IconActionButton
-                    intent="danger"
-                    size="compact"
-                    onClick={() => setDeletingSnapshot(snap)}
-                    label={`Delete ${snap.label}`}
-                    icon={<Trash2 className="w-3.5 h-3.5" aria-hidden="true" />}
+                    variant={snap.trigger === "manual" ? "accent" : "warning"}
+                    size="xs"
+                  />
+                  <StatusPill
+                    label={formatByteSize(snap.sizeBytes)}
+                    variant="neutral"
+                    size="xs"
                   />
                 </div>
+                <p className="text-[11px] font-mono text-(--text-muted) leading-relaxed">
+                  <span suppressHydrationWarning>
+                    {new Date(snap.createdAt).toLocaleString()}
+                  </span>{" "}
+                  · {snap.counts.projects} projects · {snap.counts.skills}{" "}
+                  skills · {snap.counts.messages} msgs · SHA{" "}
+                  {snap.sha256.slice(0, 8)}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* 3. Real Payload Byte Breakdown */}
-      <div
-        data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 space-y-5"
-      >
-        <SectionHeader
-          eyebrow="Schema Footprint"
-          title="Indexed Records & Byte Distribution"
-          description="Actual UTF-8 JSON storage distribution across each portfolio table domain."
-          size="sm"
-          rightSlot={
-            <div className="flex items-center gap-2">
-              <InfoTooltip
-                label="UTF-8 payload telemetry"
-                content="Calculates serialized UTF-8 byte sizes per table domain so you can spot oversized image base64 strings or unbounded telemetry growth."
-              />
-              <Database className="w-5 h-5 text-(--text-accent)" />
-            </div>
-          }
-        />
+              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={restoring || !isOnline}
+                  className="flex-1 sm:flex-none"
+                  onClick={() =>
+                    setPendingRestore({
+                      kind: "snapshot",
+                      snapshotId: snap.id,
+                      sourceLabel: snap.label,
+                      integrityStatus: "verified",
+                      incomingCounts: {
+                        projects: snap.counts.projects,
+                        skills: snap.counts.skills,
+                        pillars: snap.counts.pillars,
+                        messages: snap.counts.messages,
+                        analytics: snap.counts.analytics,
+                      },
+                    })
+                  }
+                >
+                  <RotateCcw className="w-3 h-3 text-(--text-accent) shrink-0" />
+                  <span>Restore</span>
+                </Button>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-4">
-          {(footprints?.sections || []).map((section, idx) => (
-            <div
-              key={section.key}
-              className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-sm p-3 sm:p-4 space-y-2 sm:space-y-2.5"
-            >
-              <TruncatedText
-                text={section.label}
-                className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block"
-              />
-              <div className="font-display text-3xl text-(--text-primary)">
-                <AnimatedCounter
-                  value={section.records}
-                  durationMs={850 + idx * 80}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!isOnline}
+                  className="flex-1 sm:flex-none"
+                  onClick={() => {
+                    window.open(
+                      `/api/admin/system?downloadSnapshot=${encodeURIComponent(
+                        snap.id
+                      )}`,
+                      "_blank"
+                    );
+                  }}
+                  aria-label={`Download ${snap.label} JSON`}
+                >
+                  <Download className="w-3 h-3 shrink-0" />
+                  <span>JSON</span>
+                </Button>
+
+                <IconActionButton
+                  intent="danger"
+                  size="compact"
+                  disabled={deletingLoading || !isOnline}
+                  onClick={() => setDeletingSnapshot(snap)}
+                  label={`Delete ${snap.label}`}
+                  icon={<Trash2 className="w-3.5 h-3.5" aria-hidden="true" />}
                 />
               </div>
-              <AnimatedBar
-                percentage={section.percentage}
-                delayMs={120 + idx * 70}
-                heightClassName="h-1.5"
-              />
-              <span className="text-[10px] font-mono text-(--text-muted) block">
-                {formatByteSize(section.bytes)} ({section.percentage}%)
-              </span>
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+
+  /* 3. Real Payload Byte Breakdown */
+  const schemaSectionNode = (
+    <div
+      data-cascade
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5"
+    >
+      <SectionHeader
+        eyebrow="Schema Footprint"
+        title="Indexed Records & Byte Distribution"
+        description="Actual UTF-8 JSON storage distribution across each portfolio table domain."
+        size="sm"
+        tooltip={
+          <InfoTooltip
+            label="UTF-8 payload telemetry"
+            content="Calculates serialized UTF-8 byte sizes per table domain so you can spot oversized image base64 strings or unbounded telemetry growth."
+          />
+        }
+        rightSlot={<Database className="w-5 h-5 text-(--text-accent)" />}
+      />
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-4">
+        {(footprints?.sections || []).map((section, idx) => (
+          <div
+            key={section.key}
+            className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-(--radius-control) p-3 sm:p-4 space-y-2 sm:space-y-2.5"
+          >
+            <TruncatedText
+              text={section.label}
+              className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block"
+            />
+            <div className="font-display text-3xl text-(--text-primary)">
+              <AnimatedCounter
+                value={section.records}
+                durationMs={850 + idx * 80}
+              />
+            </div>
+            <AnimatedBar
+              percentage={section.percentage}
+              delayMs={120 + idx * 70}
+              heightClassName="h-1.5"
+            />
+            <span className="text-[10px] font-mono text-(--text-muted) block">
+              {formatByteSize(section.bytes)} ({section.percentage}%)
+            </span>
+          </div>
+        ))}
       </div>
+    </div>
+  );
+
+  const databasePanels = [
+    healthSectionNode,
+    vaultSectionNode,
+    schemaSectionNode,
+  ];
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      {isMobileOrTablet ? (
+        <AdminMobileStepView
+          ariaLabel="Database health, backups, and schema sections"
+          steps={databaseSteps}
+          activeStep={activeStep}
+          direction={stepDirection}
+          onChangeStep={(next) => switchStep(next as DatabaseStep)}
+        >
+          {databasePanels[activeStep] ?? databasePanels[0]}
+        </AdminMobileStepView>
+      ) : (
+        <>
+          {healthSectionNode}
+          {vaultSectionNode}
+          {schemaSectionNode}
+        </>
+      )}
 
       {pendingRestore && (
         <BackupRestoreModal

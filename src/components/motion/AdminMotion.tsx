@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { shouldReduceMotion } from "@/lib/appearance";
+import { useIsomorphicLayoutEffect } from "@/lib/searchMotion";
 import { cn } from "@/lib/utils";
 
 function collectTopLevelCascadeTargets(root: HTMLElement): HTMLElement[] {
@@ -114,6 +115,66 @@ export function AdminCascade({
 
   return (
     <div ref={containerRef} className={className}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 1b. Directional Horizontal Slide Transition (`forward` from right / `back` from left)
+ * Built with synchronous `useIsomorphicLayoutEffect` so incoming content never flashes
+ * before GSAP sets its starting GPU `translate3d` offset.
+ */
+export function AdminSlideView({
+  activeKey,
+  direction = "forward",
+  children,
+  className,
+  distancePx = 36,
+  duration = 0.36,
+  skipInitial = true,
+}: {
+  activeKey: string;
+  direction?: "forward" | "back";
+  children: React.ReactNode;
+  className?: string;
+  distancePx?: number;
+  duration?: number;
+  skipInitial?: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prevKeyRef = useRef(activeKey);
+
+  useIsomorphicLayoutEffect(() => {
+    const prevKey = prevKeyRef.current;
+    prevKeyRef.current = activeKey;
+
+    if (skipInitial && prevKey === activeKey) return;
+
+    const el = containerRef.current;
+    if (!el || shouldReduceMotion()) return;
+
+    const fromX = direction === "forward" ? distancePx : -distancePx;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        el,
+        { opacity: 0, x: fromX },
+        {
+          opacity: 1,
+          x: 0,
+          duration,
+          ease: "power3.out",
+          force3D: true,
+          clearProps: "transform,opacity",
+        }
+      );
+    }, el);
+
+    return () => ctx.revert();
+  }, [activeKey, direction, distancePx, duration, skipInitial]);
+
+  return (
+    <div ref={containerRef} className={cn("will-change-transform", className)}>
       {children}
     </div>
   );

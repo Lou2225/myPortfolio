@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Wifi,
   WifiOff,
@@ -20,7 +20,13 @@ import {
   useOfflineStatus,
   type PwaCacheDiagnostics,
 } from "@/components/pwa/OfflineManager";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
+import {
+  AdminMobileStepView,
+  MobileStepItem,
+  useStepNavigation,
+} from "@/components/admin/AdminMobileStepView";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
@@ -33,6 +39,8 @@ import type { SettingsFeedback } from "./types";
 export interface OfflinePwaSettingsProps {
   onFeedback: (next: SettingsFeedback | null) => void;
 }
+
+type OfflinePwaStep = 0 | 1 | 2;
 
 function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || !Number.isFinite(bytes)) return "—";
@@ -59,6 +67,10 @@ export function OfflinePwaSettings({ onFeedback }: OfflinePwaSettingsProps) {
     removeOutboxItem,
     flushContactOutbox,
   } = useOfflineStatus();
+
+  const isMobileOrTablet = useMediaQuery("(max-width: 1023px)");
+  const { activeStep, stepDirection, switchStep } =
+    useStepNavigation<OfflinePwaStep>(0);
 
   const [diagnostics, setDiagnostics] = useState<PwaCacheDiagnostics | null>(null);
   const [inspectOpen, setInspectOpen] = useState(false);
@@ -238,387 +250,445 @@ export function OfflinePwaSettings({ onFeedback }: OfflinePwaSettingsProps) {
         )
       : 0;
 
-  return (
-    <div className="space-y-6">
-      {/* 1. Service Worker & App Lifecycle */}
-      <div
-        data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 space-y-5"
-      >
-        <SectionHeader
-          eyebrow="PWA & Offline Capability"
-          title="Service Worker & App Install Posture"
-          description="Control installability, update checks, and offline caching of public pages, resumes, and live Supabase project media."
-          size="sm"
-          rightSlot={
-            <div className="flex items-center gap-2">
-              <InfoTooltip
-                label="Service Worker caching scope"
-                content="Only public portfolio routes, /api/portfolio JSON, and uploaded media/resumes are cached locally. Authenticated /admin APIs bypass CacheStorage for strict security."
-              />
-              {isOnline ? (
-                <Wifi className="w-5 h-5 text-emerald-400" />
-              ) : (
-                <WifiOff className="w-5 h-5 text-amber-400" />
-              )}
-            </div>
-          }
-        />
+  const pwaSteps = useMemo<readonly MobileStepItem[]>(
+    () => [
+      { code: "01", shortTitle: "Status" },
+      { code: "02", shortTitle: "Storage" },
+      {
+        code: "03",
+        shortTitle:
+          pendingOutboxCount > 0
+            ? `Outbox (${pendingOutboxCount})`
+            : "Outbox",
+      },
+    ],
+    [pendingOutboxCount]
+  );
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-sm p-4 space-y-1.5">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block">
-              Connectivity Status
-            </span>
-            <div className="flex items-center gap-2 pt-1">
-              <StatusPill
-                label={isOnline ? "Online" : "Offline"}
-                variant={isOnline ? "success" : "warning"}
-                size="xs"
-              />
-              <span className="text-xs text-(--text-secondary)">
-                {isOnline
-                  ? "Admin writes enabled"
-                  : "Offline — Read-only mode"}
-              </span>
-            </div>
-          </div>
+  /* 1. Service Worker & App Lifecycle */
+  const lifecycleSectionNode = (
+    <div
+      data-cascade
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5"
+    >
+      <SectionHeader
+        eyebrow="PWA & Offline Capability"
+        title="Service Worker & App Install Posture"
+        description="Control installability, update checks, and offline caching of public pages, resumes, and live Supabase project media."
+        size="sm"
+        tooltip={
+          <InfoTooltip
+            label="Service Worker caching scope"
+            content="Only public portfolio routes, /api/portfolio JSON, and uploaded media/resumes are cached locally. Authenticated /admin APIs bypass CacheStorage for strict security."
+          />
+        }
+        rightSlot={
+          isOnline ? (
+            <Wifi className="w-5 h-5 text-emerald-400" />
+          ) : (
+            <WifiOff className="w-5 h-5 text-amber-400" />
+          )
+        }
+      />
 
-          <div className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-sm p-4 space-y-1.5">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block">
-              Service Worker Cache
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
+        <div className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-(--radius-control) p-3 sm:p-4 space-y-1.5 min-w-0">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block truncate">
+            Connectivity
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <StatusPill
+              label={isOnline ? "Online" : "Offline"}
+              variant={isOnline ? "success" : "warning"}
+              size="xs"
+            />
+            <span className="text-[11px] text-(--text-secondary) hidden sm:inline">
+              {isOnline ? "Admin writes enabled" : "Read-only mode"}
             </span>
-            <div className="flex items-center gap-2 pt-1">
-              <StatusPill
-                label={swStatusLabel}
-                variant={
-                  swState === "active"
-                    ? "success"
-                    : swState === "updating"
-                      ? "accent"
-                      : "neutral"
-                }
-                size="xs"
-              />
-            </div>
           </div>
-
-          <div className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-sm p-4 space-y-1.5">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block">
-              PWA Install Posture
-            </span>
-            <div className="flex items-center gap-2 pt-1">
-              <StatusPill
-                label={
-                  installPosture === "standalone"
-                    ? "Installed App"
-                    : installPosture === "prompt-ready"
-                      ? "Ready to Install"
-                      : installPosture === "ios-safari"
-                        ? "Safari A2HS"
-                        : "Browser Tab"
-                }
-                variant={
-                  installPosture === "standalone"
-                    ? "success"
-                    : installPosture === "prompt-ready"
-                      ? "accent"
-                      : "neutral"
-                }
-                size="xs"
-                icon={<Smartphone className="w-3 h-3" />}
-              />
-              {installPosture === "ios-safari" && (
-                <span className="text-[11px] text-(--text-muted)">
-                  Tap Share → Add to Home Screen
-                </span>
-              )}
-            </div>
-          </div>
+          <p className="text-[11px] text-(--text-muted) sm:hidden">
+            {isOnline ? "Writes enabled" : "Read-only mode"}
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-(--border-subtle)">
-          <span className="text-xs text-(--text-muted)">
-            CacheStorage covers public routes, live <code className="font-mono text-(--text-primary)">/api/portfolio</code>, and uploaded media (never <code className="font-mono text-(--text-primary)">/admin</code>).
+        <div className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-(--radius-control) p-3 sm:p-4 space-y-1.5 min-w-0">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block truncate">
+            Install Posture
           </span>
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <StatusPill
+              label={
+                installPosture === "standalone"
+                  ? "Installed"
+                  : installPosture === "prompt-ready"
+                    ? "Install Ready"
+                    : installPosture === "ios-safari"
+                      ? "Safari A2HS"
+                      : "Browser Tab"
+              }
+              variant={
+                installPosture === "standalone"
+                  ? "success"
+                  : installPosture === "prompt-ready"
+                    ? "accent"
+                    : "neutral"
+              }
+              size="xs"
+              icon={<Smartphone className="w-3 h-3" />}
+            />
+          </div>
+          {installPosture === "ios-safari" && (
+            <p className="text-[10px] text-(--text-muted)">
+              Share → Add to Home Screen
+            </p>
+          )}
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            {updateReady && (
-              <Button
-                type="button"
-                onClick={applyUpdate}
-                variant="primary"
-                size="sm"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reload for Update</span>
-              </Button>
-            )}
-
-            <Button
-              type="button"
-              onClick={() => void handleCheckUpdates()}
-              disabled={checkingUpdate}
-              variant="secondary"
-              size="sm"
-            >
-              {checkingUpdate ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3.5 h-3.5 text-(--text-accent)" />
-              )}
-              <span>Check for Updates</span>
-            </Button>
-
-            <Button
-              type="button"
-              onClick={() => void handlePrewarm()}
-              disabled={prewarming || !isOnline}
-              variant="secondary"
-              size="sm"
-            >
-              {prewarming ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <CloudDownload className="w-3.5 h-3.5 text-(--text-accent)" />
-              )}
-              <span>Sync Portfolio for Offline</span>
-            </Button>
-
-            {canInstall && (
-              <Button
-                type="button"
-                onClick={() => void promptInstall()}
-                variant="primary"
-                size="sm"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Install App</span>
-              </Button>
-            )}
+        <div className="col-span-2 md:col-span-1 bg-(--bg-surface-2) border border-(--border-subtle) rounded-(--radius-control) p-3 sm:p-4 space-y-1.5 min-w-0">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) block truncate">
+            Service Worker Cache
+          </span>
+          <div className="flex items-center gap-2 pt-0.5">
+            <StatusPill
+              label={swStatusLabel}
+              variant={
+                swState === "active"
+                  ? "success"
+                  : swState === "updating"
+                    ? "accent"
+                    : "neutral"
+              }
+              size="xs"
+            />
           </div>
         </div>
       </div>
 
-      {/* 2. Browser CacheStorage & Quota Inspector */}
-      <div
-        data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 space-y-5"
-      >
-        <SectionHeader
-          eyebrow="Origin Storage Diagnostics"
-          title="CacheStorage Buckets & Quota Footprint"
-          description="Inspect how much origin storage this browser has allocated and review cached routes and media."
-          size="sm"
-          rightSlot={
-            <div className="flex items-center gap-2">
-              <InfoTooltip
-                label="Browser origin quota explained"
-                content="Measures persistent browser storage used by CacheStorage buckets and local offline query state under this domain."
-              />
-              <HardDrive className="w-5 h-5 text-(--text-accent)" />
-            </div>
-          }
-        />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2.5 border-t border-(--border-subtle)">
+        <span className="text-xs text-(--text-muted) leading-relaxed">
+          CacheStorage covers public routes,{" "}
+          <code className="font-mono text-(--text-primary)">
+            /api/portfolio
+          </code>
+          , and uploaded media (never{" "}
+          <code className="font-mono text-(--text-primary)">/admin</code>).
+        </span>
 
-        <div className="p-4 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-            <span className="text-(--text-muted) uppercase tracking-wider">
-              Browser Origin Usage ({diagnostics?.totalEntries ?? 0} cached entries)
-            </span>
-            <span className="text-(--text-primary)">
-              {formatBytes(diagnostics?.usageBytes)} /{" "}
-              {formatBytes(diagnostics?.quotaBytes)} ({usagePct}%)
-            </span>
-          </div>
-          <AnimatedBar percentage={usagePct} heightClassName="h-1.5" />
-
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <button
+        <div className="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto shrink-0">
+          {updateReady && (
+            <Button
               type="button"
-              onClick={() => setInspectOpen((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 text-xs font-mono text-(--text-primary) hover:text-(--text-accent) cursor-pointer transition-colors"
+              onClick={applyUpdate}
+              variant="primary"
+              size="sm"
+              className="w-full sm:w-auto"
             >
-              <span>
-                {inspectOpen
-                  ? "Hide Cached URLs"
-                  : `Inspect Cached Entries (${diagnostics?.totalEntries ?? 0})`}
-              </span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                  inspectOpen ? "rotate-180" : ""
-                }`}
-              />
-            </button>
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+              <span>Reload for Update</span>
+            </Button>
+          )}
 
-            <button
+          {canInstall && (
+            <Button
               type="button"
-              onClick={() => void refreshDiagnostics()}
-              className="text-[11px] font-mono text-(--text-muted) hover:text-(--text-accent) cursor-pointer transition-colors"
+              onClick={() => void promptInstall()}
+              variant="primary"
+              size="sm"
+              className="w-full sm:w-auto"
             >
-              Refresh Metrics
-            </button>
-          </div>
-        </div>
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span>Install App</span>
+            </Button>
+          )}
 
-        <Collapsible open={inspectOpen} allowOverflowWhenOpen>
-          <div className="space-y-3 pt-1">
-            {!diagnostics || diagnostics.buckets.length === 0 ? (
-              <p className="text-xs font-mono text-(--text-muted) p-4 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle)">
-                No Service Worker CacheStorage entries are present yet. Run &ldquo;Sync Portfolio for Offline&rdquo; on a production build to populate caches.
-              </p>
-            ) : (
-              diagnostics.buckets.map((bucket) => (
-                <div
-                  key={bucket.name}
-                  className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) space-y-2"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-mono font-semibold text-(--text-primary)">
-                      {bucket.name}
-                    </span>
-                    <StatusPill
-                      label={`${bucket.urls.length} files`}
-                      variant="neutral"
-                      size="xs"
-                    />
-                  </div>
-                  <ul
-                    data-lenis-prevent
-                    className="max-h-40 overflow-y-auto overscroll-contain lou-scrollarea space-y-1 text-[11px] font-mono text-(--text-muted)"
-                  >
-                    {bucket.urls.map((u) => (
-                      <li key={u} className="truncate">
-                        {u}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
-            )}
-          </div>
-        </Collapsible>
-
-        <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2 border-t border-(--border-subtle)">
           <Button
             type="button"
-            onClick={() => setConfirmClearMode("sw-only")}
-            disabled={clearingPwaCache}
+            onClick={() => void handleCheckUpdates()}
+            disabled={checkingUpdate}
             variant="secondary"
             size="sm"
+            className="w-full sm:w-auto"
           >
-            {clearingPwaCache ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            {checkingUpdate ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
             ) : (
-              <Trash2 className="w-3.5 h-3.5 text-(--text-accent)" />
+              <RefreshCw className="w-3.5 h-3.5 text-(--text-accent) shrink-0" />
             )}
-            <span>Clear SW Cache</span>
+            <span>Check for Updates</span>
           </Button>
 
           <Button
             type="button"
-            onClick={() => setConfirmClearMode("full")}
-            disabled={clearingPwaCache}
-            variant="danger"
+            onClick={() => void handlePrewarm()}
+            disabled={prewarming || !isOnline}
+            variant="secondary"
             size="sm"
+            className="w-full sm:w-auto"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Reset SW + Browser Query Cache</span>
+            {prewarming ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : (
+              <CloudDownload className="w-3.5 h-3.5 text-(--text-accent) shrink-0" />
+            )}
+            <span>Sync Portfolio Offline</span>
           </Button>
         </div>
       </div>
+    </div>
+  );
 
-      {/* 3. Queued Contact Outbox Inspector */}
-      <div
-        data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 space-y-4"
-      >
-        <SectionHeader
-          eyebrow="Background Sync Queue"
-          title="Queued Offline Contact Outbox"
-          description="Inquiries submitted while visitors are offline stay queued locally and auto-flush on reconnect."
-          size="sm"
-          rightSlot={
-            <div className="flex items-center gap-2">
-              <InfoTooltip
-                label="How offline outbox sync works"
-                content="Visitors submitting Contact inquiries while offline have their message queued safely in local IndexedDB/localStorage and dispatched once reconnected."
-              />
-              <StatusPill
-                label={`${pendingOutboxCount} Queued`}
-                variant={pendingOutboxCount > 0 ? "warning" : "success"}
-                size="xs"
-              />
-            </div>
-          }
-        />
+  /* 2. Browser CacheStorage & Quota Inspector */
+  const storageSectionNode = (
+    <div
+      data-cascade
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5"
+    >
+      <SectionHeader
+        eyebrow="Origin Storage Diagnostics"
+        title="CacheStorage Buckets & Quota Footprint"
+        description="Inspect how much origin storage this browser has allocated and review cached routes and media."
+        size="sm"
+        tooltip={
+          <InfoTooltip
+            label="Browser origin quota explained"
+            content="Measures persistent browser storage used by CacheStorage buckets and local offline query state under this domain."
+          />
+        }
+        rightSlot={<HardDrive className="w-5 h-5 text-(--text-accent)" />}
+      />
 
-        {outboxItems.length === 0 ? (
-          <div className="p-4 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) flex items-center gap-2.5 text-xs text-(--text-muted)">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>All queued contact submissions have been synced to the server.</span>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {outboxItems.map((item) => (
+      <div className="p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-mono">
+          <span className="text-(--text-muted) uppercase tracking-wider">
+            Browser Origin Usage ({diagnostics?.totalEntries ?? 0} cached entries)
+          </span>
+          <span className="text-(--text-primary) font-semibold">
+            {formatBytes(diagnostics?.usageBytes)} /{" "}
+            {formatBytes(diagnostics?.quotaBytes)} ({usagePct}%)
+          </span>
+        </div>
+        <AnimatedBar percentage={usagePct} heightClassName="h-1.5" />
+
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-(--border-subtle)/60">
+          <button
+            type="button"
+            onClick={() => setInspectOpen((prev) => !prev)}
+            className="inline-flex items-center gap-1.5 py-1 text-xs font-mono text-(--text-primary) hover:text-(--text-accent) cursor-pointer transition-colors"
+          >
+            <span>
+              {inspectOpen
+                ? "Hide Cached URLs"
+                : `Inspect Entries (${diagnostics?.totalEntries ?? 0})`}
+            </span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                inspectOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void refreshDiagnostics()}
+            className="py-1 text-[11px] font-mono text-(--text-accent) hover:underline cursor-pointer transition-colors"
+          >
+            Refresh Metrics
+          </button>
+        </div>
+      </div>
+
+      <Collapsible open={inspectOpen} allowOverflowWhenOpen>
+        <div className="space-y-3 pt-1">
+          {!diagnostics || diagnostics.buckets.length === 0 ? (
+            <p className="text-xs font-mono text-(--text-muted) p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) leading-relaxed">
+              No Service Worker CacheStorage entries are present yet. Run
+              &ldquo;Sync Portfolio Offline&rdquo; on a production build to
+              populate caches.
+            </p>
+          ) : (
+            diagnostics.buckets.map((bucket) => (
               <div
-                key={item.queuedAt}
-                className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) flex items-start justify-between gap-3"
+                key={bucket.name}
+                className="p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) space-y-2"
               >
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold text-(--text-primary)">
-                      {item.name}
-                    </span>
-                    <span className="text-[11px] font-mono text-(--text-muted)">
-                      &lt;{item.email}&gt;
-                    </span>
-                    <span
-                      suppressHydrationWarning
-                      className="text-[10px] font-mono text-(--text-muted)"
-                    >
-                      Queued {new Date(item.queuedAt).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-xs font-medium text-(--text-primary) truncate">
-                    {item.subject}
-                  </p>
-                  <p className="text-xs text-(--text-muted) line-clamp-2">
-                    {item.message}
-                  </p>
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-xs font-mono font-semibold text-(--text-primary) truncate">
+                    {bucket.name}
+                  </span>
+                  <StatusPill
+                    label={`${bucket.urls.length} files`}
+                    variant="neutral"
+                    size="xs"
+                  />
                 </div>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeOutboxItem(item.queuedAt)}
-                  aria-label={`Discard queued message from ${item.name}`}
+                <ul
+                  data-lenis-prevent
+                  className="max-h-40 overflow-y-auto overscroll-contain lou-scrollarea space-y-1 text-[11px] font-mono text-(--text-muted)"
                 >
-                  <X className="w-4 h-4 text-rose-400" />
-                </Button>
+                  {bucket.urls.map((u) => (
+                    <li key={u} className="truncate">
+                      {u}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            ))}
+            ))
+          )}
+        </div>
+      </Collapsible>
 
-            <div className="flex justify-end pt-1">
+      <div className="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-2 sm:gap-2.5 pt-2.5 border-t border-(--border-subtle)">
+        <Button
+          type="button"
+          onClick={() => setConfirmClearMode("sw-only")}
+          disabled={clearingPwaCache}
+          variant="danger"
+          size="sm"
+          className="w-full sm:w-auto"
+        >
+          {clearingPwaCache ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          ) : (
+            <Trash2 className="w-3.5 h-3.5 shrink-0" />
+          )}
+          <span>Clear SW Cache</span>
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => setConfirmClearMode("full")}
+          disabled={clearingPwaCache}
+          variant="danger"
+          size="sm"
+          className="w-full sm:w-auto"
+        >
+          <Trash2 className="w-3.5 h-3.5 shrink-0" />
+          <span>Reset SW &amp; Query Cache</span>
+        </Button>
+      </div>
+    </div>
+  );
+
+  /* 3. Queued Contact Outbox Inspector */
+  const outboxSectionNode = (
+    <div
+      data-cascade
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4"
+    >
+      <SectionHeader
+        eyebrow="Background Sync Queue"
+        title="Queued Offline Contact Outbox"
+        description="Inquiries submitted while visitors are offline stay queued locally and auto-flush on reconnect."
+        size="sm"
+        tooltip={
+          <InfoTooltip
+            label="How offline outbox sync works"
+            content="Visitors submitting Contact inquiries while offline have their message queued safely in local IndexedDB/localStorage and dispatched once reconnected."
+          />
+        }
+        rightSlot={
+          <StatusPill
+            label={`${pendingOutboxCount} Queued`}
+            variant={pendingOutboxCount > 0 ? "warning" : "success"}
+            size="xs"
+          />
+        }
+      />
+
+      {outboxItems.length === 0 ? (
+        <div className="p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex items-center gap-2.5 text-xs text-(--text-muted)">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>All queued contact submissions have been synced to the server.</span>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {outboxItems.map((item) => (
+            <div
+              key={item.queuedAt}
+              className="p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex items-start justify-between gap-3"
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="text-xs font-semibold text-(--text-primary)">
+                    {item.name}
+                  </span>
+                  <span className="text-[11px] font-mono text-(--text-muted) break-all">
+                    &lt;{item.email}&gt;
+                  </span>
+                  <span
+                    suppressHydrationWarning
+                    className="text-[10px] font-mono text-(--text-muted)"
+                  >
+                    Queued {new Date(item.queuedAt).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-xs font-medium text-(--text-primary) truncate">
+                  {item.subject}
+                </p>
+                <p className="text-xs text-(--text-muted) line-clamp-2">
+                  {item.message}
+                </p>
+              </div>
+
               <Button
                 type="button"
-                onClick={() => void handleFlushOutbox()}
-                disabled={flushingOutbox || !isOnline}
-                variant="primary"
-                size="sm"
+                variant="danger"
+                size="icon"
+                onClick={() => removeOutboxItem(item.queuedAt)}
+                aria-label={`Discard queued message from ${item.name}`}
               >
-                {flushingOutbox ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5" />
-                )}
-                <span>Flush Outbox Now</span>
+                <X className="w-4 h-4" />
               </Button>
             </div>
+          ))}
+
+          <div className="flex justify-end pt-1">
+            <Button
+              type="button"
+              onClick={() => void handleFlushOutbox()}
+              disabled={flushingOutbox || !isOnline}
+              variant="primary"
+              size="sm"
+              className="w-full sm:w-auto"
+            >
+              {flushingOutbox ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+              ) : (
+                <Send className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span>Flush Outbox Now</span>
+            </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const pwaPanels = [
+    lifecycleSectionNode,
+    storageSectionNode,
+    outboxSectionNode,
+  ];
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      {isMobileOrTablet ? (
+        <AdminMobileStepView
+          ariaLabel="Offline cache and PWA sections"
+          steps={pwaSteps}
+          activeStep={activeStep}
+          direction={stepDirection}
+          onChangeStep={(next) => switchStep(next as OfflinePwaStep)}
+        >
+          {pwaPanels[activeStep] ?? pwaPanels[0]}
+        </AdminMobileStepView>
+      ) : (
+        <>
+          {lifecycleSectionNode}
+          {storageSectionNode}
+          {outboxSectionNode}
+        </>
+      )}
 
       <ConfirmModal
         open={Boolean(confirmClearMode)}

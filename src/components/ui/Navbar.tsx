@@ -127,7 +127,7 @@ export function Navbar() {
     e.preventDefault();
     setActiveSection(item.id);
     scrollTo(item.href, {
-      offset: item.id === "top" ? 0 : -68,
+      offset: item.id === "top" ? 0 : -76,
       duration: 1.4,
     });
     if (window.history.pushState) {
@@ -147,39 +147,39 @@ export function Navbar() {
   return (
     <>
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
+        className={`fixed inset-x-0 top-0 z-50 w-full max-w-full overflow-x-clip transition-all duration-500 ${
           scrolled
-            ? "navbar-scrolled bg-[#08080a]/85 backdrop-blur-xl border-b border-(--border-subtle) py-3 sm:py-3.5 shadow-lg"
-            : "navbar-top bg-linear-to-b from-[#08080a]/90 via-[#08080a]/40 to-transparent py-4 sm:py-5"
+            ? "navbar-scrolled bg-[#08080a]/85 backdrop-blur-xl border-b border-(--border-subtle) py-2.5 sm:py-3.5 shadow-lg"
+            : "navbar-top bg-linear-to-b from-[#08080a]/90 via-[#08080a]/40 to-transparent py-3.5 sm:py-5"
         }`}
       >
         <nav
           aria-label="Main Storytelling Navigation"
-          className="max-w-7xl mx-auto px-4 sm:px-6 md:px-10 flex items-center justify-between gap-4"
+          className="max-w-7xl mx-auto w-full px-(--gutter) flex items-center justify-between gap-2 sm:gap-4"
         >
           {/* Brand Logo & Monogram */}
-          <Magnetic strength={0.18}>
+          <Magnetic strength={0.18} className="min-w-0">
             <Link
               href={isHomeRoute ? "#top" : "/"}
               onClick={(e) => handleNavClick(e, navLinks[0])}
-              className="flex items-center gap-2.5 sm:gap-3 group select-none cursor-pointer shrink-0"
+              className="flex items-center gap-2 sm:gap-3 group select-none cursor-pointer min-w-0"
             >
               <MonogramBadge
                 monogram={profile.monogram}
                 imageUrl={profile.monogramImageUrl}
                 transform={profile.monogramTransform}
                 alt={`${profile.name} monogram logo`}
-                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border font-bold text-xs tracking-wider transition-all duration-300 ${
+                className={`w-[2rem] h-[2rem] sm:w-[2.5rem] sm:h-[2.5rem] rounded-full border font-bold text-[0.75rem] tracking-wider transition-all duration-300 shrink-0 ${
                   currentSection === "top"
                     ? "border-brand text-(--text-accent) bg-(--bg-badge-highlight) shadow-[0_0_15px_var(--accent-glow)]"
                     : "border-(--border-strong) text-(--text-primary) group-hover:border-brand group-hover:text-(--text-accent)"
                 }`}
               />
-              <div className="flex flex-col">
-                <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-(--text-primary) group-hover:text-(--text-accent) transition-colors leading-tight">
+              <div className="flex flex-col min-w-0 max-w-[7.25rem] min-[420px]:max-w-[9.5rem] sm:max-w-none">
+                <span className="text-[0.6875rem] sm:text-[0.75rem] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-(--text-primary) group-hover:text-(--text-accent) transition-colors leading-tight truncate">
                   {profile.name}
                 </span>
-                <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] text-(--text-muted) leading-tight">
+                <span className="text-[0.53125rem] sm:text-[0.625rem] uppercase tracking-[0.11em] sm:tracking-[0.14em] text-(--text-muted) leading-tight truncate">
                   {profile.education.major}
                 </span>
               </div>
@@ -232,14 +232,14 @@ export function Navbar() {
           )}
 
           {/* Right Action & Mobile Active Chapter Indicator */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {!isOfflineRoute && (
-              <div className="flex lg:hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-(--bg-surface) border border-(--border-subtle) text-[10px] uppercase tracking-[0.15em]">
-                <span className="w-1.5 h-1.5 rounded-full bg-brand" />
+              <div className="flex lg:hidden items-center gap-1.5 px-2 sm:px-2.5 h-[1.75rem] sm:h-[1.875rem] rounded-full bg-(--bg-surface) border border-(--border-subtle) text-[0.5625rem] sm:text-[0.625rem] uppercase tracking-[0.11em] sm:tracking-[0.14em] whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
                 <span className="font-mono text-(--text-accent) font-bold">
                   {activeItem.chapter}
                 </span>
-                <span className="text-(--text-primary) font-medium">
+                <span className="hidden min-[360px]:inline text-(--text-primary) font-medium">
                   {activeItem.label}
                 </span>
               </div>

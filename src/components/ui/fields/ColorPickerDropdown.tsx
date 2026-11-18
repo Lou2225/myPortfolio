@@ -9,7 +9,9 @@ import {
 } from "react";
 import { Pipette, ChevronDown, Check, Sparkles } from "lucide-react";
 import { DropdownPopover } from "@/components/ui/DropdownPopover";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { FieldWrapper } from "@/components/ui/fields/FieldWrapper";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { cn } from "@/lib/utils";
 
 export interface ColorPickerDropdownProps {
@@ -171,6 +173,9 @@ export function ColorPickerDropdown({
   hint,
   className,
 }: ColorPickerDropdownProps) {
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const [mobileModalOpen, setMobileModalOpen] = useState(false);
+
   const safeHex = useMemo(() => normalizeHex(value) || "#FF3B1D", [value]);
   const rgb = useMemo(() => hexToRgb(safeHex), [safeHex]);
   const [hsv, setHsv] = useState<HsvColor>(() => rgbToHsv(hexToRgb(safeHex)));
@@ -280,304 +285,332 @@ export function ColorPickerDropdown({
     [rgb]
   );
 
-  return (
-    <FieldWrapper id={id} label={label} hint={hint} className={className}>
-      <DropdownPopover
-        portal
-        align="start"
-        minWidth={308}
-        estimatedHeight={430}
-        overflowMode="none"
-        disabled={disabled}
-        trigger={({ isOpen, toggle }) => (
-          <button
-            id={id}
-            type="button"
-            disabled={disabled}
-            onClick={toggle}
-            aria-expanded={isOpen}
-            aria-label={`Open custom RGB and Hex color picker (current ${safeHex})`}
-            className={cn(
-              "w-full min-h-11 rounded-(--radius-control) border bg-(--bg-surface) px-3 py-2 flex items-center justify-between gap-2.5 text-left transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed",
-              isOpen
-                ? "border-brand ring-2 ring-(--accent-ring)"
-                : "border-(--border-strong) hover:border-brand/60"
-            )}
-          >
-            <span className="flex items-center gap-2.5 min-w-0">
-              <span
-                className="w-7 h-7 rounded-(--radius-control) border border-(--border-strong) shrink-0 shadow-inner"
-                style={{ backgroundColor: safeHex }}
-                aria-hidden="true"
-              />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5">
-                  <Pipette
-                    className="w-3 h-3 text-(--text-accent) shrink-0"
-                    aria-hidden="true"
-                  />
-                  <span className="text-xs font-mono font-bold text-(--text-primary) uppercase tracking-wider">
-                    {safeHex}
-                  </span>
-                </span>
-                <span className="block text-[10px] font-mono text-(--text-muted) truncate tabular-nums">
-                  RGB({rgb.r}, {rgb.g}, {rgb.b}) · HSV({hsv.h}°, {hsv.s}%, {hsv.v}%)
-                </span>
-              </span>
-            </span>
-
-            <ChevronDown
-              className={cn(
-                "w-4 h-4 text-(--text-muted) shrink-0 transition-transform duration-200",
-                isOpen && "rotate-180 text-(--text-accent)"
-              )}
+  const renderTriggerButton = (isOpen: boolean, onToggle: () => void) => (
+    <button
+      id={id}
+      type="button"
+      disabled={disabled}
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      aria-haspopup={isMobile ? "dialog" : "true"}
+      aria-label={`Open custom RGB and Hex color picker (current ${safeHex})`}
+      className={cn(
+        "w-full min-h-11 rounded-(--radius-control) border bg-(--bg-surface) px-3 py-2 flex items-center justify-between gap-2.5 text-left transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50 disabled:cursor-not-allowed",
+        isOpen
+          ? "border-brand ring-2 ring-(--accent-ring)"
+          : "border-(--border-strong) hover:border-brand/60"
+      )}
+    >
+      <span className="flex items-center gap-2.5 min-w-0">
+        <span
+          className="w-7 h-7 rounded-(--radius-control) border border-(--border-strong) shrink-0 shadow-inner"
+          style={{ backgroundColor: safeHex }}
+          aria-hidden="true"
+        />
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5">
+            <Pipette
+              className="w-3 h-3 text-(--text-accent) shrink-0"
               aria-hidden="true"
             />
-          </button>
-        )}
-      >
-        {({ close }) => (
-          <div className="p-3.5 space-y-3.5 select-none">
-            {/* Popover Header */}
-            <div className="flex items-center justify-between gap-2 pb-2 border-b border-(--border-subtle)">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className="w-5 h-5 rounded-(--radius-control) border border-(--border-strong) shrink-0"
-                  style={{ backgroundColor: safeHex }}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0">
-                  <span className="text-[11px] font-mono uppercase tracking-[0.16em] font-semibold text-(--text-primary) block truncate">
-                    RGB Spectrum Picker
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={close}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-(--radius-control) bg-brand text-brand-contrast hover:bg-brand-hover text-[10px] font-mono uppercase tracking-wider font-semibold transition-colors cursor-pointer shrink-0"
-              >
-                <Check className="w-3 h-3" aria-hidden="true" />
-                <span>Done</span>
-              </button>
-            </div>
+            <span className="text-xs font-mono font-bold text-(--text-primary) uppercase tracking-wider">
+              {safeHex}
+            </span>
+          </span>
+          <span className="block text-[10px] font-mono text-(--text-muted) truncate tabular-nums">
+            RGB({rgb.r}, {rgb.g}, {rgb.b}) · HSV({hsv.h}°, {hsv.s}%, {hsv.v}%)
+          </span>
+        </span>
+      </span>
 
-            {/* 2D Saturation × Brightness Spectrum Canvas */}
-            <div
-              ref={padRef}
-              role="slider"
-              tabIndex={0}
-              aria-label="Saturation and brightness color pad"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(hsv.s)}
-              aria-valuetext={`Saturation ${hsv.s} percent, brightness ${hsv.v} percent`}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                draggingRef.current = true;
-                updateFromPadPointer(e.clientX, e.clientY);
-              }}
-              onKeyDown={(e) => {
-                const step = e.shiftKey ? 5 : 2;
-                if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  applyHsv({ ...hsv, s: hsv.s + step });
-                } else if (e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  applyHsv({ ...hsv, s: hsv.s - step });
-                } else if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  applyHsv({ ...hsv, v: hsv.v + step });
-                } else if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  applyHsv({ ...hsv, v: hsv.v - step });
-                }
-              }}
-              className="relative w-full h-36 rounded-(--radius-control) border border-(--border-strong) overflow-hidden cursor-crosshair touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-              style={{
-                backgroundColor: pureHueHex,
-                backgroundImage:
-                  "linear-gradient(to top, #000000, rgba(0,0,0,0)), linear-gradient(to right, #ffffff, rgba(255,255,255,0))",
-              }}
+      <ChevronDown
+        className={cn(
+          "w-4 h-4 text-(--text-muted) shrink-0 transition-transform duration-200",
+          isOpen && "rotate-180 text-(--text-accent)"
+        )}
+        aria-hidden="true"
+      />
+    </button>
+  );
+
+  const renderPickerContent = (close: () => void) => (
+    <div className="p-3.5 sm:p-4 space-y-3.5 select-none">
+      {/* Picker Header */}
+      <div className="flex items-center justify-between gap-2 pb-2 border-b border-(--border-subtle)">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="w-5 h-5 rounded-(--radius-control) border border-(--border-strong) shrink-0"
+            style={{ backgroundColor: safeHex }}
+            aria-hidden="true"
+          />
+          <div className="min-w-0">
+            <span
+              id={`${id}-modal-title`}
+              className="text-[11px] font-mono uppercase tracking-[0.16em] font-semibold text-(--text-primary) block truncate"
             >
-              <span
-                className="absolute w-4 h-4 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1.5px_rgba(0,0,0,0.85)] pointer-events-none"
-                style={{
-                  left: `${hsv.s}%`,
-                  bottom: `${hsv.v}%`,
-                  backgroundColor: safeHex,
-                }}
-              />
-            </div>
-
-            {/* Hue Slider */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-mono text-(--text-muted)">
-                <span className="uppercase tracking-wider">Hue Angle</span>
-                <span className="tabular-nums text-(--text-primary) font-semibold">
-                  {hsv.h}°
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={360}
-                value={hsv.h}
-                onChange={(e) =>
-                  applyHsv({ ...hsv, h: Number(e.target.value) })
-                }
-                aria-label="Hue angle"
-                className="w-full h-2.5 rounded-full appearance-none cursor-pointer border border-(--border-strong)"
-                style={{
-                  background:
-                    "linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)",
-                }}
-              />
-            </div>
-
-            {/* Individual RGB Sliders + Numeric Inputs */}
-            <div className="space-y-2 pt-1 border-t border-(--border-subtle)">
-              {(
-                [
-                  {
-                    key: "r" as const,
-                    label: "R",
-                    gradient: `linear-gradient(to right, rgb(0,${rgb.g},${rgb.b}), rgb(255,${rgb.g},${rgb.b}))`,
-                    val: rgb.r,
-                  },
-                  {
-                    key: "g" as const,
-                    label: "G",
-                    gradient: `linear-gradient(to right, rgb(${rgb.r},0,${rgb.b}), rgb(${rgb.r},255,${rgb.b}))`,
-                    val: rgb.g,
-                  },
-                  {
-                    key: "b" as const,
-                    label: "B",
-                    gradient: `linear-gradient(to right, rgb(${rgb.r},${rgb.g},0), rgb(${rgb.r},${rgb.g},255))`,
-                    val: rgb.b,
-                  },
-                ] as const
-              ).map((ch) => (
-                <div
-                  key={ch.key}
-                  className="grid grid-cols-[18px_1fr_52px] items-center gap-2"
-                >
-                  <span className="text-[11px] font-mono font-bold text-(--text-secondary) uppercase">
-                    {ch.label}
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={255}
-                    value={ch.val}
-                    onChange={(e) =>
-                      applyRgbChannel(ch.key, Number(e.target.value))
-                    }
-                    aria-label={`${ch.label} channel slider`}
-                    className="w-full h-2 rounded-full appearance-none cursor-pointer border border-(--border-subtle)"
-                    style={{ background: ch.gradient }}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={255}
-                    value={ch.val}
-                    onChange={(e) =>
-                      applyRgbChannel(ch.key, Number(e.target.value))
-                    }
-                    aria-label={`${ch.label} channel numeric value`}
-                    className="w-full px-1.5 py-1 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface-2) text-[11px] font-mono text-(--text-primary) text-right tabular-nums focus:outline-none focus:border-brand"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Direct Hex Input + WCAG Dark/Light Contrast Preview */}
-            <div className="grid grid-cols-1 min-[340px]:grid-cols-2 gap-2 pt-1 border-t border-(--border-subtle)">
-              <div>
-                <label
-                  htmlFor={`${id}-hex-input`}
-                  className="block text-[9px] font-mono uppercase tracking-wider text-(--text-muted) mb-1"
-                >
-                  Hex Code
-                </label>
-                <input
-                  id={`${id}-hex-input`}
-                  type="text"
-                  maxLength={7}
-                  value={hexDraft}
-                  onChange={(e) => {
-                    const raw = e.target.value.toUpperCase();
-                    setHexDraft(raw);
-                    const normalized = normalizeHex(raw);
-                    if (normalized) {
-                      onChange(normalized);
-                    }
-                  }}
-                  onBlur={() => setHexDraft(safeHex)}
-                  placeholder="#FF3B1D"
-                  className="w-full px-2.5 py-1.5 rounded-(--radius-control) border border-(--border-strong) bg-(--bg-surface-2) text-xs font-mono font-bold text-(--text-primary) uppercase focus:outline-none focus:border-brand"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <span className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-(--text-muted)">
-                  <Sparkles className="w-2.5 h-2.5 text-(--text-accent)" />
-                  <span>Canvas Contrast</span>
-                </span>
-                <div className="grid grid-cols-2 gap-1 text-[10px] font-mono tabular-nums">
-                  <div
-                    className="px-2 py-1.5 rounded-(--radius-control) border border-(--border-subtle) flex items-center justify-between"
-                    style={{ backgroundColor: "#08080A", color: safeHex }}
-                  >
-                    <span className="font-bold">D</span>
-                    <span>{darkContrast.toFixed(1)}:1</span>
-                  </div>
-                  <div
-                    className="px-2 py-1.5 rounded-(--radius-control) border border-(--border-subtle) flex items-center justify-between"
-                    style={{ backgroundColor: "#FAF8F4", color: safeHex }}
-                  >
-                    <span className="font-bold">L</span>
-                    <span>{lightContrast.toFixed(1)}:1</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Optional Quick Swatches */}
-            {presets && presets.length > 0 && (
-              <div className="pt-1.5 border-t border-(--border-subtle) space-y-1.5">
-                <span className="block text-[9px] font-mono uppercase tracking-wider text-(--text-muted)">
-                  Quick Presets
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {presets.map((preset) => {
-                    const active =
-                      preset.hex.toUpperCase() === safeHex.toUpperCase();
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => onChange(preset.hex)}
-                        title={`${preset.label} (${preset.hex})`}
-                        aria-label={`Select ${preset.label} swatch (${preset.hex})`}
-                        className={cn(
-                          "w-6 h-6 rounded-(--radius-control) border transition-transform cursor-pointer hover:scale-110",
-                          active
-                            ? "border-(--text-primary) ring-2 ring-brand scale-110"
-                            : "border-(--border-strong)"
-                        )}
-                        style={{ backgroundColor: preset.hex }}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+              RGB Spectrum Picker
+            </span>
           </div>
-        )}
-      </DropdownPopover>
+        </div>
+        <button
+          type="button"
+          onClick={close}
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-(--radius-control) bg-brand text-brand-contrast hover:bg-brand-hover text-[10px] font-mono uppercase tracking-wider font-semibold transition-colors cursor-pointer shrink-0"
+        >
+          <Check className="w-3 h-3" aria-hidden="true" />
+          <span>Done</span>
+        </button>
+      </div>
+
+      {/* 2D Saturation × Brightness Spectrum Canvas */}
+      <div
+        ref={padRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Saturation and brightness color pad"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(hsv.s)}
+        aria-valuetext={`Saturation ${hsv.s} percent, brightness ${hsv.v} percent`}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          draggingRef.current = true;
+          updateFromPadPointer(e.clientX, e.clientY);
+        }}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 5 : 2;
+          if (e.key === "ArrowRight") {
+            e.preventDefault();
+            applyHsv({ ...hsv, s: hsv.s + step });
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            applyHsv({ ...hsv, s: hsv.s - step });
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            applyHsv({ ...hsv, v: hsv.v + step });
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            applyHsv({ ...hsv, v: hsv.v - step });
+          }
+        }}
+        className="relative w-full h-36 rounded-(--radius-control) border border-(--border-strong) overflow-hidden cursor-crosshair touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        style={{
+          backgroundColor: pureHueHex,
+          backgroundImage:
+            "linear-gradient(to top, #000000, rgba(0,0,0,0)), linear-gradient(to right, #ffffff, rgba(255,255,255,0))",
+        }}
+      >
+        <span
+          className="absolute w-4 h-4 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1.5px_rgba(0,0,0,0.85)] pointer-events-none"
+          style={{
+            left: `${hsv.s}%`,
+            bottom: `${hsv.v}%`,
+            backgroundColor: safeHex,
+          }}
+        />
+      </div>
+
+      {/* Hue Slider */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-[10px] font-mono text-(--text-muted)">
+          <span className="uppercase tracking-wider">Hue Angle</span>
+          <span className="tabular-nums text-(--text-primary) font-semibold">
+            {hsv.h}°
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={360}
+          value={hsv.h}
+          onChange={(e) =>
+            applyHsv({ ...hsv, h: Number(e.target.value) })
+          }
+          aria-label="Hue angle"
+          className="w-full h-2.5 rounded-full appearance-none cursor-pointer border border-(--border-strong)"
+          style={{
+            background:
+              "linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)",
+          }}
+        />
+      </div>
+
+      {/* Individual RGB Sliders + Numeric Inputs */}
+      <div className="space-y-2 pt-1 border-t border-(--border-subtle)">
+        {(
+          [
+            {
+              key: "r" as const,
+              label: "R",
+              gradient: `linear-gradient(to right, rgb(0,${rgb.g},${rgb.b}), rgb(255,${rgb.g},${rgb.b}))`,
+              val: rgb.r,
+            },
+            {
+              key: "g" as const,
+              label: "G",
+              gradient: `linear-gradient(to right, rgb(${rgb.r},0,${rgb.b}), rgb(${rgb.r},255,${rgb.b}))`,
+              val: rgb.g,
+            },
+            {
+              key: "b" as const,
+              label: "B",
+              gradient: `linear-gradient(to right, rgb(${rgb.r},${rgb.g},0), rgb(${rgb.r},${rgb.g},255))`,
+              val: rgb.b,
+            },
+          ] as const
+        ).map((ch) => (
+          <div
+            key={ch.key}
+            className="grid grid-cols-[18px_1fr_52px] items-center gap-2"
+          >
+            <span className="text-[11px] font-mono font-bold text-(--text-secondary) uppercase">
+              {ch.label}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={255}
+              value={ch.val}
+              onChange={(e) =>
+                applyRgbChannel(ch.key, Number(e.target.value))
+              }
+              aria-label={`${ch.label} channel slider`}
+              className="w-full h-2 rounded-full appearance-none cursor-pointer border border-(--border-subtle)"
+              style={{ background: ch.gradient }}
+            />
+            <input
+              type="number"
+              min={0}
+              max={255}
+              value={ch.val}
+              onChange={(e) =>
+                applyRgbChannel(ch.key, Number(e.target.value))
+              }
+              aria-label={`${ch.label} channel numeric value`}
+              className="w-full px-1.5 py-1 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface-2) text-[11px] font-mono text-(--text-primary) text-right tabular-nums focus:outline-none focus:border-brand"
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Direct Hex Input + WCAG Dark/Light Contrast Preview */}
+      <div className="grid grid-cols-1 min-[340px]:grid-cols-2 gap-2 pt-1 border-t border-(--border-subtle)">
+        <div>
+          <label
+            htmlFor={`${id}-hex-input`}
+            className="block text-[9px] font-mono uppercase tracking-wider text-(--text-muted) mb-1"
+          >
+            Hex Code
+          </label>
+          <input
+            id={`${id}-hex-input`}
+            type="text"
+            maxLength={7}
+            value={hexDraft}
+            onChange={(e) => {
+              const raw = e.target.value.toUpperCase();
+              setHexDraft(raw);
+              const normalized = normalizeHex(raw);
+              if (normalized) {
+                onChange(normalized);
+              }
+            }}
+            onBlur={() => setHexDraft(safeHex)}
+            placeholder="#FF3B1D"
+            className="w-full px-2.5 py-1.5 rounded-(--radius-control) border border-(--border-strong) bg-(--bg-surface-2) text-xs font-mono font-bold text-(--text-primary) uppercase focus:outline-none focus:border-brand"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <span className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-(--text-muted)">
+            <Sparkles className="w-2.5 h-2.5 text-(--text-accent)" />
+            <span>Canvas Contrast</span>
+          </span>
+          <div className="grid grid-cols-2 gap-1 text-[10px] font-mono tabular-nums">
+            <div
+              className="px-2 py-1.5 rounded-(--radius-control) border border-(--border-subtle) flex items-center justify-between"
+              style={{ backgroundColor: "#08080A", color: safeHex }}
+            >
+              <span className="font-bold">D</span>
+              <span>{darkContrast.toFixed(1)}:1</span>
+            </div>
+            <div
+              className="px-2 py-1.5 rounded-(--radius-control) border border-(--border-subtle) flex items-center justify-between"
+              style={{ backgroundColor: "#FAF8F4", color: safeHex }}
+            >
+              <span className="font-bold">L</span>
+              <span>{lightContrast.toFixed(1)}:1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Optional Quick Swatches */}
+      {presets && presets.length > 0 && (
+        <div className="pt-1.5 border-t border-(--border-subtle) space-y-1.5">
+          <span className="block text-[9px] font-mono uppercase tracking-wider text-(--text-muted)">
+            Quick Presets
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {presets.map((preset) => {
+              const active =
+                preset.hex.toUpperCase() === safeHex.toUpperCase();
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => onChange(preset.hex)}
+                  title={`${preset.label} (${preset.hex})`}
+                  aria-label={`Select ${preset.label} swatch (${preset.hex})`}
+                  className={cn(
+                    "w-6 h-6 rounded-(--radius-control) border transition-transform cursor-pointer hover:scale-110",
+                    active
+                      ? "border-(--text-primary) ring-2 ring-brand scale-110"
+                      : "border-(--border-strong)"
+                  )}
+                  style={{ backgroundColor: preset.hex }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <FieldWrapper id={id} label={label} hint={hint} className={className}>
+      {isMobile ? (
+        <>
+          {renderTriggerButton(mobileModalOpen, () => {
+            if (!disabled) setMobileModalOpen(true);
+          })}
+          <ModalShell
+            open={mobileModalOpen}
+            onClose={() => setMobileModalOpen(false)}
+            ariaLabelledBy={`${id}-modal-title`}
+            maxWidthClassName="max-w-[360px]"
+          >
+            <div className="overflow-y-auto overscroll-contain">
+              {renderPickerContent(() => setMobileModalOpen(false))}
+            </div>
+          </ModalShell>
+        </>
+      ) : (
+        <DropdownPopover
+          portal
+          align="start"
+          minWidth={308}
+          estimatedHeight={430}
+          overflowMode="none"
+          disabled={disabled}
+          trigger={({ isOpen, toggle }) =>
+            renderTriggerButton(isOpen, toggle)
+          }
+        >
+          {({ close }) => renderPickerContent(close)}
+        </DropdownPopover>
+      )}
     </FieldWrapper>
   );
 }

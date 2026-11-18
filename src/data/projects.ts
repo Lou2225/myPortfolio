@@ -58,7 +58,7 @@ export const projectsData: Project[] = [
       "Standard template websites suffer from frame drops, bloated bundles, and generic visual layouts.",
     solution:
       "Crafted GPU-composite transforms, zero-lag animation loops, and fluid proportional typography targeting a 98+ Lighthouse score.",
-    stack: ["Next.js 15", "TypeScript", "Tailwind CSS v4", "GSAP", "Lenis", "Zod"],
+    stack: ["Next.js", "TypeScript", "Tailwind CSS", "GSAP", "Lenis", "Zod"],
     image: "/images/projects/portfolio.webp",
     metrics:
       "Maintains solid 60–120 FPS on all viewports with sub-800ms First Contentful Paint.",

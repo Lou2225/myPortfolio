@@ -17,6 +17,29 @@ export function swapArrayItem<T>(
   return next;
 }
 
+/**
+ * Pure non-mutating array item reorder from `fromIndex` to `toIndex`.
+ */
+export function moveArrayItem<T>(
+  items: readonly T[],
+  fromIndex: number,
+  toIndex: number
+): T[] {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    fromIndex >= items.length ||
+    toIndex < 0 ||
+    toIndex >= items.length
+  ) {
+    return [...items];
+  }
+  const next = [...items];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
 export function findDuplicateValues(values: readonly string[]): Set<string> {
   const counts = new Map<string, number>();
   for (const raw of values) {

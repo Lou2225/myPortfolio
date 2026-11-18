@@ -297,7 +297,7 @@ export function ImageCropModal({
       maxWidthClassName="max-w-3xl"
     >
       {/* Compact Header */}
-      <div className="px-5 py-3.5 border-b border-(--border-subtle) flex items-center justify-between gap-3">
+      <div className="px-4 sm:px-5 py-3.5 border-b border-(--border-subtle) flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="w-8 h-8 rounded-(--radius-control) bg-brand/12 border border-brand/35 flex items-center justify-center shrink-0">
             <Crop className="w-4 h-4 text-(--text-accent)" />
@@ -309,8 +309,8 @@ export function ImageCropModal({
             >
               {title}
             </h3>
-            <p className="text-[11px] font-mono text-(--text-muted)">
-              Drag to reposition · Scroll or slide to resize · Original image stays intact
+            <p className="text-[11px] font-mono text-(--text-muted) truncate">
+              Drag to reposition · Scroll or slide to resize
             </p>
           </div>
         </div>
@@ -327,10 +327,10 @@ export function ImageCropModal({
       </div>
 
       {/* 2-Column Compact Landscape Body */}
-      <div className="p-5 grid grid-cols-1 md:grid-cols-[276px_1fr] gap-5 items-center max-h-[78vh] md:max-h-none overflow-y-auto md:overflow-visible lou-scrollarea">
+      <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-[264px_1fr] gap-4 sm:gap-5 items-center flex-1 min-h-0 overflow-y-auto lou-scrollarea">
         {/* Left: Non-Destructive Live Stage */}
-        <div className="flex flex-col items-center justify-center bg-(--bg-surface-2) border border-(--border-subtle) rounded-lg p-3.5 shrink-0">
-          <div className="w-62 h-62 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center bg-(--bg-surface-2) border border-(--border-subtle) rounded-lg p-3 shrink-0">
+          <div className="w-62 h-62 max-w-full flex items-center justify-center">
             <div
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
@@ -605,7 +605,7 @@ export function ImageCropModal({
       </div>
 
       {/* Consistent Footer Buttons */}
-      <div className="px-5 py-3.5 bg-(--bg-surface-2) border-t border-(--border-subtle) flex flex-wrap items-center justify-between gap-2.5">
+      <div className="px-4 sm:px-5 py-3 bg-(--bg-surface-2) border-t border-(--border-subtle) flex flex-wrap items-center justify-between gap-2 shrink-0">
         <button
           type="button"
           onClick={revertToOriginal}

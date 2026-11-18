@@ -5,29 +5,23 @@ import { AdminTab } from "./types";
 import { DropdownPopover } from "@/components/ui/DropdownPopover";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Magnetic } from "@/components/motion/Magnetic";
+import { useBrandPortal } from "@/components/motion/BrandPortal";
 import { TruncatedText } from "@/components/ui/Tooltip";
 import { MonogramBadge } from "@/components/common/MonogramBadge";
 import {
   ChevronDown,
   User,
   FolderKanban,
-  MonitorCheck,
-  MonitorOff,
-  RotateCcw,
   LogOut,
   Database,
   Settings,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ProfileDropdownProps {
   profile: Profile;
   storageMode: "local-json" | "supabase";
-  deviceRegistered: boolean;
-  togglingDevice: boolean;
-  resettingSeed: boolean;
-  onToggleDevice: () => void;
-  onResetSeed: () => void;
   onLogout: () => void;
   onNavigateTab: (tab: AdminTab) => void;
 }
@@ -35,18 +29,18 @@ export interface ProfileDropdownProps {
 export function ProfileDropdown({
   profile,
   storageMode,
-  deviceRegistered,
-  togglingDevice,
-  resettingSeed,
-  onToggleDevice,
-  onResetSeed,
   onLogout,
   onNavigateTab,
 }: ProfileDropdownProps) {
+  const { triggerSlideNavigate } = useBrandPortal();
+
   return (
     <DropdownPopover
+      portal
       align="end"
-      widthClassName="w-72 sm:w-80"
+      minWidth={288}
+      estimatedHeight={340}
+      overflowMode="auto"
       trigger={({ isOpen, toggle }) => (
         <Magnetic strength={0.14}>
           <button
@@ -161,50 +155,22 @@ export function ProfileDropdown({
               <Settings className="w-4 h-4 text-(--text-muted)" />
               <span>Settings & Data Backup</span>
             </button>
-          </div>
-
-          {/* Device Registration & Seed Controls */}
-          <div className="p-1.5 space-y-0.5">
-            <button
-              type="button"
-              onClick={onToggleDevice}
-              disabled={togglingDevice}
-              className="w-full px-3 py-2 rounded-lg text-left hover:bg-(--bg-surface-2) transition-colors flex items-center justify-between gap-2 cursor-pointer"
-            >
-              <span className="flex items-center gap-2.5">
-                {deviceRegistered ? (
-                  <MonitorCheck className="w-4 h-4 text-(--text-success)" />
-                ) : (
-                  <MonitorOff className="w-4 h-4 text-(--text-muted)" />
-                )}
-                <span className="text-(--text-primary)">
-                  Secret Logo Redirect
-                </span>
-              </span>
-              <StatusPill
-                label={deviceRegistered ? "Registered" : "Off"}
-                variant={deviceRegistered ? "success" : "neutral"}
-                size="sm"
-                className={!deviceRegistered ? "text-(--text-muted)" : undefined}
-              />
-            </button>
 
             <button
               type="button"
               onClick={() => {
                 close();
-                onResetSeed();
+                triggerSlideNavigate("/", "left");
               }}
-              disabled={resettingSeed}
-              className="w-full px-3 py-2 rounded-lg text-left text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-surface-2) transition-colors flex items-center gap-2.5 cursor-pointer"
+              className="w-full px-3 py-2 rounded-lg text-left text-(--text-primary) hover:bg-(--bg-badge-highlight) hover:text-(--text-accent) transition-colors flex items-center justify-between gap-2.5 cursor-pointer"
             >
-              <RotateCcw
-                className={cn(
-                  "w-4 h-4 text-(--text-muted)",
-                  resettingSeed && "animate-spin text-(--text-accent)"
-                )}
-              />
-              <span>Reset Content to Seed Defaults</span>
+              <span className="flex items-center gap-2.5">
+                <ExternalLink className="w-4 h-4 text-(--text-accent)" />
+                <span>View Public Portfolio</span>
+              </span>
+              <span className="text-[10px] font-mono text-(--text-muted)">
+                /
+              </span>
             </button>
           </div>
 

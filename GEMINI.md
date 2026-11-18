@@ -24,28 +24,35 @@
   src/
   ├── components/
   │   ├── admin/                # Modular /admin CMS partials
-  │   │   ├── AdminLogin.tsx    # Private authentication gate
+  │   │   ├── AdminLogin.tsx    # Private authentication gate (Password + TOTP)
   │   │   ├── AnalyticsOverview.tsx # Business analytics & chapter funnel
   │   │   ├── ProfileHeroManager.tsx # Hero, avatar/CV upload, roles, contact
   │   │   ├── StoryMarqueeManager.tsx # Story, 4 pillars & marquee editor
   │   │   ├── SkillsImpactManager.tsx # Skills bento, KPI counters & headers
   │   │   ├── ProjectsManager.tsx # Projects & case studies CRUD + upload
-  │   │   └── InboxManager.tsx  # Contact form inbox (read, star, reply)
+  │   │   ├── InboxManager.tsx  # Contact form inbox (read, star, Resend reply)
+  │   │   ├── SettingsManager.tsx # Master CMS settings tab coordinator
+  │   │   └── settings/         # Granular settings partials (Security, Appearance, Backups)
+  │   │       ├── SecurityAccessSettings.tsx # Trusted devices (paginated), TOTP 2FA, session epoch
+  │   │       ├── QrDevicePairModal.tsx # Balanced 2-column mobile QR pairing modal
+  │   │       ├── DeviceEditModal.tsx # Hardware/telemetry inspector & label editor
+  │   │       └── TotpSetupModal.tsx # Authenticator app QR setup & recovery codes
   │   ├── motion/               # Reusable animation primitives
   │   │   ├── SmoothScroll.tsx  # Lenis + GSAP sync wrapper & smooth anchor scroll
-  │   │   ├── Preloader.tsx     # 0-100% tabular counter + curtain wipe
+  │   │   ├── Preloader.tsx     # Full-page fixed curtain wipe + GPU scaleX progress bar
+  │   │   ├── BrandPortal.tsx   # Floating stealth admin portal gateway
+  │   │   ├── BrandPortalOrb.tsx # Brand portal draggable orb (clean stealth trigger)
   │   │   ├── LiquidImage.tsx   # SVG turbulence displacement filter
   │   │   ├── Magnetic.tsx      # Cursor proximity magnetic pull
-  │   │   ├── ScrollReveal.tsx  # GSAP ScrollTrigger viewport reveal
   │   │   └── SplitText.tsx     # Kinetic character & line reveal
   │   ├── sections/             # Modular section partials
-  │   │   ├── Hero.tsx          # Hero section (Name, Avatar, Roles, CTAs)
+  │   │   ├── Hero.tsx          # Hero section (Name, Avatar, Roles, in-app Resume CTA)
   │   │   ├── Marquee.tsx       # Infinite principles ticker
   │   │   ├── Story.tsx         # The origin narrative & 4 core pillars
   │   │   ├── TechBento.tsx     # Full-Stack & Analytics skills bento grid
   │   │   ├── Projects.tsx      # Selected systems grid (offset layout)
   │   │   ├── Impact.tsx        # By-the-numbers metrics counter
-  │   │   └── Contact.tsx       # In-site form + magnetic mailto
+  │   │   └── Contact.tsx       # In-site form + magnetic mailto & Resend dispatch
   │   ├── ui/                   # Atomic, reusable UI primitives
   │   │   ├── fields/           # Reusable strict-validated form field partials
   │   │   │   ├── FieldWrapper.tsx # Label, live Valid/Required status & counter
@@ -61,16 +68,23 @@
   │   │   ├── Footer.tsx        # Bottom bar, copyright & social links
   │   │   ├── ThemeToggle.tsx   # Reusable Dark/Light mode icon with radial pulse wave
   │   │   ├── ScrollToTop.tsx   # Reusable floating SVG progress ring & inline scroll-to-top
+  │   │   ├── Tooltip.tsx       # Viewport-aware boundary-clamped operational tooltip
+  │   │   ├── ScrollArea.tsx    # Height-constrained accessible scrollable container
+  │   │   ├── ModalShell.tsx    # Accessible modal container with backdrop support
   │   │   ├── ProjectCard.tsx   # Individual project card with hover states
   │   │   ├── BentoCard.tsx     # Reusable bento module container
   │   │   └── Button.tsx        # Accessible button & link components
   │   └── common/
-  │       └── Avatar.tsx        # Layered hero avatar with gradient base
+  │       ├── Avatar.tsx        # Layered hero avatar with gradient base
+  │       ├── MonogramBadge.tsx # High-contrast LV monogram badge
+  │       └── ResumeViewerModal.tsx # In-app PDF viewer with fullscreen & skeleton loading
   ├── context/
   │   └── PortfolioContext.tsx  # Live portfolio state & analytics tracker
   ├── lib/
   │   ├── db.ts                 # Hybrid Local JSON / Supabase PostgreSQL adapter
   │   ├── auth.ts               # HMAC-SHA256 httpOnly admin session auth
+  │   ├── security.ts           # Device fingerprinting, pairing challenges, audit trail
+  │   ├── totp.ts               # RFC 6238 Authenticator 2FA with AES-256-GCM encryption
   │   └── validation.ts         # Real-time input sanitizers, validators & Zod schemas
   ├── data/                     # Initial seed defaults
   │   ├── portfolio.ts          # Core profile metadata, roles, bio, headers
@@ -78,15 +92,19 @@
   │   ├── skills.ts             # Skills grouped by DB, Backend, Frontend, Analytics
   │   └── principles.ts         # Marquee ticker statements
   ├── types/                    # Strict TypeScript schemas
-  │   └── portfolio.ts
+  │   ├── portfolio.ts
+  │   └── security.ts
   └── app/
       ├── admin/
-      │   └── page.tsx          # Private /admin Portfolio Management Dashboard
+      │   ├── page.tsx          # Private /admin Portfolio Management Dashboard
+      │   └── pair/page.tsx     # Mobile cross-device PIN verification client
       ├── api/
-      │   ├── admin/            # Auth, Portfolio CRUD, Inbox & Upload routes
+      │   ├── admin/            # Auth, Portfolio CRUD, Inbox, Devices, Upload routes
       │   ├── analytics/route.ts # Public analytics event ingest
       │   ├── portfolio/route.ts # Public portfolio state endpoint
-      │   └── contact/route.ts  # Zod-validated inbox & email dispatch
+      │   ├── contact/route.ts  # Zod-validated inbox & Resend email dispatch
+      │   ├── github/route.ts   # Live GitHub repository activity proof
+      │   └── resume/route.ts   # SSRF-guarded PDF streaming proxy for in-app viewer
       ├── layout.tsx            # Global fonts, metadata, PortfolioProvider
       ├── page.tsx              # Main orchestrator (imports section partials)
       └── globals.css           # Fluid rem/vw variables, theme tokens
@@ -166,8 +184,11 @@ To maintain **60–120 FPS** with **zero frame drops** and a **95+ Google Lighth
 Before any git commit or deployment to Vercel:
 - [ ] `npm run lint` passes with 0 errors.
 - [ ] `npx tsc --noEmit` passes with 0 type errors.
+- [ ] `npm run test` passes (all Vitest unit & integration test suites).
+- [ ] `npm run test:e2e` passes (all Playwright end-to-end specs).
 - [ ] All interactive buttons and forms have accessible `aria-labels` and focus rings.
-- [ ] `/api/contact` validates input using Zod and rejects malformed or bot submissions.
+- [ ] `/api/contact` validates input using Zod, enforces rate limiting, and rejects bot submissions via honeypots.
+- [ ] `/api/resume` validates target URLs against allowlisted CDNs with loopback/private IP blocking and magic-byte validation.
 - [ ] Lighthouse score meets or exceeds:
   * Performance: $\ge 92$
   * Accessibility: $\ge 95$

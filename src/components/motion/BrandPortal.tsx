@@ -17,6 +17,7 @@ import {
   BrandPortalTone,
   DEVICE_STORAGE_KEY,
   DEVICE_SYNC_EVENT,
+  dismissBrandPortalNotice,
 } from "@/lib/brandPortalStatus";
 import {
   queryKeys,
@@ -91,10 +92,15 @@ export function BrandPortalProvider({
   const pendingSlideRef = useRef<PendingSlideState | null>(null);
 
   const isAnimatingRef = useRef(false);
+  const greetingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isGreetingRef = useRef(false);
   const triggerSlideNavigateRef = useRef<
     (href: string, direction?: "left" | "right") => void
   >(() => {});
   const [isAnimating, setIsAnimating] = useState(false);
+  const [portalMode, setPortalMode] = useState<"idle" | "slide" | "wave">(
+    "idle"
+  );
   const [isRegisteredDevice, setIsRegisteredDevice] = useState(false);
   const [slideText, setSlideText] = useState("PORTFOLIO");
 
@@ -245,6 +251,10 @@ export function BrandPortalProvider({
       cancelled = true;
       cancelAnimationFrame(rafId);
       if (authTimerId !== null) clearTimeout(authTimerId);
+      if (greetingTimerRef.current !== null) {
+        clearTimeout(greetingTimerRef.current);
+        greetingTimerRef.current = null;
+      }
       if (
         idleCallbackId !== null &&
         typeof window !== "undefined" &&
@@ -285,6 +295,7 @@ export function BrandPortalProvider({
       pendingSlideRef.current = null;
       isAnimatingRef.current = false;
       setIsAnimating(false);
+      setPortalMode("idle");
       return;
     }
 
@@ -299,6 +310,7 @@ export function BrandPortalProvider({
                 pendingSlideRef.current = null;
                 isAnimatingRef.current = false;
                 setIsAnimating(false);
+                setPortalMode("idle");
               },
             })
             .to(labelEl, {
@@ -445,6 +457,7 @@ export function BrandPortalProvider({
 
       isAnimatingRef.current = true;
       setIsAnimating(true);
+      setPortalMode("wave");
 
       const rect = logoBtn.getBoundingClientRect();
       const originX = Math.round(rect.left + rect.width / 2);
@@ -503,6 +516,7 @@ export function BrandPortalProvider({
                     gsap.set(logoBtn, { scale: 1 });
                     isAnimatingRef.current = false;
                     setIsAnimating(false);
+                    setPortalMode("idle");
                   },
                 })
                 .to(overlay, {
@@ -546,9 +560,10 @@ export function BrandPortalProvider({
 
       isAnimatingRef.current = true;
       setIsAnimating(true);
+      setPortalMode("slide");
       setSlideText(
         targetPath.startsWith("/admin")
-          ? "PORTFOLIO MANAGER // CMS"
+          ? "WELCOME ADMIN // CMS"
           : "PUBLIC PORTFOLIO // LIVE"
       );
 
@@ -602,6 +617,9 @@ export function BrandPortalProvider({
             duration: 0.38,
             ease: "expo.inOut",
             onComplete: () => {
+              // Dismiss the transient portal greeting behind the opaque curtain so mobile
+              // transitions smoothly into /admin with no lingering orb capsule over the dock.
+              dismissBrandPortalNotice();
               router.push(href);
               if (targetPath.startsWith("/admin")) {
                 window.dispatchEvent(new CustomEvent("lou-check-admin-ready"));
@@ -628,20 +646,30 @@ export function BrandPortalProvider({
   }, [triggerSlideNavigate]);
 
   const handleOrbAction = useCallback(() => {
-    if (isAnimating) return;
+    if (isAnimating || isGreetingRef.current || !isRegisteredDevice) return;
 
-    if (isRegisteredDevice) {
-      if (isAdminRoute) {
-        triggerSlideNavigate("/", "left");
-      } else {
-        triggerSlideNavigate("/admin", "right");
-      }
+    if (isAdminRoute) {
+      triggerSlideNavigate("/", "left");
       return;
     }
 
-    if (!isAdminRoute && typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+    // Expand the orb pill to greet the admin on mobile/desktop before sweeping the slide curtain
+    isGreetingRef.current = true;
+    announceBrandPortalStatus({
+      tone: "live",
+      label: "Welcome Admin",
+      detail: "Opening Portfolio CMS...",
+      durationMs: 2200,
+    });
+
+    if (greetingTimerRef.current !== null) {
+      clearTimeout(greetingTimerRef.current);
     }
+    greetingTimerRef.current = setTimeout(() => {
+      greetingTimerRef.current = null;
+      isGreetingRef.current = false;
+      triggerSlideNavigateRef.current("/admin", "right");
+    }, 420);
   }, [isAnimating, isRegisteredDevice, isAdminRoute, triggerSlideNavigate]);
 
   const contextValue = useMemo<BrandPortalContextValue>(
@@ -663,6 +691,7 @@ export function BrandPortalProvider({
         isAdminRoute={isAdminRoute}
         isRegisteredDevice={isRegisteredDevice}
         isAnimating={isAnimating}
+        isSlideTransition={portalMode === "slide"}
         onOrbAction={handleOrbAction}
       />
 
@@ -670,8 +699,9 @@ export function BrandPortalProvider({
       <div
         ref={portalOverlayRef}
         aria-hidden="true"
-        className="fixed inset-0 z-9994 bg-(--bg-canvas) opacity-0 pointer-events-none will-change-[clip-path]"
+        className="fixed inset-0 bg-(--bg-canvas) opacity-0 pointer-events-none will-change-[clip-path]"
         style={{
+          zIndex: 9994,
           backgroundImage:
             "radial-gradient(circle at 40px calc(100vh - 40px), var(--accent-glow) 0%, var(--bg-badge-highlight) 38%, transparent 70%)",
         }}
@@ -681,7 +711,8 @@ export function BrandPortalProvider({
       <div
         ref={slideOverlayRef}
         aria-hidden="true"
-        className="fixed inset-0 z-9993 bg-(--bg-canvas) border-x-2 border-brand flex items-center justify-center opacity-0 pointer-events-none will-change-transform"
+        style={{ zIndex: 9993 }}
+        className="fixed inset-0 bg-(--bg-canvas) border-x-2 border-brand flex items-center justify-center opacity-0 pointer-events-none will-change-transform"
       >
         <div
           ref={slideLabelRef}

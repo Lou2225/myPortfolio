@@ -216,25 +216,30 @@ export function PasswordCredentialsSettings({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Credential Source Posture Card */}
       <div
         data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4"
       >
         <div className="flex items-start gap-3 sm:gap-3.5 min-w-0">
-          <div className="w-10 h-10 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) flex items-center justify-center shrink-0 text-(--text-accent)">
-            <KeyRound className="w-5 h-5" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex items-center justify-center shrink-0 text-(--text-accent)">
+            <KeyRound className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold text-(--text-primary)">
-                Active Credential Source
+                Active Credential{" "}
+                <span className="whitespace-nowrap">
+                  Source
+                  <span className="inline-flex align-middle ml-1.5">
+                    <InfoTooltip
+                      label="How credential source precedence works"
+                      content="A custom scrypt override hash stored in your database takes precedence over ADMIN_PASSWORD in .env / Vercel. Reverting deletes the stored hash and restores environment variable fallback."
+                    />
+                  </span>
+                </span>
               </h3>
-              <InfoTooltip
-                label="How credential source precedence works"
-                content="A custom scrypt override hash stored in your database takes precedence over ADMIN_PASSWORD in .env / Vercel. Reverting deletes the stored hash and restores environment variable fallback."
-              />
               <StatusPill
                 label={
                   passwordSource === "override"
@@ -253,7 +258,7 @@ export function PasswordCredentialsSettings({
                 size="xs"
               />
             </div>
-            <p className="text-xs text-(--text-muted) mt-1">
+            <p className="text-xs text-(--text-muted) mt-1 leading-relaxed">
               {passwordSource === "override" && overrideUpdatedAt ? (
                 <>
                   Stored privately in{" "}
@@ -289,9 +294,9 @@ export function PasswordCredentialsSettings({
             variant="secondary"
             size="sm"
             onClick={() => setConfirmRevertOpen(true)}
-            className="font-mono text-xs shrink-0"
+            className="w-full sm:w-auto font-mono text-xs shrink-0"
           >
-            <RotateCcw className="w-3.5 h-3.5 text-(--text-accent)" />
+            <RotateCcw className="w-3.5 h-3.5 text-(--text-accent) shrink-0" />
             <span>Revert to Env Password</span>
           </Button>
         )}
@@ -301,26 +306,24 @@ export function PasswordCredentialsSettings({
       <form
         data-cascade
         onSubmit={handleSubmit}
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 space-y-5"
+        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5"
       >
         <SectionHeader
           eyebrow="Credential Update"
           title="Change Administrator Password"
           description="Verify your current password and configure a strong new passkey (8+ characters with at least one number or symbol)."
           size="sm"
-          rightSlot={
-            <div className="flex items-center gap-2">
-              <InfoTooltip
-                label="Password hashing & session behavior"
-                content="Passwords are salted and hashed with Node crypto.scrypt (N=16384) before saving. Your current active browser cookie remains signed in."
-              />
-              <Lock className="w-5 h-5 text-(--text-accent)" />
-            </div>
+          tooltip={
+            <InfoTooltip
+              label="Password hashing & session behavior"
+              content="Passwords are salted and hashed with Node crypto.scrypt (N=16384) before saving. Your current active browser cookie remains signed in."
+            />
           }
+          rightSlot={<Lock className="w-5 h-5 text-(--text-accent)" />}
         />
 
         {storageMode === "local-json" && (
-          <div className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) flex items-start gap-2.5 text-xs text-(--text-secondary)">
+          <div className="p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex items-start gap-2.5 text-xs text-(--text-secondary) leading-relaxed">
             <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <span>
               Running in <strong>Local JSON</strong> mode: custom password
@@ -382,7 +385,7 @@ export function PasswordCredentialsSettings({
         </div>
 
         {/* Live Password Strength Meter & Checklist */}
-        <div className="p-4 rounded-sm bg-(--bg-surface-2) border border-(--border-subtle) space-y-3">
+        <div className="p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) space-y-3">
           <div className="flex items-center justify-between text-xs font-mono">
             <span className="uppercase tracking-wider text-(--text-muted)">
               Password Strength
@@ -405,7 +408,7 @@ export function PasswordCredentialsSettings({
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-[11px] font-mono">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-4 gap-y-1.5 pt-1 text-[11px] font-mono">
             {[
               { ok: strength.checks.minLength, text: "8+ characters" },
               {
@@ -421,8 +424,8 @@ export function PasswordCredentialsSettings({
                   rule.ok ? "text-emerald-400" : "text-(--text-muted)"
                 }`}
               >
-                <Check className="w-3 h-3" aria-hidden="true" />
-                {rule.text}
+                <Check className="w-3 h-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{rule.text}</span>
               </span>
             ))}
           </div>
@@ -434,11 +437,12 @@ export function PasswordCredentialsSettings({
             disabled={submitting}
             variant="primary"
             size="sm"
+            className="w-full sm:w-auto"
           >
             {submitting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
             ) : (
-              <KeyRound className="w-3.5 h-3.5" />
+              <KeyRound className="w-3.5 h-3.5 shrink-0" />
             )}
             <span>
               {submitting ? "Updating Password..." : "Update Admin Password"}

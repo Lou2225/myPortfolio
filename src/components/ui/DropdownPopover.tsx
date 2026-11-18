@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { useSmoothScroll } from "@/components/motion/SmoothScroll";
+import { usePresenceTransition } from "@/lib/usePresenceTransition";
 import { cn, measureStickyCeilingPx } from "@/lib/utils";
 
 export interface DropdownPopoverProps {
@@ -54,8 +55,6 @@ export function DropdownPopover({
 }: DropdownPopoverProps) {
   const { subscribeScroll } = useSmoothScroll();
   const [isOpen, setIsOpen] = useState(false);
-  const [portalMounted, setPortalMounted] = useState(false);
-  const [portalVisible, setPortalVisible] = useState(false);
   const [portalPlacement, setPortalPlacement] = useState<"bottom" | "top">(
     "bottom"
   );
@@ -67,6 +66,9 @@ export function DropdownPopover({
   const portalPanelRef = useRef<HTMLDivElement>(null);
   const inlinePanelRef = useRef<HTMLDivElement>(null);
   const placementRef = useRef<"bottom" | "top">("bottom");
+
+  const { mounted: portalMounted, visible: portalVisible } =
+    usePresenceTransition(portal && isOpen, POPOVER_EXIT_MS, portalPanelRef);
 
   const close = useCallback(() => {
     if (!isOpen) return;
@@ -104,11 +106,19 @@ export function DropdownPopover({
       );
 
       const insideModal = Boolean(triggerEl.closest("[role='dialog']"));
-      panelEl.style.zIndex = insideModal ? "140" : "15";
+      const insideHeader = Boolean(
+        triggerEl.closest("header, [data-sticky-ceiling='true']")
+      );
+      panelEl.style.zIndex = insideModal
+        ? "140"
+        : insideHeader
+          ? "110"
+          : "15";
 
-      const ceilingY = insideModal
-        ? VIEWPORT_EDGE_PAD_PX
-        : measureStickyCeilingPx();
+      const ceilingY =
+        insideModal || insideHeader
+          ? VIEWPORT_EDGE_PAD_PX
+          : measureStickyCeilingPx();
 
       // Measure unconstrained intrinsic height from first inner block to avoid
       // ResizeObserver oscillation when maxHeight caps outer portal height.
@@ -187,6 +197,7 @@ export function DropdownPopover({
       if (
         !allowImmediateFlip &&
         !insideModal &&
+        !insideHeader &&
         (rect.bottom <= ceilingY - 10 || rect.top >= window.innerHeight - 6)
       ) {
         close();
@@ -194,37 +205,6 @@ export function DropdownPopover({
     },
     [align, close, estimatedHeight, minWidth, overflowMode]
   );
-
-  // Smooth portal mount & exit lifecycle
-  useEffect(() => {
-    if (!portal) return;
-
-    if (isOpen) {
-      let nestedRaf = 0;
-      const mountRaf = requestAnimationFrame(() => {
-        setPortalMounted(true);
-        nestedRaf = requestAnimationFrame(() => {
-          setPortalVisible(true);
-        });
-      });
-      return () => {
-        cancelAnimationFrame(mountRaf);
-        cancelAnimationFrame(nestedRaf);
-      };
-    }
-
-    const hideRaf = requestAnimationFrame(() => {
-      setPortalVisible(false);
-    });
-    const unmountTimer = setTimeout(() => {
-      setPortalMounted(false);
-    }, POPOVER_EXIT_MS);
-
-    return () => {
-      cancelAnimationFrame(hideRaf);
-      clearTimeout(unmountTimer);
-    };
-  }, [portal, isOpen]);
 
   // Synchronously position portal panel before paint when mounted, and track ResizeObserver / scroll / resize
   useLayoutEffect(() => {

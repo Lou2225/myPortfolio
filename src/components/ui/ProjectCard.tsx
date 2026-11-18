@@ -26,21 +26,21 @@ export function ProjectCard({ project }: { project: Project }) {
   const caseStudyHref = `/projects/${encodeURIComponent(project.id)}`;
 
   return (
-    <article className="group relative flex flex-col bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) overflow-hidden hover:border-(--border-strong) transition-all duration-500 shadow-xl">
-      {/* Liquid Image Showcase with Hover Distortion */}
+    <article className="group relative h-full w-full flex flex-col bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) overflow-hidden hover:border-(--border-strong) transition-all duration-500 shadow-xl">
+      {/* Compact Widescreen Liquid Image Showcase with Hover Distortion */}
       <LiquidImage
         src={project.image}
         alt={project.title}
         placeholderText={project.title}
-        aspectRatio="aspect-16/10"
-        className="border-0 border-b border-(--border-subtle) rounded-none"
+        aspectRatio="h-[6rem] sm:h-[8.5rem] md:h-[9.5rem]"
+        className="border-0 border-b border-(--border-subtle) rounded-none shrink-0"
       />
 
-      <div className="p-4 sm:p-6 md:p-8 flex flex-col flex-1 justify-between gap-5 sm:gap-6">
+      <div className="p-3 sm:p-4 md:p-5 flex flex-col flex-1 justify-between gap-2.5 sm:gap-3">
         <div>
           {/* Header row: Category, Featured badge & Year */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <Eyebrow withDot>{project.category}</Eyebrow>
               {project.featured && (
                 <StatusPill
@@ -55,21 +55,21 @@ export function ProjectCard({ project }: { project: Project }) {
           </div>
 
           {/* Title with hover color spring */}
-          <DisplayHeading as="h3" size="md" hoverAccent>
+          <DisplayHeading as="h3" size="sm" hoverAccent>
             {project.title}
           </DisplayHeading>
 
           {/* Role & Outcome Meta */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs uppercase tracking-[0.16em] text-(--text-muted) font-medium">
-            <span>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.6875rem] uppercase tracking-[0.12em] text-(--text-muted) font-medium">
+            <span className="truncate">
               Role:{" "}
               <span className="text-(--text-primary) font-semibold">
                 {project.role}
               </span>
             </span>
             {project.outcome && (
-              <span className="inline-flex items-center gap-1.5 text-(--text-success)">
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1 text-(--text-success)">
+                <CheckCircle2 className="w-3 h-3 shrink-0" aria-hidden="true" />
                 <span className="normal-case tracking-normal font-medium">
                   {project.outcome}
                 </span>
@@ -78,25 +78,25 @@ export function ProjectCard({ project }: { project: Project }) {
           </div>
 
           {/* Description */}
-          <BodyText size="sm" tone="secondary" className="mt-4">
+          <BodyText size="xs" tone="secondary" className="mt-1.5 sm:mt-2 line-clamp-2">
             {project.description}
           </BodyText>
 
-          {/* Problem / Solution Mini-Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5 pt-5 border-t border-(--border-subtle)">
-            <div className="bg-(--bg-surface-2) p-3.5 rounded-(--radius-control) border border-(--border-subtle)">
-              <MonoLabel as="span" tone="accent" className="block mb-1">
+          {/* Problem / Solution Equal-Height Mini-Grid (Shown on Tablet/Desktop; Full Detail in Case Study on Mobile) */}
+          <div className="hidden sm:grid sm:grid-cols-2 gap-2.5 mt-2.5 pt-2.5 border-t border-(--border-subtle)">
+            <div className="h-full bg-(--bg-surface-2) p-2.5 rounded-(--radius-control) border border-(--border-subtle) flex flex-col">
+              <MonoLabel as="span" tone="accent" className="block mb-0.5">
                 The Problem
               </MonoLabel>
-              <BodyText size="xs" tone="secondary">
+              <BodyText size="xs" tone="secondary" className="line-clamp-2">
                 {project.problem}
               </BodyText>
             </div>
-            <div className="bg-(--bg-surface-2) p-3.5 rounded-(--radius-control) border border-(--border-subtle)">
-              <MonoLabel as="span" tone="success" className="block mb-1">
+            <div className="h-full bg-(--bg-surface-2) p-2.5 rounded-(--radius-control) border border-(--border-subtle) flex flex-col">
+              <MonoLabel as="span" tone="success" className="block mb-0.5">
                 Engineered Solution
               </MonoLabel>
-              <BodyText size="xs" tone="secondary">
+              <BodyText size="xs" tone="secondary" className="line-clamp-2">
                 {project.solution}
               </BodyText>
             </div>
@@ -104,35 +104,62 @@ export function ProjectCard({ project }: { project: Project }) {
 
           {/* Key Metric Highlight */}
           {project.metrics && (
-            <div className="mt-4 flex items-center gap-2.5 p-3 rounded-(--radius-control) bg-(--bg-badge-highlight) border border-brand/30 text-xs text-(--text-primary) font-medium">
-              <Sparkles className="w-4 h-4 text-(--text-accent) shrink-0" aria-hidden="true" />
-              <span>{project.metrics}</span>
+            <div className="mt-2 sm:mt-2.5 flex items-center gap-2 py-1.5 px-2.5 rounded-(--radius-control) bg-(--bg-badge-highlight) border border-brand/30 text-[0.6875rem] text-(--text-primary) font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-(--text-accent) shrink-0" aria-hidden="true" />
+              <span className="line-clamp-1">{project.metrics}</span>
             </div>
           )}
         </div>
 
-        {/* Footer: Tech Stack badges & Reusable Action Buttons */}
-        <div className="pt-4 border-t border-(--border-subtle) flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
-            {project.stack.map((tech) => (
-              <TechBadge key={tech} label={tech} size="sm" />
+        {/* Footer: Uniform Tech Stack Grid + Equal-Width Action Bar */}
+        <div className="pt-2.5 border-t border-(--border-subtle) flex flex-col gap-2 w-full">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 w-full">
+            {project.stack.slice(0, 6).map((tech) => (
+              <TechBadge
+                key={tech}
+                label={tech}
+                size="sm"
+                className="w-full h-[1.625rem] px-1.5 text-[0.625rem] justify-center text-center"
+              />
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-center">
+          <div className="flex items-center gap-2 w-full">
             <Button
               href={caseStudyHref}
               variant="secondary"
               size="sm"
+              fullWidth
+              magnetic={false}
               slideDirection="right"
               onClick={() =>
                 trackEvent("project_click", `${project.title} (Case Study)`)
               }
               aria-label={`Read full case study for ${project.title}`}
+              className="flex-1 h-[2rem]"
             >
               <span>Case Study</span>
               <ArrowRight className="w-3.5 h-3.5 text-(--text-accent)" />
             </Button>
+
+            {project.liveUrl && (
+              <Button
+                href={project.liveUrl}
+                external
+                variant="primary"
+                size="sm"
+                fullWidth
+                magnetic={false}
+                onClick={() =>
+                  trackEvent("project_click", `${project.title} (Live Demo)`)
+                }
+                aria-label={`Visit live demo for ${project.title}`}
+                className="flex-1 h-[2rem]"
+              >
+                <span>Live Demo</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Button>
+            )}
 
             {project.githubUrl && (
               <Button
@@ -140,28 +167,15 @@ export function ProjectCard({ project }: { project: Project }) {
                 external
                 variant="outline"
                 size="icon"
+                magnetic={false}
                 onClick={() =>
                   trackEvent("project_click", `${project.title} (GitHub)`)
                 }
                 aria-label={`View ${project.title} source code on GitHub`}
                 title="View Source on GitHub"
+                className="shrink-0 h-[2rem] w-[2rem]"
               >
                 <Github className="w-3.5 h-3.5" />
-              </Button>
-            )}
-            {project.liveUrl && (
-              <Button
-                href={project.liveUrl}
-                external
-                variant="primary"
-                size="sm"
-                onClick={() =>
-                  trackEvent("project_click", `${project.title} (Live Demo)`)
-                }
-                aria-label={`Visit live demo for ${project.title}`}
-              >
-                <span>Live Demo</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
               </Button>
             )}
           </div>

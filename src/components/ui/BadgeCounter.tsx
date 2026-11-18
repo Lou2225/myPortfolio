@@ -49,14 +49,14 @@ export function BadgeCounter({
   // Pair even pixel heights with even font sizes so (height - fontSize) / 2 is an exact integer
   const sizeClasses = {
     xs: isSingleChar
-      ? "w-4.5 h-4.5 p-0 text-[10px]"
-      : "min-w-4.5 h-4.5 px-1.5 text-[10px]",
+      ? "w-[1.125rem] h-[1.125rem] p-0 text-[0.625rem]"
+      : "min-w-[1.125rem] h-[1.125rem] px-1.5 text-[0.625rem]",
     sm: isSingleChar
-      ? "w-5 h-5 p-0 text-[10px]"
-      : "min-w-5 h-5 px-1.5 text-[10px]",
+      ? "w-[1.25rem] h-[1.25rem] p-0 text-[0.625rem]"
+      : "min-w-[1.25rem] h-[1.25rem] px-1.5 text-[0.625rem]",
     md: isSingleChar
-      ? "w-5.5 h-5.5 p-0 text-[12px]"
-      : "min-w-5.5 h-5.5 px-2 text-[12px]",
+      ? "w-[1.375rem] h-[1.375rem] p-0 text-[0.75rem]"
+      : "min-w-[1.375rem] h-[1.375rem] px-2 text-[0.75rem]",
   };
 
   // Explicit inline colors ensure 100% identical appearance across Dark Mode and Light Mode

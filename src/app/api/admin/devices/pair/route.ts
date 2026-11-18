@@ -17,28 +17,6 @@ import type { PairingChallenge } from "@/types/security";
 
 const PAIRING_TTL_MS = 3 * 60 * 1000; // 3 minutes
 
-function isPrivateLanOrLocalHostname(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  if (
-    lower === "localhost" ||
-    lower === "127.0.0.1" ||
-    lower === "::1" ||
-    lower.endsWith(".local")
-  ) {
-    return true;
-  }
-
-  // Allow private RFC1918 LAN IPv4 addresses for local dev phone-to-PC pairing
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
-  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(lower)) return true;
-  const match172 = /^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(lower);
-  if (match172) {
-    const secondOctet = Number(match172[1]);
-    return secondOctet >= 16 && secondOctet <= 31;
-  }
-  return false;
-}
-
 function getAllowedCanonicalHosts(requestUrl: URL): Set<string> {
   const allowed = new Set<string>([requestUrl.hostname.toLowerCase()]);
   try {
@@ -65,36 +43,9 @@ function getAllowedCanonicalHosts(requestUrl: URL): Set<string> {
   return allowed;
 }
 
-function resolveRequestOrigin(
-  request: Request,
-  overrideOrigin?: string | null
-): { origin: string | null; error?: string } {
+function resolveRequestOrigin(request: Request): string {
   const requestUrl = new URL(request.url);
   const allowedHosts = getAllowedCanonicalHosts(requestUrl);
-  const isVercel = process.env.VERCEL === "1";
-
-  if (overrideOrigin && overrideOrigin.trim()) {
-    try {
-      const parsed = new URL(overrideOrigin.trim());
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return { origin: null, error: "QR origin must use http or https." };
-      }
-      const targetHost = parsed.hostname.toLowerCase();
-      const hostAllowed =
-        allowedHosts.has(targetHost) ||
-        (!isVercel && isPrivateLanOrLocalHostname(targetHost));
-      if (!hostAllowed) {
-        return {
-          origin: null,
-          error:
-            "Origin override is not an allowlisted site domain or local LAN host.",
-        };
-      }
-      return { origin: parsed.origin };
-    } catch {
-      return { origin: null, error: "Malformed QR origin override URL." };
-    }
-  }
 
   const forwardedHostRaw = request.headers
     .get("x-forwarded-host")
@@ -108,21 +59,17 @@ function resolveRequestOrigin(
 
   if (forwardedHostRaw) {
     const forwardedHostname = forwardedHostRaw.split(":")[0]?.toLowerCase() || "";
-    const hostTrusted =
-      allowedHosts.has(forwardedHostname) ||
-      (!isVercel && isPrivateLanOrLocalHostname(forwardedHostname));
-    const proto =
-      forwardedProtoRaw === "http" || forwardedProtoRaw === "https"
-        ? forwardedProtoRaw
-        : isPrivateLanOrLocalHostname(forwardedHostname) && !isVercel
-          ? "http"
-          : "https";
-    if (hostTrusted) {
-      return { origin: `${proto}://${forwardedHostRaw}` };
+    if (allowedHosts.has(forwardedHostname)) {
+      const fallbackProto = requestUrl.protocol.replace(":", "") || "https";
+      const proto =
+        forwardedProtoRaw === "http" || forwardedProtoRaw === "https"
+          ? forwardedProtoRaw
+          : fallbackProto;
+      return `${proto}://${forwardedHostRaw}`;
     }
   }
 
-  return { origin: requestUrl.origin };
+  return requestUrl.origin;
 }
 
 export async function GET(request: Request) {
@@ -213,18 +160,11 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json().catch(() => ({}))) as {
-      originOverride?: string;
       grantAdminSession?: boolean;
       requireDesktopApproval?: boolean;
     };
 
-    const resolvedOrigin = resolveRequestOrigin(request, body.originOverride);
-    if (!resolvedOrigin.origin) {
-      return NextResponse.json(
-        { error: resolvedOrigin.error || "Invalid QR base origin." },
-        { status: 400 }
-      );
-    }
+    const baseOrigin = resolveRequestOrigin(request);
 
     const challengeId = crypto.randomBytes(16).toString("base64url");
     const numericCode = String(crypto.randomInt(100000, 1000000));
@@ -260,7 +200,6 @@ export async function POST(request: Request) {
       ].slice(0, 20),
     }));
 
-    const baseOrigin = resolvedOrigin.origin;
     const pairUrl = `${baseOrigin}/admin/pair?challenge=${encodeURIComponent(
       challengeId
     )}`;

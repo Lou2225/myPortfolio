@@ -15,13 +15,38 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
       }
     });
 
+    // SSR HTML must mount Preloader as a full-viewport curtain (not a navbar strip).
+    const ssrRes = await request.get("/");
+    expect(ssrRes.status()).toBe(200);
+    const ssrHtml = await ssrRes.text();
+    expect(ssrHtml).toMatch(/aria-label="Site loader"[^>]*class="[^"]*fixed inset-0/);
+
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     // Wait for Preloader wipe to finish and hero heading to become interactive.
     const heroHeading = page.locator("h1").first();
     await expect(heroHeading).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.locator('aside[aria-label="Site loader"]')
+    ).not.toBeAttached({ timeout: 10000 });
     await expect(page.locator("#projects")).toBeAttached();
     await expect(page.locator("#contact")).toBeAttached();
+
+    // Scroll down and verify BrandPortal does not trigger scroll-to-top for unregistered visitors.
+    await page.locator("#contact").scrollIntoViewIfNeeded();
+    const scrollYBeforePortalClick = await page.evaluate(() => window.scrollY);
+    expect(scrollYBeforePortalClick).toBeGreaterThan(200);
+
+    const brandPortalCapsule = page
+      .locator('[role="status"]')
+      .filter({ hasText: /Portfolio Live/i });
+    await expect(brandPortalCapsule).toBeVisible();
+    await expect(brandPortalCapsule).not.toContainText(/Click orb to scroll top/i);
+    await expect(brandPortalCapsule.getByRole("button")).toHaveCount(0);
+    await brandPortalCapsule.click();
+    await page.waitForTimeout(250);
+    const scrollYAfterPortalClick = await page.evaluate(() => window.scrollY);
+    expect(scrollYAfterPortalClick).toBeGreaterThan(200);
 
     // Public portfolio API must never expose messages, analytics, birthDate, or PSGC street/address PII.
     const apiRes = await request.get("/api/portfolio");
@@ -148,6 +173,10 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
     );
     expect(missingProjectRes.status()).toBe(404);
 
+    // Resume proxy must fail closed with 404 when no resume document is configured.
+    const resumeRes = await request.get("/api/resume");
+    expect(resumeRes.status()).toBe(404);
+
     // Offline fallback skips Preloader, uses Button controls, and hides home scroll chapters.
     await page.goto("/offline", { waitUntil: "networkidle" });
     await expect(
@@ -190,7 +219,9 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
       })
     ).not.toBeVisible();
 
-    await projectsSection.getByRole("tab", { name: /All Systems/i }).click();
+    await projectsSection
+      .getByRole("tab", { name: /Full-Stack System/i })
+      .click();
     await expect(
       projectsSection.getByRole("heading", {
         name: /Enterprise Group Capstone System/i,

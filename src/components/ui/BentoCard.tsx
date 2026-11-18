@@ -16,7 +16,7 @@ export function BentoCard({ category, className }: BentoCardProps) {
   return (
     <div
       className={cn(
-        "relative flex flex-col justify-between p-4 sm:p-6 md:p-8 rounded-(--radius-card) bg-(--bg-surface) border border-(--border-subtle) hover:border-(--border-strong) transition-colors duration-500 group shadow-lg overflow-hidden",
+        "relative h-full w-full flex flex-col justify-between p-4 sm:p-6 md:p-7 rounded-(--radius-card) bg-(--bg-surface) border border-(--border-subtle) hover:border-(--border-strong) transition-colors duration-500 group shadow-lg overflow-hidden",
         className
       )}
     >
@@ -33,18 +33,20 @@ export function BentoCard({ category, className }: BentoCardProps) {
         </DisplayHeading>
 
         {/* Description */}
-        <BodyText size="xs" tone="secondary" className="mt-2 max-w-sm">
+        <BodyText size="xs" tone="secondary" className="mt-2 max-w-md">
           {category.description}
         </BodyText>
       </div>
 
-      {/* Skills Pill List using reusable TechBadge */}
-      <div className="mt-6 pt-6 border-t border-(--border-subtle) flex flex-wrap gap-2">
+      {/* Uniform Equal-Width Skills Grid */}
+      <div className="mt-5 pt-5 border-t border-(--border-subtle) grid grid-cols-2 sm:grid-cols-3 gap-2 w-full">
         {category.skills.map((skill) => (
           <TechBadge
             key={skill.name}
             label={skill.name}
             highlight={skill.highlight}
+            size="sm"
+            className="w-full justify-start"
           />
         ))}
       </div>

@@ -4,10 +4,20 @@ import React, { useMemo, useRef, useState } from "react";
 import { Project } from "@/types/portfolio";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { DropdownPopover } from "@/components/ui/DropdownPopover";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { Tabs, TabItem } from "@/components/ui/Tabs";
 import { TabPanel } from "@/components/ui/TabPanel";
 import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
+import { AdminModuleHeaderBar } from "@/components/admin/AdminModuleHeaderBar";
 import { ProjectCardEditor } from "@/components/admin/ProjectCardEditor";
+import {
+  ProjectDetailEditor,
+  ProjectDetailStep,
+  classifyProjectErrorStep,
+} from "@/components/admin/ProjectDetailEditor";
+import { AdminSlideView } from "@/components/motion/AdminMotion";
+import { useSmoothScroll } from "@/components/motion/SmoothScroll";
 import {
   isNetworkOffline,
   useOfflineStatus,
@@ -25,16 +35,14 @@ import {
 } from "@/lib/validation";
 import { useValidationFollower } from "@/lib/validationFollow";
 import {
-  AlertTriangle,
   Briefcase,
-  ChevronsDownUp,
-  ChevronsUpDown,
+  Check,
+  ChevronDown,
   FolderOpen,
-  Loader2,
+  ListFilter,
   Plus,
-  RotateCcw,
-  Save,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -95,6 +103,17 @@ function createUniqueProjectTitle(existing: Project[]): string {
   return `${baseTitle} ${suffix}`;
 }
 
+function buildInitialTechIds(
+  items: Project[],
+  prefix = "init"
+): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const item of items) {
+    map[item.id] = item.stack.map((_, i) => `tech-${item.id}-${prefix}-${i}`);
+  }
+  return map;
+}
+
 export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
   const [savedBaseline, setSavedBaseline] = useState<Project[]>(() =>
     cloneProjects(projects)
@@ -106,10 +125,19 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
   const [pendingFiles, setPendingFiles] = useState<Record<string, File | null>>(
     {}
   );
-  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>(() =>
-    projects[0] ? { [projects[0].id]: true } : {}
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null
   );
+  const [slideDirection, setSlideDirection] = useState<"forward" | "back">(
+    "forward"
+  );
+  const [activeDetailStep, setActiveDetailStep] =
+    useState<ProjectDetailStep>(0);
   const [filterMode, setFilterMode] = useState<ProjectFilterMode>("all");
+  const [techIdsByProject, setTechIdsByProject] = useState<
+    Record<string, string[]>
+  >(() => buildInitialTechIds(projects));
+  const nextTechKeyRef = useRef(0);
   const [newTechInputs, setNewTechInputs] = useState<Record<string, string>>(
     {}
   );
@@ -118,13 +146,13 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
   >({});
 
   const [saving, setSaving] = useState(false);
-  const [suppressExpandFollow, setSuppressExpandFollow] = useState(false);
   const [forceTouched, setForceTouched] = useState(false);
   const [validationBannerActive, setValidationBannerActive] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
+  const { scrollTo } = useSmoothScroll();
   const { followFirstInvalid, followNextInvalid } = useValidationFollower();
   const { isOnline } = useOfflineStatus();
   const offline = isNetworkOffline(isOnline);
@@ -207,24 +235,57 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
     return mapped;
   }, [draft, filterMode]);
 
-  const allVisibleExpanded =
-    visibleEntries.length > 0 &&
-    visibleEntries.every(({ project }) => Boolean(expandedIds[project.id]));
+  const scrollViewToTop = () => {
+    scrollTo(0, { immediate: true });
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  };
+
+  const handleOpenProject = (
+    projectId: string,
+    step: ProjectDetailStep = 0
+  ) => {
+    setSlideDirection("forward");
+    setSelectedProjectId(projectId);
+    setActiveDetailStep(step);
+    scrollViewToTop();
+  };
+
+  const handleCloseProject = () => {
+    setSlideDirection("back");
+    setSelectedProjectId(null);
+    scrollViewToTop();
+  };
 
   const revealInvalidAndFollow = (mode: "first" | "next") => {
-    setSuppressExpandFollow(true);
-    setFilterMode("all");
-    setExpandedIds((prev) => {
-      const next = { ...prev };
-      for (const [id, errs] of Object.entries(liveValidation.errorsByProject)) {
-        if (errs.length > 0) {
-          next[id] = true;
-        }
-      }
-      return next;
-    });
     setForceTouched(true);
     setValidationBannerActive(true);
+
+    // If current view has an open project with errors, stay on it; otherwise drill into the first failing project
+    const currentErrors = selectedProjectId
+      ? liveValidation.errorsByProject[selectedProjectId] || []
+      : [];
+
+    if (currentErrors.length > 0 && selectedProjectId) {
+      const targetStep = classifyProjectErrorStep(currentErrors[0]);
+      if (targetStep !== activeDetailStep) {
+        setActiveDetailStep(targetStep);
+      }
+    } else {
+      const firstFailing = draft.find(
+        (p) => (liveValidation.errorsByProject[p.id] || []).length > 0
+      );
+      if (firstFailing) {
+        const errs = liveValidation.errorsByProject[firstFailing.id] || [];
+        setFilterMode("all");
+        setSlideDirection("forward");
+        setSelectedProjectId(firstFailing.id);
+        setActiveDetailStep(
+          errs[0] ? classifyProjectErrorStep(errs[0]) : 0
+        );
+      }
+    }
 
     window.setTimeout(() => {
       if (mode === "first") {
@@ -233,26 +294,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
         followNextInvalid(formRef.current);
       }
     }, 330);
-  };
-
-  const handleToggleExpand = (projectId: string) => {
-    setSuppressExpandFollow(false);
-    setExpandedIds((prev) => ({
-      ...prev,
-      [projectId]: !prev[projectId],
-    }));
-  };
-
-  const handleToggleExpandAllVisible = () => {
-    setSuppressExpandFollow(true);
-    const targetState = !allVisibleExpanded;
-    setExpandedIds((prev) => {
-      const next = { ...prev };
-      for (const { project } of visibleEntries) {
-        next[project.id] = targetState;
-      }
-      return next;
-    });
   };
 
   const handleMoveProject = (index: number, direction: -1 | 1) => {
@@ -317,13 +358,36 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       return;
     }
 
+    const key = `tech-${projectId}-${nextTechKeyRef.current++}`;
     setDraft((prev) =>
       prev.map((item) =>
         item.id === projectId ? { ...item, stack: [...item.stack, raw] } : item
       )
     );
+    setTechIdsByProject((prev) => ({
+      ...prev,
+      [projectId]: [
+        ...(prev[projectId] || project.stack.map((_, i) => `t-${projectId}-${i}`)),
+        key,
+      ],
+    }));
     setNewTechInputs((prev) => ({ ...prev, [projectId]: "" }));
     setTechFeedbacks((prev) => ({ ...prev, [projectId]: null }));
+  };
+
+  const handleUpdateTech = (
+    projectId: string,
+    techIdx: number,
+    nextValue: string
+  ) => {
+    setDraft((prev) =>
+      prev.map((item) => {
+        if (item.id !== projectId) return item;
+        const nextStack = [...item.stack];
+        nextStack[techIdx] = nextValue;
+        return { ...item, stack: nextStack };
+      })
+    );
   };
 
   const handleMoveTech = (
@@ -338,6 +402,16 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
           : item
       )
     );
+    setTechIdsByProject((prev) => {
+      const target = draft.find((item) => item.id === projectId);
+      const current =
+        prev[projectId] ||
+        (target ? target.stack.map((_, i) => `t-${projectId}-${i}`) : []);
+      return {
+        ...prev,
+        [projectId]: swapArrayItem(current, techIdx, direction),
+      };
+    });
   };
 
   const handleRemoveTech = (projectId: string, techIdx: number) => {
@@ -348,6 +422,10 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
           : item
       )
     );
+    setTechIdsByProject((prev) => ({
+      ...prev,
+      [projectId]: (prev[projectId] || []).filter((_, idx) => idx !== techIdx),
+    }));
   };
 
   const handleAddProject = () => {
@@ -375,13 +453,15 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       published: true,
     };
 
-    setSuppressExpandFollow(false);
     setFilterMode("all");
     setDraft((prev) => [...prev, newProject]);
-
-    window.requestAnimationFrame(() => {
-      setExpandedIds((prev) => ({ ...prev, [newId]: true }));
-    });
+    setTechIdsByProject((prev) => ({
+      ...prev,
+      [newId]: newProject.stack.map(
+        (_, i) => `tech-${newId}-${nextTechKeyRef.current++}-${i}`
+      ),
+    }));
+    handleOpenProject(newId, 0);
   };
 
   const handleDeleteProject = (projectId: string, title: string) => {
@@ -394,12 +474,16 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       variant: "danger",
       action: () => {
         setDraft((prev) => prev.filter((item) => item.id !== projectId));
+        if (selectedProjectId === projectId) {
+          setSlideDirection("back");
+          setSelectedProjectId(null);
+        }
         setPendingFiles((prev) => {
           const next = { ...prev };
           delete next[projectId];
           return next;
         });
-        setExpandedIds((prev) => {
+        setTechIdsByProject((prev) => {
           const next = { ...prev };
           delete next[projectId];
           return next;
@@ -426,7 +510,18 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       confirmLabel: "Discard Changes",
       variant: "danger",
       action: () => {
-        setDraft(cloneProjects(savedBaseline));
+        const reverted = cloneProjects(savedBaseline);
+        setDraft(reverted);
+        setTechIdsByProject(
+          buildInitialTechIds(reverted, `reset-${nextTechKeyRef.current++}`)
+        );
+        if (
+          selectedProjectId &&
+          !reverted.some((p) => p.id === selectedProjectId)
+        ) {
+          setSlideDirection("back");
+          setSelectedProjectId(null);
+        }
         setPendingFiles({});
         setNewTechInputs({});
         setTechFeedbacks({});
@@ -574,93 +669,48 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
     { id: "featured", label: "Featured", badge: counts.featured },
   ];
 
+  const selectedProjectIndex = selectedProjectId
+    ? draft.findIndex((item) => item.id === selectedProjectId)
+    : -1;
+  const selectedProject =
+    selectedProjectIndex >= 0 ? draft[selectedProjectIndex] : null;
+
   return (
     <form
       ref={formRef}
       onSubmit={handleSubmit}
       noValidate
-      className="space-y-6"
+      className="space-y-4 sm:space-y-8"
     >
       {/* Header & Sticky Save Bar */}
-      <div
-        data-cascade
-        data-sticky-ceiling="true"
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4 sticky top-16 z-20 shadow-xl"
-      >
-        <div className="flex items-start sm:items-center gap-3 min-w-0">
-          <Briefcase
-            className="w-5 h-5 text-(--text-accent) shrink-0 mt-0.5 sm:mt-0"
-            aria-hidden="true"
-          />
-          <div className="min-w-0">
-            <h2 className="font-display text-xl sm:text-2xl uppercase tracking-tight text-(--text-primary)">
-              Projects &amp; Case Studies
-            </h2>
-            <p className="text-xs text-(--text-muted)">
-              {counts.total} Total · {counts.live} Live · {counts.draftOnly} Draft ·{" "}
-              {counts.featured} Featured
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          {liveErrorsCount > 0 && (
-            <Button
-              type="button"
-              variant="danger"
-              size="md"
-              onClick={() => revealInvalidAndFollow("next")}
-              className="h-10 px-3.5 font-mono text-[11px] bg-(--bg-badge-highlight) border-brand/45 text-(--text-accent) hover:bg-brand/22"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>
-                {liveErrorsCount} {liveErrorsCount === 1 ? "Issue" : "Issues"} · Follow
-              </span>
-            </Button>
-          )}
-
-          {hasUnsavedChanges && (
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              disabled={saving}
-              onClick={handleDiscardDraft}
-              className="h-10 px-4 font-mono text-xs bg-(--bg-surface-2)"
-            >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>Discard</span>
-            </Button>
-          )}
-
+      <AdminModuleHeaderBar
+        dataCascade
+        icon={<Briefcase className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
+        title="Projects & Case Studies"
+        tooltipLabel="Projects & case-study visibility"
+        tooltipContent="Toggle Live vs Draft visibility, star Featured spotlight items, reorder systems, or expand any card to update architecture notes, stack tags, and cropped screenshots."
+        subtitle={`${counts.total} Total · ${counts.live} Live · ${counts.draftOnly} Draft · ${counts.featured} Featured`}
+        showSubtitleOnMobile
+        liveErrorsCount={liveErrorsCount}
+        onFollowIssue={() => revealInvalidAndFollow("next")}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onDiscard={handleDiscardDraft}
+        saving={saving}
+        extraAction={
           <Button
             type="button"
             variant="secondary"
-            size="md"
+            size="sm"
+            fullWidth
             disabled={saving}
             onClick={handleAddProject}
-            className="h-10 px-4 font-mono text-xs"
+            className="h-10 px-3 sm:px-4 font-mono"
           >
             <Plus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>Add Project</span>
           </Button>
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={saving}
-            className="h-10 px-6 text-xs tracking-[0.16em]"
-          >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
-            ) : (
-              <Save className="w-4 h-4 shrink-0" aria-hidden="true" />
-            )}
-            <span>Save &amp; Publish</span>
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {offline && (
         <AdminAlertBanner
@@ -688,150 +738,266 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
         />
       )}
 
-      {/* Clean Filter & Expand/Collapse Bar */}
-      <div
-        data-cascade
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-      >
-        <Tabs
-          items={filterTabs}
-          value={filterMode}
-          onChange={setFilterMode}
-          ariaLabel="Filter project cards"
-          size="sm"
-          variant="accent"
-        />
-
-        <div className="flex items-center justify-between sm:justify-end gap-2">
-          <span className="text-[11px] font-mono text-(--text-muted) uppercase tracking-widest">
-            Showing {visibleEntries.length} of {draft.length}
-          </span>
-
-          {visibleEntries.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleToggleExpandAllVisible}
-              className="h-8 px-3 font-mono text-[11px]"
-            >
-              {allVisibleExpanded ? (
-                <>
-                  <ChevronsDownUp className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span>Collapse All</span>
-                </>
-              ) : (
-                <>
-                  <ChevronsUpDown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span>Expand All</span>
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Collapsible Project Cards with Cascade on Tab Navigate */}
-      <TabPanel activeKey={filterMode}>
-        {visibleEntries.length > 0 ? (
-          <div className="space-y-4">
-            {visibleEntries.map(({ project, index }) => {
-              const projectErrors =
-                liveValidation.errorsByProject[project.id] || [];
-              const isTitleDuplicate =
-                Boolean(project.title.trim()) &&
-                duplicateTitleSet.has(project.title.trim().toLowerCase());
-              const isImageDirty =
-                Boolean(pendingFiles[project.id]) ||
-                (savedImageById[project.id] !== undefined &&
-                  savedImageById[project.id] !== project.image);
-
-              return (
-                <div
-                  key={project.id}
-                  data-cascade
-                  data-project-id={project.id}
-                >
-                  <ProjectCardEditor
-                    project={project}
-                    index={index}
-                    totalCount={draft.length}
-                    expanded={Boolean(expandedIds[project.id])}
-                    followOnExpand={!suppressExpandFollow}
-                    forceTouched={forceTouched}
-                    errors={projectErrors}
-                    isTitleDuplicate={isTitleDuplicate}
-                    isImageDirty={isImageDirty}
-                    pendingImageFile={pendingFiles[project.id] || null}
-                    newTechValue={newTechInputs[project.id] || ""}
-                    techFeedback={techFeedbacks[project.id] || null}
-                    onToggleExpand={() => handleToggleExpand(project.id)}
-                    onMoveUp={() => handleMoveProject(index, -1)}
-                    onMoveDown={() => handleMoveProject(index, 1)}
-                    onDelete={() =>
-                      handleDeleteProject(project.id, project.title)
-                    }
-                    onUpdateField={(field, value) =>
-                      handleUpdateField(project.id, field, value)
-                    }
-                    onPendingImageChange={(file) =>
-                      handlePendingImageChange(project.id, file)
-                    }
-                    onRevertImage={() => handleRevertImage(project.id)}
-                    onUploadError={(message) => setApiError(message)}
-                    onNewTechChange={(val) => {
-                      setNewTechInputs((prev) => ({
-                        ...prev,
-                        [project.id]: val,
-                      }));
-                      if (techFeedbacks[project.id]) {
-                        setTechFeedbacks((prev) => ({
-                          ...prev,
-                          [project.id]: null,
-                        }));
-                      }
-                    }}
-                    onAddTech={() => handleAddTech(project.id)}
-                    onMoveTech={(techIdx, direction) =>
-                      handleMoveTech(project.id, techIdx, direction)
-                    }
-                    onRemoveTech={(techIdx) =>
-                      handleRemoveTech(project.id, techIdx)
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
+      <div className="overflow-x-clip">
+        <AdminSlideView
+          activeKey={selectedProject ? `detail-${selectedProject.id}` : "list"}
+          direction={slideDirection}
+          distancePx={40}
+          skipInitial
+        >
+          {selectedProject ? (
+            <ProjectDetailEditor
+              project={selectedProject}
+              index={selectedProjectIndex}
+              totalCount={draft.length}
+              activeStep={activeDetailStep}
+              onChangeStep={setActiveDetailStep}
+            forceTouched={forceTouched}
+            errors={liveValidation.errorsByProject[selectedProject.id] || []}
+            isTitleDuplicate={
+              Boolean(selectedProject.title.trim()) &&
+              duplicateTitleSet.has(selectedProject.title.trim().toLowerCase())
+            }
+            isImageDirty={
+              Boolean(pendingFiles[selectedProject.id]) ||
+              (savedImageById[selectedProject.id] !== undefined &&
+                savedImageById[selectedProject.id] !== selectedProject.image)
+            }
+            pendingImageFile={pendingFiles[selectedProject.id] || null}
+            techIds={techIdsByProject[selectedProject.id] || []}
+            newTechValue={newTechInputs[selectedProject.id] || ""}
+            techFeedback={techFeedbacks[selectedProject.id] || null}
+            onBack={handleCloseProject}
+            onMoveUp={() => handleMoveProject(selectedProjectIndex, -1)}
+            onMoveDown={() => handleMoveProject(selectedProjectIndex, 1)}
+            onDelete={() =>
+              handleDeleteProject(selectedProject.id, selectedProject.title)
+            }
+            onUpdateField={(field, value) =>
+              handleUpdateField(selectedProject.id, field, value)
+            }
+            onPendingImageChange={(file) =>
+              handlePendingImageChange(selectedProject.id, file)
+            }
+            onRevertImage={() => handleRevertImage(selectedProject.id)}
+            onUploadError={(message) => setApiError(message)}
+            onNewTechChange={(val) => {
+              setNewTechInputs((prev) => ({
+                ...prev,
+                [selectedProject.id]: val,
+              }));
+              if (techFeedbacks[selectedProject.id]) {
+                setTechFeedbacks((prev) => ({
+                  ...prev,
+                  [selectedProject.id]: null,
+                }));
+              }
+            }}
+            onAddTech={() => handleAddTech(selectedProject.id)}
+            onUpdateTech={(techIdx, nextVal) =>
+              handleUpdateTech(selectedProject.id, techIdx, nextVal)
+            }
+            onMoveTech={(techIdx, direction) =>
+              handleMoveTech(selectedProject.id, techIdx, direction)
+            }
+            onRemoveTech={(techIdx) =>
+              handleRemoveTech(selectedProject.id, techIdx)
+            }
+          />
         ) : (
-          <div
-            data-cascade
-            className="bg-(--bg-surface) border border-dashed border-(--border-subtle) rounded-sm p-10 flex flex-col items-center justify-center text-center gap-3"
-          >
-            <FolderOpen
-              className="w-8 h-8 text-(--text-muted)"
-              aria-hidden="true"
-            />
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-(--text-primary)">
-                No projects match the &ldquo;{filterMode}&rdquo; filter
-              </p>
-              <p className="text-xs text-(--text-muted)">
-                Switch back to view all {draft.length} portfolio projects.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setFilterMode("all")}
-              className="font-mono text-xs"
+          <div className="space-y-4 sm:space-y-6">
+            {/* Responsive Filter Bar */}
+            <div
+              data-cascade
+              className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-2.5 sm:gap-3"
             >
-              Show All Projects
-            </Button>
+              {/* Mobile (< sm): Compact Pill Dropdown Filter avoiding multi-tab horizontal clipping */}
+              <div className="sm:hidden min-w-0">
+                <DropdownPopover
+                  portal
+                  align="start"
+                  minWidth={210}
+                  estimatedHeight={190}
+                  trigger={({ isOpen, toggle }) => {
+                    const activeFilter =
+                      filterTabs.find((t) => t.id === filterMode) ??
+                      filterTabs[0];
+                    return (
+                      <button
+                        type="button"
+                        onClick={toggle}
+                        aria-label="Filter project cards"
+                        aria-expanded={isOpen}
+                        className={cn(
+                          "h-9 px-3 rounded-full border text-xs font-mono inline-flex items-center gap-2 transition-colors cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                          isOpen
+                            ? "border-brand bg-(--bg-badge-highlight) text-(--text-primary)"
+                            : "border-(--border-strong) bg-(--bg-surface-2) text-(--text-primary) hover:border-brand/60"
+                        )}
+                      >
+                        <ListFilter
+                          className="w-3.5 h-3.5 text-(--text-accent) shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span className="uppercase tracking-wider font-medium">
+                          {activeFilter.label}
+                        </span>
+                        <StatusPill
+                          label={String(activeFilter.badge ?? 0)}
+                          variant="accent"
+                          size="xs"
+                        />
+                        <ChevronDown
+                          className={cn(
+                            "w-3.5 h-3.5 text-(--text-muted) transition-transform duration-200",
+                            isOpen && "rotate-180 text-(--text-accent)"
+                          )}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    );
+                  }}
+                >
+                  {({ close }) => (
+                    <div
+                      role="menu"
+                      aria-label="Filter project cards"
+                      className="p-1.5 space-y-0.5 bg-(--bg-surface-elevated)"
+                    >
+                      {filterTabs.map((tab) => {
+                        const selected = tab.id === filterMode;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            onClick={() => {
+                              setFilterMode(tab.id);
+                              close();
+                            }}
+                            className={cn(
+                              "w-full px-2.5 py-2 rounded-(--radius-control) text-xs font-mono flex items-center justify-between gap-2 transition-colors cursor-pointer",
+                              selected
+                                ? "bg-(--bg-badge-highlight) text-(--text-accent) font-semibold"
+                                : "text-(--text-primary) hover:bg-(--bg-surface-2)"
+                            )}
+                          >
+                            <span className="inline-flex items-center gap-2">
+                              <Check
+                                className={cn(
+                                  "w-3.5 h-3.5",
+                                  selected ? "opacity-100" : "opacity-0"
+                                )}
+                                aria-hidden="true"
+                              />
+                              <span className="uppercase tracking-wider">
+                                {tab.label}
+                              </span>
+                            </span>
+                            <StatusPill
+                              label={String(tab.badge ?? 0)}
+                              variant={selected ? "accent" : "neutral"}
+                              size="xs"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </DropdownPopover>
+              </div>
+
+              {/* Tablet & Desktop (>= sm): Full Gliding Segmented Tabs */}
+              <div className="hidden sm:block">
+                <Tabs
+                  items={filterTabs}
+                  value={filterMode}
+                  onChange={setFilterMode}
+                  ariaLabel="Filter project cards"
+                  size="sm"
+                  variant="accent"
+                />
+              </div>
+
+              <span className="text-[11px] font-mono text-(--text-muted) uppercase tracking-widest shrink-0">
+                Showing {visibleEntries.length} of {draft.length}
+              </span>
+            </div>
+
+            {/* Project List Summary Cards with Cascade on Tab Navigate */}
+            <TabPanel activeKey={filterMode}>
+              {visibleEntries.length > 0 ? (
+                <div className="space-y-4">
+                  {visibleEntries.map(({ project, index }) => {
+                    const projectErrors =
+                      liveValidation.errorsByProject[project.id] || [];
+                    const isImageDirty =
+                      Boolean(pendingFiles[project.id]) ||
+                      (savedImageById[project.id] !== undefined &&
+                        savedImageById[project.id] !== project.image);
+
+                    return (
+                      <div
+                        key={project.id}
+                        data-cascade
+                        data-project-id={project.id}
+                      >
+                        <ProjectCardEditor
+                          project={project}
+                          index={index}
+                          totalCount={draft.length}
+                          forceTouched={forceTouched}
+                          errors={projectErrors}
+                          isImageDirty={isImageDirty}
+                          pendingImageFile={pendingFiles[project.id] || null}
+                          onOpenProject={() => handleOpenProject(project.id, 0)}
+                          onMoveUp={() => handleMoveProject(index, -1)}
+                          onMoveDown={() => handleMoveProject(index, 1)}
+                          onDelete={() =>
+                            handleDeleteProject(project.id, project.title)
+                          }
+                          onUpdateField={(field, value) =>
+                            handleUpdateField(project.id, field, value)
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div
+                  data-cascade
+                  className="bg-(--bg-surface) border border-dashed border-(--border-subtle) rounded-(--radius-card) p-8 sm:p-10 flex flex-col items-center justify-center text-center gap-3"
+                >
+                  <FolderOpen
+                    className="w-8 h-8 text-(--text-muted)"
+                    aria-hidden="true"
+                  />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-(--text-primary)">
+                      No projects match the &ldquo;{filterMode}&rdquo; filter
+                    </p>
+                    <p className="text-xs text-(--text-muted)">
+                      Switch back to view all {draft.length} portfolio projects.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setFilterMode("all")}
+                    className="font-mono text-xs"
+                  >
+                    Show All Projects
+                  </Button>
+                </div>
+              )}
+            </TabPanel>
           </div>
         )}
-      </TabPanel>
+        </AdminSlideView>
+      </div>
 
       <ConfirmModal
         open={Boolean(confirmState)}

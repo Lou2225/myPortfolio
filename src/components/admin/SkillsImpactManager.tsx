@@ -7,10 +7,22 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import {
   FieldSlotButton,
   IconActionButton,
-  ReorderActionGroup,
 } from "@/components/ui/ActionButtons";
+import {
+  ActionMenuButton,
+  buildReorderMenuItems,
+} from "@/components/ui/ActionMenuButton";
+import { AdminModuleHeaderBar } from "@/components/admin/AdminModuleHeaderBar";
+import {
+  AdminMobileStepView,
+  MobileStepItem,
+  useStepNavigation,
+} from "@/components/admin/AdminMobileStepView";
+import { SortableTextRow } from "@/components/admin/SortableTextRow";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { InfoTooltip } from "@/components/ui/Tooltip";
 import { AnimatedCounter } from "@/components/motion/AdminMotion";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
@@ -32,15 +44,48 @@ import {
   validateSkillsImpactDraft,
 } from "@/lib/validation";
 import { useValidationFollower } from "@/lib/validationFollow";
-import {
-  AlertTriangle,
-  Cpu,
-  Loader2,
-  Plus,
-  RotateCcw,
-  Save,
-  Star,
-} from "lucide-react";
+import { Cpu, Plus, Save, Star } from "lucide-react";
+
+type SkillsStep = 0 | 1 | 2;
+
+const SKILLS_STEPS: readonly {
+  step: SkillsStep;
+  code: string;
+  shortTitle: string;
+}[] = [
+  { step: 0, code: "01", shortTitle: "Skills" },
+  { step: 1, code: "02", shortTitle: "Metrics" },
+  { step: 2, code: "03", shortTitle: "Headers" },
+];
+
+const SECTION_HEADER_LABELS = SECTION_HEADER_FIELD_RULES.map((rule) =>
+  rule.label.toLowerCase()
+);
+
+function classifySkillsErrorStep(errorMessage: string): SkillsStep {
+  const lower = errorMessage.toLowerCase();
+  if (
+    lower.includes("counter #") ||
+    lower.includes("impact metric") ||
+    lower.includes("metric title")
+  ) {
+    return 1;
+  }
+  if (
+    lower.includes("category") ||
+    lower.includes("bento") ||
+    lower.includes("eyebrow tag") ||
+    lower.includes("skill entry") ||
+    lower.includes(" · skill ") ||
+    lower.includes("is duplicated in")
+  ) {
+    return 0;
+  }
+  if (SECTION_HEADER_LABELS.some((label) => lower.includes(label))) {
+    return 2;
+  }
+  return 0;
+}
 
 interface SkillsImpactManagerProps {
   skills: SkillCategory[];
@@ -92,6 +137,9 @@ export function SkillsImpactManager({
   const formRef = useRef<HTMLFormElement>(null);
   const { isOnline } = useOfflineStatus();
   const offline = !isOnline;
+  const isMobileOrTablet = useMediaQuery("(max-width: 1023px)");
+  const { activeStep, stepDirection, switchStep } =
+    useStepNavigation<SkillsStep>(0);
   const { followFirstInvalid, followNextInvalid } = useValidationFollower();
 
   const [savedBaseline, setSavedBaseline] = useState<SkillsImpactSnapshot>(() =>
@@ -167,6 +215,40 @@ export function SkillsImpactManager({
   );
 
   const liveErrorsCount = liveValidation.errors.length;
+  const stepHasError: Record<SkillsStep, boolean> = {
+    0: false,
+    1: false,
+    2: false,
+  };
+  if (forceTouched && liveErrorsCount > 0) {
+    for (const err of liveValidation.errors) {
+      stepHasError[classifySkillsErrorStep(err)] = true;
+    }
+  }
+  const firstErrorStep: SkillsStep | null =
+    liveErrorsCount > 0
+      ? classifySkillsErrorStep(liveValidation.errors[0])
+      : null;
+
+  const mobileSteps: MobileStepItem[] = SKILLS_STEPS.map((item) => ({
+    code: item.code,
+    shortTitle: item.shortTitle,
+    hasError: stepHasError[item.step],
+  }));
+
+  const jumpToValidationIssue = (mode: "first" | "next") => {
+    if (isMobileOrTablet && firstErrorStep !== null && !stepHasError[activeStep]) {
+      switchStep(firstErrorStep);
+    } else if (isMobileOrTablet && mode === "first" && firstErrorStep !== null) {
+      switchStep(firstErrorStep);
+    }
+    window.requestAnimationFrame(() =>
+      mode === "first"
+        ? followFirstInvalid(formRef.current)
+        : followNextInvalid(formRef.current)
+    );
+  };
+
   const activeErrorBanner =
     apiError ??
     (validationBannerActive && liveErrorsCount > 0
@@ -470,7 +552,7 @@ export function SkillsImpactManager({
           liveValidation.errors[0] ||
           "Review required Skills & Impact fields",
       });
-      window.requestAnimationFrame(() => followFirstInvalid(formRef.current));
+      jumpToValidationIssue("first");
       return;
     }
 
@@ -486,126 +568,21 @@ export function SkillsImpactManager({
     });
   };
 
-  return (
-    <form
-      ref={formRef}
-      onSubmit={handleSubmit}
-      noValidate
-      className="space-y-8"
-    >
-      {/* Header & Sticky Save Bar */}
-      <div
-        data-sticky-ceiling="true"
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 sticky top-16 z-20 shadow-xl"
-      >
-        <div className="flex items-start sm:items-center gap-3 min-w-0">
-          <Cpu
-            className="w-5 h-5 text-(--text-accent) shrink-0 mt-0.5 sm:mt-0"
-            aria-hidden="true"
-          />
-          <div className="min-w-0">
-            <h2 className="font-display text-xl sm:text-2xl uppercase tracking-tight text-(--text-primary)">
-              Skills Bento, Impact Metrics & Section Headers
-            </h2>
-            <p className="text-xs text-(--text-muted)">
-              Manage your 4-layer technical arsenal, animated KPI counters, and section titles across the site.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          {liveErrorsCount > 0 && (
-            <Button
-              type="button"
-              variant="danger"
-              size="md"
-              onClick={() => {
-                setForceTouched(true);
-                setValidationBannerActive(true);
-                window.requestAnimationFrame(() =>
-                  followNextInvalid(formRef.current)
-                );
-              }}
-              className="h-10 px-3.5 font-mono text-[11px] bg-(--bg-badge-highlight) border-brand/45 text-(--text-accent) hover:bg-brand/22"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>
-                {liveErrorsCount} {liveErrorsCount === 1 ? "Issue" : "Issues"} · Follow
-              </span>
-            </Button>
-          )}
-
-          {hasUnsavedChanges && (
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              disabled={saving}
-              onClick={handleDiscardDraft}
-              className="h-10 px-4 font-mono text-xs bg-(--bg-surface-2)"
-            >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>Discard</span>
-            </Button>
-          )}
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={saving}
-            className="h-10 px-6 text-xs tracking-[0.16em]"
-          >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
-            ) : (
-              <Save className="w-4 h-4 shrink-0" aria-hidden="true" />
-            )}
-            <span>Save & Publish</span>
-          </Button>
-        </div>
-      </div>
-
-      {offline && (
-        <AdminAlertBanner
-          variant="offline"
-          message="You are offline."
-          detail="Draft edits stay safe locally, but publishing Skills & Metrics requires an active connection."
-        />
-      )}
-
-      {activeErrorBanner && (
-        <AdminAlertBanner
-          variant="error"
-          message={apiError ? "Save Blocked:" : "Check Required Fields:"}
-          detail={activeErrorBanner}
-          actionLabel={liveErrorsCount > 0 ? "Follow Issue" : undefined}
-          onAction={
-            liveErrorsCount > 0
-              ? () => {
-                  setForceTouched(true);
-                  window.requestAnimationFrame(() =>
-                    followFirstInvalid(formRef.current)
-                  );
-                }
-              : undefined
-          }
-          onDismiss={() => {
-            setValidationBannerActive(false);
-            setApiError(null);
-          }}
-        />
-      )}
-
-      {/* 1. Skills Bento Categories */}
-      <div className="space-y-6">
+  const skillsSectionNode = (
+    <div className="space-y-6">
         <SectionHeader
           eyebrow="Chapter 02"
           title="1. Technical Arsenal (Bento Categories)"
           size="sm"
+          rightSlot={
+            <InfoTooltip
+              label="Technical arsenal layers & core stars"
+              content="Starred skills highlight primary capabilities inside each bento layer without changing grid layout."
+            />
+          }
         />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {draftSkills.map((category, catIdx) => {
             const isCatTitleDup =
               category.title.trim() !== "" &&
@@ -620,7 +597,7 @@ export function SkillsImpactManager({
             return (
               <div
                 key={category.id}
-                className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-5 space-y-4"
+                className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 space-y-4 min-w-0"
               >
                 <div className="flex items-center justify-between gap-2 pb-2 border-b border-(--border-subtle)">
                   <div className="flex items-center gap-2">
@@ -634,13 +611,15 @@ export function SkillsImpactManager({
                     />
                   </div>
 
-                  <ReorderActionGroup
-                    index={catIdx}
-                    total={draftSkills.length}
-                    itemLabel={`category ${catIdx + 1}`}
+                  <ActionMenuButton
+                    label={`Actions for Bento Layer #${catIdx + 1}`}
                     size="compact"
-                    onMoveUp={() => handleMoveCategory(catIdx, -1)}
-                    onMoveDown={() => handleMoveCategory(catIdx, 1)}
+                    items={buildReorderMenuItems({
+                      index: catIdx,
+                      total: draftSkills.length,
+                      onMoveUp: () => handleMoveCategory(catIdx, -1),
+                      onMoveDown: () => handleMoveCategory(catIdx, 1),
+                    })}
                   />
                 </div>
 
@@ -707,6 +686,7 @@ export function SkillsImpactManager({
                   minLength={10}
                   maxLength={240}
                   showCounter
+                  expandableOnMobile
                   forceTouched={forceTouched}
                 />
 
@@ -736,11 +716,30 @@ export function SkillsImpactManager({
                       const skillKey = catSkillIds[skillIdx] ?? `${skillIdx}`;
 
                       return (
-                        <TextField
+                        <SortableTextRow
                           key={skillKey}
                           id={`skill-${category.id}-${skillKey}`}
                           label={`Skill ${String(skillIdx + 1).padStart(2, "0")}`}
+                          itemNoun="skill"
+                          removeLabel="Remove Skill"
+                          index={skillIdx}
+                          totalCount={category.skills.length}
                           value={skill.name}
+                          placeholder="e.g. PostgreSQL"
+                          minLength={1}
+                          maxLength={60}
+                          forceTouched={forceTouched}
+                          hint={
+                            isSkillDup
+                              ? "Duplicate skill in this category."
+                              : undefined
+                          }
+                          validate={(val) =>
+                            validateSkillName(
+                              val,
+                              `Skill ${String(skillIdx + 1).padStart(2, "0")}`
+                            )
+                          }
                           onChange={(name) => {
                             setDraftSkills((prev) => {
                               const next = [...prev];
@@ -756,70 +755,41 @@ export function SkillsImpactManager({
                               return next;
                             });
                           }}
-                          validate={(val) =>
-                            validateSkillName(
-                              val,
-                              `Skill ${String(skillIdx + 1).padStart(2, "0")}`
+                          onMove={(dir) =>
+                            handleMoveSkill(
+                              catIdx,
+                              skillIdx,
+                              dir === "up" ? -1 : 1
                             )
                           }
-                          placeholder="e.g. PostgreSQL"
-                          required
-                          minLength={1}
-                          maxLength={60}
-                          forceTouched={forceTouched}
-                          hint={
-                            isSkillDup
-                              ? "Duplicate skill in this category."
-                              : undefined
+                          onRemove={() =>
+                            handleRemoveSkillFromCategory(catIdx, skillIdx)
                           }
-                          leftSlot={
-                            <span className="text-xs font-mono text-(--text-accent)">
-                              {String(skillIdx + 1).padStart(2, "0")}
-                            </span>
-                          }
-                          rightSlot={
-                            <div className="flex items-center gap-1 shrink-0">
-                              <IconActionButton
-                                label={
-                                  skill.highlight
-                                    ? `Remove accent highlight from ${skill.name || "skill"}`
-                                    : `Highlight ${skill.name || "skill"} in accent color`
-                                }
-                                size="field"
-                                onClick={() =>
-                                  handleToggleSkillHighlight(catIdx, skillIdx)
-                                }
-                                className={
-                                  skill.highlight
-                                    ? "border-brand/55 bg-(--bg-badge-highlight) text-(--text-accent)"
-                                    : undefined
-                                }
-                                icon={
-                                  <Star
-                                    className={`w-3.5 h-3.5 ${
-                                      skill.highlight ? "fill-current" : ""
-                                    }`}
-                                    aria-hidden="true"
-                                  />
-                                }
-                              />
-                              <ReorderActionGroup
-                                index={skillIdx}
-                                total={category.skills.length}
-                                itemLabel={`skill ${skillIdx + 1}`}
-                                canRemove={category.skills.length > 1}
-                                size="field"
-                                onMoveUp={() =>
-                                  handleMoveSkill(catIdx, skillIdx, -1)
-                                }
-                                onMoveDown={() =>
-                                  handleMoveSkill(catIdx, skillIdx, 1)
-                                }
-                                onRemove={() =>
-                                  handleRemoveSkillFromCategory(catIdx, skillIdx)
-                                }
-                              />
-                            </div>
+                          inlineActionSlot={
+                            <IconActionButton
+                              label={
+                                skill.highlight
+                                  ? `Remove accent highlight from ${skill.name || "skill"}`
+                                  : `Highlight ${skill.name || "skill"} in accent color`
+                              }
+                              size="field"
+                              onClick={() =>
+                                handleToggleSkillHighlight(catIdx, skillIdx)
+                              }
+                              className={
+                                skill.highlight
+                                  ? "border-brand/55 bg-(--bg-badge-highlight) text-(--text-accent)"
+                                  : undefined
+                              }
+                              icon={
+                                <Star
+                                  className={`w-3.5 h-3.5 ${
+                                    skill.highlight ? "fill-current" : ""
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                              }
+                            />
                           }
                         />
                       );
@@ -856,6 +826,7 @@ export function SkillsImpactManager({
                       minLength={1}
                       maxLength={60}
                       showCounter
+                      wrapRightSlotOnMobile
                       validate={(val) =>
                         val.trim()
                           ? validateSkillName(val, "New Skill")
@@ -868,6 +839,7 @@ export function SkillsImpactManager({
                       rightSlot={
                         <FieldSlotButton
                           onClick={() => handleAddSkillToCategory(catIdx)}
+                          className="w-full sm:w-auto justify-center"
                         >
                           <Plus
                             className="w-3.5 h-3.5 text-(--text-accent)"
@@ -884,21 +856,23 @@ export function SkillsImpactManager({
           })}
         </div>
       </div>
+  );
 
-      {/* 2. Impact Metrics Counters */}
-      <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-6 space-y-5">
+  const metricsSectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
         <SectionHeader
           eyebrow="Chapter 04"
           title="2. Impact Metrics (Animated Counters)"
           size="sm"
           withDivider
+          stackRightOnMobile
           rightSlot={
             <Button
               type="button"
               variant="secondary"
               size="sm"
               onClick={handleAddMetric}
-              className="font-mono tracking-wider border-(--border-strong)"
+              className="w-full sm:w-auto font-mono tracking-wider border-(--border-strong)"
             >
               <Plus
                 className="w-3.5 h-3.5 text-(--text-accent)"
@@ -909,7 +883,7 @@ export function SkillsImpactManager({
           }
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {draftMetrics.map((metric, idx) => {
             const metricKey = metricIds[idx] ?? `${idx}`;
             const trimmedValue = metric.value.trim();
@@ -921,7 +895,7 @@ export function SkillsImpactManager({
             return (
               <div
                 key={metricKey}
-                className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-sm p-4 space-y-3"
+                className="bg-(--bg-surface-2) border border-(--border-subtle) rounded-(--radius-control) p-3.5 sm:p-4 space-y-3"
               >
                 <div className="flex items-center justify-between gap-2 pb-2 border-b border-(--border-subtle)">
                   <div className="flex items-baseline gap-3 min-w-0">
@@ -946,15 +920,18 @@ export function SkillsImpactManager({
                     </span>
                   </div>
 
-                  <ReorderActionGroup
-                    index={idx}
-                    total={draftMetrics.length}
-                    itemLabel={`Counter #${idx + 1}`}
-                    canRemove={draftMetrics.length > 1}
+                  <ActionMenuButton
+                    label={`Actions for Counter #${idx + 1}`}
                     size="compact"
-                    onMoveUp={() => handleMoveMetric(idx, -1)}
-                    onMoveDown={() => handleMoveMetric(idx, 1)}
-                    onRemove={() => handleRemoveMetric(idx)}
+                    items={buildReorderMenuItems({
+                      index: idx,
+                      total: draftMetrics.length,
+                      onMoveUp: () => handleMoveMetric(idx, -1),
+                      onMoveDown: () => handleMoveMetric(idx, 1),
+                      removeLabel: "Remove Counter",
+                      canRemove: draftMetrics.length > 1,
+                      onRemove: () => handleRemoveMetric(idx),
+                    })}
                   />
                 </div>
 
@@ -1078,6 +1055,7 @@ export function SkillsImpactManager({
                   minLength={10}
                   maxLength={220}
                   showCounter
+                  expandableOnMobile
                   forceTouched={forceTouched}
                 />
               </div>
@@ -1085,14 +1063,21 @@ export function SkillsImpactManager({
           })}
         </div>
       </div>
+  );
 
-      {/* 3. Section Headers & Global Labels */}
-      <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-sm p-6 space-y-5">
+  const headersSectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
         <SectionHeader
           eyebrow="Global Copy"
           title="3. Section Headings, Subtitles & Footer Copy"
           size="sm"
           withDivider
+          rightSlot={
+            <InfoTooltip
+              label="Global section headings & footer labels"
+              content="Edits eyebrows, section titles, subtitles, and footer text labels live across the public portfolio without touching code."
+            />
+          }
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
@@ -1119,6 +1104,92 @@ export function SkillsImpactManager({
           ))}
         </div>
       </div>
+  );
+
+  const skillsPanels = [
+    skillsSectionNode,
+    metricsSectionNode,
+    headersSectionNode,
+  ];
+
+  return (
+    <form
+      ref={formRef}
+      onSubmit={handleSubmit}
+      noValidate
+      className="space-y-4 sm:space-y-8"
+    >
+      {/* Header & Sticky Save Bar */}
+      <AdminModuleHeaderBar
+        icon={<Cpu className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
+        title="Skills Bento, Impact Metrics & Section Headers"
+        tooltipLabel="Skills, metrics & copy editor guide"
+        tooltipContent="Curate core/secondary skills across all 4 system layers, reorder animated KPI counters, and customize section eyebrows, headings, and footer copy globally."
+        subtitle="Manage your 4-layer technical arsenal, animated KPI counters, and section titles across the site."
+        liveErrorsCount={liveErrorsCount}
+        onFollowIssue={() => {
+          setForceTouched(true);
+          setValidationBannerActive(true);
+          jumpToValidationIssue("next");
+        }}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onDiscard={handleDiscardDraft}
+        saving={saving}
+      />
+
+      {offline && (
+        <AdminAlertBanner
+          variant="offline"
+          message="You are offline."
+          detail="Draft edits stay safe locally, but publishing Skills & Metrics requires an active connection."
+        />
+      )}
+
+      {activeErrorBanner && (
+        <AdminAlertBanner
+          variant="error"
+          message={apiError ? "Save Blocked:" : "Check Required Fields:"}
+          detail={activeErrorBanner}
+          actionLabel={liveErrorsCount > 0 ? "Follow Issue" : undefined}
+          onAction={
+            liveErrorsCount > 0
+              ? () => {
+                  setForceTouched(true);
+                  jumpToValidationIssue("first");
+                }
+              : undefined
+          }
+          onDismiss={() => {
+            setValidationBannerActive(false);
+            setApiError(null);
+          }}
+        />
+      )}
+
+      {isMobileOrTablet ? (
+        <AdminMobileStepView
+          ariaLabel="Skills, impact metrics, and section header steps"
+          steps={mobileSteps}
+          activeStep={activeStep}
+          direction={stepDirection}
+          onChangeStep={(next) => switchStep(next as SkillsStep)}
+          finalAction={{
+            label: saving ? "Saving..." : "Save & Publish",
+            type: "submit",
+            variant: "primary",
+            disabled: saving,
+            icon: <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
+          }}
+        >
+          {skillsPanels[activeStep] ?? skillsPanels[0]}
+        </AdminMobileStepView>
+      ) : (
+        <div className="space-y-6 sm:space-y-8">
+          {skillsSectionNode}
+          {metricsSectionNode}
+          {headersSectionNode}
+        </div>
+      )}
 
       <ConfirmModal
         open={Boolean(confirmState)}

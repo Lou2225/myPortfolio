@@ -297,4 +297,44 @@ flowchart LR
 * **Dead Code Cleanup:**
   - [x] Remove unused `recordAnalyticsEvent` export from `src/lib/db.ts` and archive/remove redundant early draft docs (`prompt.md`) once no longer needed.
 
+---
+
+### Track D (Milestone 9 — Priority 4): In-App Media Viewer, Device Pairing Polish, Curtain Preloader & System Documentation (`P1`)
+
+* **Full-Viewport Curtain Preloader & BrandPortal Refinements:**
+  - [x] Refactor `src/components/motion/Preloader.tsx` from an inline navbar strip into a cinematic, full-screen fixed curtain (`z-200`) with GPU-accelerated `scaleX` progress bar and curtain wipe exit.
+  - [x] Streamline `BrandPortal.tsx` & `BrandPortalOrb.tsx` by removing the `window.scrollTo` top-of-page fallback so the stealth portal orb functions strictly as an administrative gateway without duplicate scroll actions.
+* **Admin CMS Hygiene & Security Pagination:**
+  - [x] Clean up `ProfileDropdown.tsx` by removing "Secret Logo Redirect" and "Reset Content to Seed Defaults" controls (consolidating security controls in the Security Access tab and factory resets in Maintenance & Danger Zone).
+  - [x] Restrict container height in `SecurityAccessSettings.tsx` to 360px with custom `<ScrollArea>` and added 3-item incremental "Load more" device pagination.
+  - [x] Clean up `InboxManager.tsx` to remove misleading sandbox badge text while preserving Resend diagnostics and manual test email triggers.
+  - [x] Rebalance `QrDevicePairModal.tsx` into a clean 2-column layout (QR code & link on the left, 6-digit PIN and security permissions on the right) and eliminate all manual localhost/LAN IP origin overrides.
+* **In-App Resume Viewer & SSRF-Protected Proxy:**
+  - [x] Implement secure same-origin PDF proxy route `src/app/api/resume/route.ts` with strict hostname allowlisting (preventing private IP/loopback SSRF), PDF magic-byte validation (`%PDF-`), and inline/attachment stream headers.
+  - [x] Create accessible `src/components/common/ResumeViewerModal.tsx` featuring fullscreen expansion toggle, A4 skeleton document loading state, and direct PDF download fallback.
+  - [x] Update `Hero.tsx` CTA to prewarm PDF assets on hover/focus and open the resume directly inside the modal rather than redirecting to an external tab.
+  - [x] Update `next.config.ts` Content Security Policy frame directives (`frame-src 'self' blob: https://drive.google.com`) and exempt `/api/resume` from default frame-blocking.
+* **Tooltip Boundary Fix & Analytics Clarification:**
+  - [x] Fix vertical layout crushing in `src/components/ui/Tooltip.tsx` by anchoring at `(0,0)`, enforcing `w-max`, and applying dynamic boundary-clamped positioning via `useLayoutEffect`.
+  - [x] Document traffic telemetry attribution (separating unattributed "Legacy" fallback events from modern device split donuts, and clarifying Direct, Internal, and External referral sources).
+* **Master System Architecture & Tools Documentation:**
+  - [x] Generate comprehensive `SYSTEM_DOCUMENTATION.md` covering full tech stack, hybrid database sync, multi-layer admin security, telemetry engine, and deployment guide.
+
+---
+
+### Track E (Milestone 10 — Priority 5): Fluid `rem` Responsiveness, Master–Detail Spotlight & Seamless `<Tabs />` (`P1`)
+
+* **Fluid `rem` Typography, `--gutter` & Uniform Grid Alignment:**
+  - [x] Standardize `--gutter: clamp(1rem, 4vw, 2.5rem)` and `--section-py: clamp(3rem, 7vw, 7.5rem)` across all public sections (`Hero`, `Story`, `TechBento`, `Projects`, `Impact`, `Contact`, `Footer`, `Navbar`).
+  - [x] Convert hardcoded `px` font sizes in `Typography.tsx`, `StatusPill.tsx`, `BadgeCounter.tsx`, `Button.tsx`, and `Tabs.tsx` to fluid `rem`/`clamp()` scales while preserving `1px` crisp borders.
+  - [x] Align skill badges in `BentoCard.tsx` (`grid-cols-2 sm:grid-cols-3`) and tech stack tags in `ProjectCard.tsx` (`grid-cols-3 sm:grid-cols-6`) into equal-width CSS Grid cells.
+* **Seamless Horizontally Scrollable `<Tabs />`:**
+  - [x] Hide native horizontal scrollbars via `.no-scrollbar`, fix flexbox overflow clipping (`shrink-0 min-w-full w-max`), and add pointer drag-to-scroll (`onPointerDown`/`onPointerMove`), `data-lenis-prevent` wheel scrolling, and automatic active-tab centering.
+* **Master–Detail Spotlight Projects & Responsive Tech Bento:**
+  - [x] Upgrade `Projects.tsx` to a clean **Master–Detail Spotlight Switcher** (5-column interactive System Directory on desktop + 7-column stacked GPU crossfade Spotlight Stage, and horizontally scrollable `<Tabs />` + compact viewport-fitted card on mobile) with a spring-gliding `[ Spotlight | Grid ]` mode toggle synced with `/admin` Appearance Studio.
+  - [x] Upgrade `TechBento.tsx` to render a balanced **2×2 Bento Matrix** on desktop (`>= 768px`) and a horizontally scrollable `<Tabs />` + stacked GPU crossfade single card on mobile (`< 768px`).
+  - [x] Implement smart presence-aware auto-advance (`9s` interaction cooldown + pointer/focus pause) so cards never auto-advance while the user is reading or interacting.
+
+
+
 

@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Profile } from "@/types/portfolio";
 import { uploadImageToAdminApi } from "@/lib/instantImageCache";
+import { moveArrayItem } from "@/lib/utils";
+import { useMediaQuery } from "@/lib/useMediaQuery";
+import {
+  AdminMobileStepView,
+  MobileStepItem,
+  useStepNavigation,
+} from "@/components/admin/AdminMobileStepView";
 import {
   NameField,
   EmailField,
@@ -18,8 +25,9 @@ import {
 import {
   FieldSlotButton,
   IconActionButton,
-  ReorderActionGroup,
 } from "@/components/ui/ActionButtons";
+import { HeroRoleRow } from "@/components/admin/HeroRoleRow";
+import { AdminModuleHeaderBar } from "@/components/admin/AdminModuleHeaderBar";
 import { ProfileLivePreviewCard } from "@/components/admin/ProfileLivePreviewCard";
 import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import { Button } from "@/components/ui/Button";
@@ -42,16 +50,58 @@ import {
   useBrandPortalWorkspaceSync,
 } from "@/lib/brandPortalStatus";
 import {
-  Save,
   Upload,
   Plus,
   Trash2,
   Loader2,
   User,
-  RotateCcw,
   Sparkles,
-  AlertCircle,
+  Save,
 } from "lucide-react";
+
+type ProfileStep = 0 | 1 | 2 | 3;
+
+const PROFILE_STEPS: readonly {
+  step: ProfileStep;
+  code: string;
+  shortTitle: string;
+}[] = [
+  { step: 0, code: "01", shortTitle: "Hero" },
+  { step: 1, code: "02", shortTitle: "Assets" },
+  { step: 2, code: "03", shortTitle: "Edu" },
+  { step: 3, code: "04", shortTitle: "Contact" },
+];
+
+function classifyProfileErrorStep(errorMessage: string): ProfileStep {
+  const lower = errorMessage.toLowerCase();
+  if (
+    lower.includes("monogram / favicon") ||
+    lower.includes("portrait image") ||
+    lower.includes("resume pdf")
+  ) {
+    return 1;
+  }
+  if (
+    lower.includes("degree program") ||
+    lower.includes("specialization / major") ||
+    lower.includes("graduation year") ||
+    lower.includes("academic status")
+  ) {
+    return 2;
+  }
+  if (
+    lower.includes("direct email") ||
+    lower.includes("github profile") ||
+    lower.includes("linkedin profile") ||
+    lower.includes("psgc") ||
+    lower.includes("city / municipality") ||
+    lower.includes("location") ||
+    lower.includes("availability status")
+  ) {
+    return 3;
+  }
+  return 0;
+}
 
 interface ProfileHeroManagerProps {
   profile: Profile;
@@ -63,10 +113,17 @@ export function ProfileHeroManager({
   onSave,
 }: ProfileHeroManagerProps) {
   const { isOnline } = useOfflineStatus();
+  const isMobileOrTablet = useMediaQuery("(max-width: 1023px)");
+  const { activeStep, stepDirection, switchStep } =
+    useStepNavigation<ProfileStep>(0);
   const { followFirstInvalid, followNextInvalid } = useValidationFollower();
   const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState<Profile>(profile);
   const [savedBaseline, setSavedBaseline] = useState<Profile>(profile);
+  const [roleIds, setRoleIds] = useState<string[]>(() =>
+    profile.roles.map((_, i) => `role-init-${i}`)
+  );
+  const nextRoleKeyRef = useRef(profile.roles.length);
   const [pendingFiles, setPendingFiles] = useState<{
     monogramImageUrl: File | null;
     avatarUrl: File | null;
@@ -100,12 +157,59 @@ export function ProfileHeroManager({
     saving,
   });
 
-  const liveErrorsCount = forceTouched
-    ? validateProfileDraft({
+  const liveValidation = useMemo(
+    () =>
+      validateProfileDraft({
         ...draft,
         roles: draft.roles.map((r) => r.trim()),
-      }).errors.length
-    : 0;
+      }),
+    [draft]
+  );
+
+  const liveErrorsCount = forceTouched ? liveValidation.errors.length : 0;
+
+  const stepHasError: Record<ProfileStep, boolean> = {
+    0: false,
+    1: false,
+    2: false,
+    3: false,
+  };
+  if (forceTouched && liveValidation.errors.length > 0) {
+    for (const err of liveValidation.errors) {
+      stepHasError[classifyProfileErrorStep(err)] = true;
+    }
+  }
+  const firstErrorStep: ProfileStep | null =
+    liveValidation.errors.length > 0
+      ? classifyProfileErrorStep(liveValidation.errors[0])
+      : null;
+
+  const mobileSteps: MobileStepItem[] = PROFILE_STEPS.map((item) => ({
+    code: item.code,
+    shortTitle: item.shortTitle,
+    hasError: stepHasError[item.step],
+  }));
+
+  const jumpToValidationIssue = (
+    mode: "first" | "next",
+    explicitErrors?: string[]
+  ) => {
+    const errs = explicitErrors ?? liveValidation.errors;
+    const target =
+      errs.length > 0 ? classifyProfileErrorStep(errs[0]) : firstErrorStep;
+    if (
+      isMobileOrTablet &&
+      target !== null &&
+      (mode === "first" || !stepHasError[activeStep])
+    ) {
+      switchStep(target);
+    }
+    window.requestAnimationFrame(() =>
+      mode === "first"
+        ? followFirstInvalid(formRef.current)
+        : followNextInvalid(formRef.current)
+    );
+  };
 
   const handleResumeUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -192,10 +296,12 @@ export function ProfileHeroManager({
       return;
     }
     setRoleFeedback(null);
+    const nextId = `role-${nextRoleKeyRef.current++}`;
     setDraft((prev) => ({
       ...prev,
       roles: [...prev.roles, cleaned],
     }));
+    setRoleIds((prev) => [...prev, nextId]);
     setNewRole("");
   };
 
@@ -211,13 +317,11 @@ export function ProfileHeroManager({
   const handleMoveRole = (index: number, direction: "up" | "down") => {
     const target = direction === "up" ? index - 1 : index + 1;
     if (target < 0 || target >= draft.roles.length) return;
-    setDraft((prev) => {
-      const next = [...prev.roles];
-      const temp = next[index];
-      next[index] = next[target];
-      next[target] = temp;
-      return { ...prev, roles: next };
-    });
+    setDraft((prev) => ({
+      ...prev,
+      roles: moveArrayItem(prev.roles, index, target),
+    }));
+    setRoleIds((prev) => moveArrayItem(prev, index, target));
   };
 
   const handleRemoveRole = (index: number) => {
@@ -238,6 +342,7 @@ export function ProfileHeroManager({
           ...prev,
           roles: prev.roles.filter((_, i) => i !== index),
         }));
+        setRoleIds((prev) => prev.filter((_, i) => i !== index));
       },
     });
   };
@@ -251,6 +356,11 @@ export function ProfileHeroManager({
       variant: "danger",
       action: () => {
         setDraft(savedBaseline);
+        setRoleIds(
+          savedBaseline.roles.map(
+            () => `role-reset-${nextRoleKeyRef.current++}`
+          )
+        );
         setPendingFiles({ monogramImageUrl: null, avatarUrl: null });
         setForceTouched(false);
         setFormError(null);
@@ -352,9 +462,8 @@ export function ProfileHeroManager({
     if (!validation.valid) {
       const extraCount =
         validation.errors.length > 1
-          ? ` (+${validation.errors.length - 1} more field${
-              validation.errors.length > 2 ? "s" : ""
-            } require attention)`
+          ? ` (+${validation.errors.length - 1} more field${validation.errors.length > 2 ? "s" : ""
+          } require attention)`
           : "";
       setFormError(`${validation.errors[0]}${extraCount}`);
       announceBrandPortalStatus({
@@ -362,7 +471,7 @@ export function ProfileHeroManager({
         label: "Check Required Fields",
         detail: validation.errors[0],
       });
-      followFirstInvalid(formRef.current);
+      jumpToValidationIssue("first", validation.errors);
       return;
     }
 
@@ -375,108 +484,29 @@ export function ProfileHeroManager({
     });
   };
 
-  return (
-    <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-8">
-      {/* Header & Sticky Save Bar */}
-      <div
-        data-sticky-ceiling="true"
-        className="bg-[#111114] border border-white/10 rounded-sm p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4 sticky top-16 z-20 shadow-xl"
-      >
-        <div className="flex items-start sm:items-center gap-3 min-w-0">
-          <User className="w-5 h-5 text-(--text-accent) shrink-0 mt-0.5 sm:mt-0" />
-          <div className="min-w-0">
-            <h2 className="font-display text-xl sm:text-2xl uppercase tracking-tight text-[#f3f1ea]">
-              Profile, Hero & Identity Manager
-            </h2>
-            <p className="text-xs text-[#807f78]">
-              Manage identity typography, monogram & browser tab favicon, portrait cutout, roles, birth date, education, and PSGC location.
-            </p>
+  const identitySectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-(--border-subtle) pb-3">
+          <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary)">
+            1. Identity &amp; Hero Display Typography
+          </h3>
+
+          <div className="w-full sm:w-auto">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              fullWidth
+              onClick={handleComposeFullName}
+              className="h-9 sm:h-8 px-3 font-mono text-[11px] text-(--text-accent) bg-(--bg-badge-highlight)/70 sm:bg-transparent border border-brand/25 sm:border-transparent hover:border-brand/45 sm:hover:border-transparent"
+            >
+              <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />
+              <span>Auto-compose Full Legal Name</span>
+            </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {forceTouched && liveErrorsCount > 0 && (
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              onClick={() => followNextInvalid(formRef.current)}
-              title="Jump smoothly to the next field requiring attention"
-              className="h-10 px-4 font-mono"
-            >
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                {liveErrorsCount} Issue{liveErrorsCount === 1 ? "" : "s"} · Follow
-              </span>
-            </Button>
-          )}
-
-          {hasUnsavedChanges && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleDiscardDraft}
-              disabled={saving}
-              className="h-10 px-4 font-mono"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-(--text-muted)" />
-              <span>Discard</span>
-            </Button>
-          )}
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={saving}
-            className="h-10 px-6 text-xs tracking-[0.16em]"
-          >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            <span>Save &amp; Publish</span>
-          </Button>
-        </div>
-      </div>
-
-      {formError && (
-        <AdminAlertBanner
-          variant="error"
-          message={formError}
-          actionLabel={forceTouched ? "Follow Issue" : undefined}
-          onAction={
-            forceTouched ? () => followNextInvalid(formRef.current) : undefined
-          }
-          onDismiss={() => setFormError(null)}
-        />
-      )}
-
-      {/* Live Preview Strip */}
-      <ProfileLivePreviewCard draft={draft} publishedProfile={savedBaseline} />
-
-      {/* 1. Identity & Giant Hero Name */}
-      <div className="bg-[#111114] border border-white/10 rounded-(--radius-card) p-6 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
-          <h3 className="font-display text-xl uppercase tracking-tight text-[#f3f1ea]">
-            1. Identity & Hero Display Typography
-          </h3>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleComposeFullName}
-            className="h-8 px-3 font-mono text-[11px] text-(--text-accent)"
-          >
-            <Sparkles className="w-3 h-3" />
-            <span>Auto-compose Full Legal Name</span>
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-start">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
           <NameField
             label="First / Given Name"
             value={draft.name}
@@ -547,27 +577,30 @@ export function ProfileHeroManager({
           />
         </div>
 
-        <TextField
-          label="Primary Headline"
-          value={draft.headline}
-          onChange={(headline) => setDraft({ ...draft, headline })}
-          minLength={4}
-          maxLength={120}
-          showCounter
-          forceTouched={forceTouched}
-        />
+        <div className="pt-3.5 sm:pt-4 border-t border-(--border-subtle)/60 space-y-4 sm:space-y-5">
+          <TextField
+            label="Primary Headline"
+            value={draft.headline}
+            onChange={(headline) => setDraft({ ...draft, headline })}
+            minLength={4}
+            maxLength={120}
+            showCounter
+            forceTouched={forceTouched}
+          />
 
-        <MessageField
-          label="Hero Bio Pitch"
-          rows={3}
-          minLength={20}
-          maxLength={420}
-          value={draft.bio}
-          onChange={(bio) => setDraft({ ...draft, bio })}
-          forceTouched={forceTouched}
-        />
+          <MessageField
+            label="Hero Bio Pitch"
+            rows={3}
+            minLength={20}
+            maxLength={420}
+            expandableOnMobile
+            value={draft.bio}
+            onChange={(bio) => setDraft({ ...draft, bio })}
+            forceTouched={forceTouched}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 items-start">
+        <div className="pt-3.5 sm:pt-4 border-t border-(--border-subtle)/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
           <TextField
             label="Primary CTA Text"
             value={draft.heroCtaPrimary || "View Systems"}
@@ -600,145 +633,128 @@ export function ProfileHeroManager({
             maxLength={60}
             showCounter
             forceTouched={forceTouched}
+            className="sm:col-span-2 lg:col-span-1"
           />
         </div>
       </div>
+  );
 
-      {/* 2. Brand Assets: Monogram/Favicon, Hero Cutout & Resume PDF */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#111114] border border-white/10 rounded-(--radius-card) p-5 sm:p-6 space-y-4 min-w-0">
-          <h3 className="font-display text-xl uppercase tracking-tight text-[#f3f1ea] border-b border-white/10 pb-3">
-            2. Monogram Logo & Browser Favicon
-          </h3>
-          <ImageUploadField
-            label="Monogram Logo Image (Updates Favicon)"
-            value={draft.monogramImageUrl || ""}
-            transform={draft.monogramTransform}
-            pendingFile={pendingFiles.monogramImageUrl}
-            onChange={(monogramImageUrl) =>
-              setDraft((prev) => ({ ...prev, monogramImageUrl }))
-            }
-            onTransformChange={(monogramTransform) => {
-              setDraft((prev) => ({ ...prev, monogramTransform }));
-              announceBrandPortalStatus({
-                tone: "draft",
-                label: "Draft Updated",
-                detail: "Monogram framing staged in placeholder",
-                durationMs: 2600,
-              });
-            }}
-            onPendingFileChange={(file) =>
-              setPendingFiles((prev) => ({ ...prev, monogramImageUrl: file }))
-            }
-            onRevertToSaved={() => {
-              setPendingFiles((prev) => ({ ...prev, monogramImageUrl: null }));
-              setDraft((prev) => ({
-                ...prev,
-                monogramImageUrl: savedBaseline.monogramImageUrl,
-                monogramTransform: savedBaseline.monogramTransform,
-              }));
-              announceBrandPortalStatus({
-                tone: "synced",
-                label: "Reverted Placeholder",
-                detail: "Restored published monogram",
-                durationMs: 2400,
-              });
-            }}
-            isDraftModified={
-              Boolean(pendingFiles.monogramImageUrl) ||
-              (draft.monogramImageUrl || "") !==
-                (savedBaseline.monogramImageUrl || "") ||
-              JSON.stringify(draft.monogramTransform ?? null) !==
-                JSON.stringify(savedBaseline.monogramTransform ?? null)
-            }
-            folder="monogram"
-            placeholder="/uploads/monogram/logo.png or https://..."
-            required={false}
-            previewShape="circle"
-            previewSize="lg"
-            previewFit="cover"
-            previewAlt="Monogram & browser favicon placeholder"
-            forceTouched={forceTouched}
-            onUploadError={(msg) => {
-              setFormError(msg);
-              announceBrandPortalStatus({
-                tone: "error",
-                label: "Image Rejected",
-                detail: msg,
-              });
-            }}
-            hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until you click Save & Publish."
-          />
-        </div>
+  const assetsMediaGridNode = (() => {
+        const buildImageFieldBindings = ({
+          urlKey,
+          transformKey,
+          noun,
+          fallbackUrl = "",
+        }: {
+          urlKey: "monogramImageUrl" | "avatarUrl";
+          transformKey: "monogramTransform" | "avatarTransform";
+          noun: string;
+          fallbackUrl?: string;
+        }) => ({
+          value: draft[urlKey] || fallbackUrl,
+          transform: draft[transformKey],
+          pendingFile: pendingFiles[urlKey],
+          onChange: (nextUrl: string) =>
+            setDraft((prev) => ({ ...prev, [urlKey]: nextUrl })),
+          onTransformChange: (nextTransform: Profile[typeof transformKey]) => {
+            setDraft((prev) => ({ ...prev, [transformKey]: nextTransform }));
+            announceBrandPortalStatus({
+              tone: "draft",
+              label: "Draft Updated",
+              detail: `${noun} framing staged in placeholder`,
+              durationMs: 2600,
+            });
+          },
+          onPendingFileChange: (file: File | null) =>
+            setPendingFiles((prev) => ({ ...prev, [urlKey]: file })),
+          onRevertToSaved: () => {
+            setPendingFiles((prev) => ({ ...prev, [urlKey]: null }));
+            setDraft((prev) => ({
+              ...prev,
+              [urlKey]: savedBaseline[urlKey],
+              [transformKey]: savedBaseline[transformKey],
+            }));
+            announceBrandPortalStatus({
+              tone: "synced",
+              label: "Reverted Placeholder",
+              detail: `Restored published ${noun.toLowerCase()}`,
+              durationMs: 2400,
+            });
+          },
+          isDraftModified:
+            Boolean(pendingFiles[urlKey]) ||
+            (draft[urlKey] || "") !== (savedBaseline[urlKey] || "") ||
+            JSON.stringify(draft[transformKey] ?? null) !==
+              JSON.stringify(savedBaseline[transformKey] ?? null),
+          onUploadError: (msg: string) => {
+            setFormError(msg);
+            announceBrandPortalStatus({
+              tone: "error",
+              label: "Image Rejected",
+              detail: msg,
+            });
+          },
+        });
 
-        <div className="bg-[#111114] border border-white/10 rounded-(--radius-card) p-5 sm:p-6 space-y-4 min-w-0">
-          <h3 className="font-display text-xl uppercase tracking-tight text-[#f3f1ea] border-b border-white/10 pb-3">
-            3. Hero Portrait Cutout (Avatar)
-          </h3>
-          <ImageUploadField
-            label="Portrait Image Path or URL"
-            value={draft.avatarUrl || "/assets/hero/avatar.png"}
-            transform={draft.avatarTransform}
-            pendingFile={pendingFiles.avatarUrl}
-            onChange={(avatarUrl) =>
-              setDraft((prev) => ({ ...prev, avatarUrl }))
-            }
-            onTransformChange={(avatarTransform) => {
-              setDraft((prev) => ({ ...prev, avatarTransform }));
-              announceBrandPortalStatus({
-                tone: "draft",
-                label: "Draft Updated",
-                detail: "Portrait framing staged in placeholder",
-                durationMs: 2600,
-              });
-            }}
-            onPendingFileChange={(file) =>
-              setPendingFiles((prev) => ({ ...prev, avatarUrl: file }))
-            }
-            onRevertToSaved={() => {
-              setPendingFiles((prev) => ({ ...prev, avatarUrl: null }));
-              setDraft((prev) => ({
-                ...prev,
-                avatarUrl: savedBaseline.avatarUrl,
-                avatarTransform: savedBaseline.avatarTransform,
-              }));
-              announceBrandPortalStatus({
-                tone: "synced",
-                label: "Reverted Placeholder",
-                detail: "Restored published portrait",
-                durationMs: 2400,
-              });
-            }}
-            isDraftModified={
-              Boolean(pendingFiles.avatarUrl) ||
-              draft.avatarUrl !== savedBaseline.avatarUrl ||
-              JSON.stringify(draft.avatarTransform ?? null) !==
-                JSON.stringify(savedBaseline.avatarTransform ?? null)
-            }
-            folder="hero"
-            placeholder="/assets/hero/avatar.png"
-            required
-            previewShape="squircle"
-            previewSize="lg"
-            previewFit="contain"
-            previewAlt="Hero portrait preview placeholder"
-            forceTouched={forceTouched}
-            onUploadError={(msg) => {
-              setFormError(msg);
-              announceBrandPortalStatus({
-                tone: "error",
-                label: "Image Rejected",
-                detail: msg,
-              });
-            }}
-            hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until you click Save & Publish."
-          />
-        </div>
-      </div>
+        const monogramBindings = buildImageFieldBindings({
+          urlKey: "monogramImageUrl",
+          transformKey: "monogramTransform",
+          noun: "Monogram",
+        });
 
-      {/* Resume / CV Card */}
-      <div className="bg-[#111114] border border-white/10 rounded-(--radius-card) p-5 sm:p-6 space-y-4 min-w-0">
-        <h3 className="font-display text-xl uppercase tracking-tight text-[#f3f1ea] border-b border-white/10 pb-3">
+        const avatarBindings = buildImageFieldBindings({
+          urlKey: "avatarUrl",
+          transformKey: "avatarTransform",
+          noun: "Portrait",
+          fallbackUrl: "/assets/hero/avatar.png",
+        });
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 min-w-0">
+              <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) border-b border-(--border-subtle) pb-3">
+                2. Monogram Logo &amp; Browser Favicon
+              </h3>
+              <ImageUploadField
+                label="Monogram Logo Image (Updates Favicon)"
+                {...monogramBindings}
+                folder="monogram"
+                placeholder="/uploads/monogram/logo.png or https://..."
+                required={false}
+                previewShape="circle"
+                previewSize="lg"
+                previewFit="cover"
+                previewAlt="Monogram & browser favicon placeholder"
+                forceTouched={forceTouched}
+                hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until you click Save & Publish."
+              />
+            </div>
+
+            <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 min-w-0">
+              <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) border-b border-(--border-subtle) pb-3">
+                3. Hero Portrait Cutout (Avatar)
+              </h3>
+              <ImageUploadField
+                label="Portrait Image Path or URL"
+                {...avatarBindings}
+                folder="hero"
+                placeholder="/assets/hero/avatar.png"
+                required
+                previewShape="squircle"
+                previewSize="lg"
+                previewFit="contain"
+                previewAlt="Hero portrait preview placeholder"
+                forceTouched={forceTouched}
+                hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until you click Save & Publish."
+              />
+            </div>
+          </div>
+        );
+      })();
+
+  const resumeSectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 min-w-0">
+        <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) border-b border-(--border-subtle) pb-3">
           4. Resume / CV Download Document
         </h3>
         <UrlField
@@ -751,24 +767,28 @@ export function ProfileHeroManager({
           forceTouched={forceTouched}
           hint="Shows a 'Resume' download button in the Hero section when set (.pdf max 10MB)."
           rightSlot={
-            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-              <Magnetic strength={0.18}>
-                <label className={FIELD_SLOT_BUTTON_CLASS}>
-                  {uploadingResume ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-(--text-accent)" />
-                  ) : (
-                    <Upload className="w-3.5 h-3.5 text-(--text-accent)" />
-                  )}
-                  <span>{uploadingResume ? "Uploading..." : "Upload PDF"}</span>
-                  <input
-                    type="file"
-                    accept={PDF_FILE_ACCEPT}
-                    disabled={uploadingResume}
-                    onChange={handleResumeUpload}
-                    className="hidden"
-                  />
-                </label>
-              </Magnetic>
+            <div className="flex items-center gap-2 sm:gap-1.5 w-full sm:w-auto shrink-0">
+              <div className="flex-1 min-w-0 sm:flex-initial">
+                <Magnetic strength={0.18} fullWidth className="sm:w-auto">
+                  <label
+                    className={`${FIELD_SLOT_BUTTON_CLASS} w-full sm:w-auto justify-center`}
+                  >
+                    {uploadingResume ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-(--text-accent)" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5 text-(--text-accent)" />
+                    )}
+                    <span>{uploadingResume ? "Uploading..." : "Upload PDF"}</span>
+                    <input
+                      type="file"
+                      accept={PDF_FILE_ACCEPT}
+                      disabled={uploadingResume}
+                      onChange={handleResumeUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </Magnetic>
+              </div>
 
               {draft.resumeUrl && (
                 <IconActionButton
@@ -792,49 +812,38 @@ export function ProfileHeroManager({
           }
         />
       </div>
+  );
 
-      {/* 5. Stacked Hero Roles (All Reusable TextField Components & Aligned Slots) */}
-      <div className="bg-[#111114] border border-white/10 rounded-sm p-6 space-y-5">
-        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-          <h3 className="font-display text-xl uppercase tracking-tight text-[#f3f1ea]">
+  const rolesSectionNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+        <div className="border-b border-(--border-subtle) pb-3 flex items-center justify-between gap-2">
+          <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) min-w-0">
             5. Hero Role Titles (Top-Left Stack)
           </h3>
-          <span className="text-[11px] font-mono text-(--text-muted)">
-            {draft.roles.length} active role{draft.roles.length === 1 ? "" : "s"}
+          <span className="text-[11px] font-mono text-(--text-muted) shrink-0 whitespace-nowrap tabular-nums">
+            {draft.roles.length} active
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          {draft.roles.map((role, idx) => (
-            <TextField
-              key={idx}
-              label={`Role Title ${String(idx + 1).padStart(2, "0")}`}
-              value={role}
-              onChange={(nextVal) => handleUpdateRole(idx, nextVal)}
-              minLength={2}
-              maxLength={60}
-              forceTouched={forceTouched}
-              leftSlot={
-                <span className="text-xs font-mono text-(--text-accent)">
-                  {String(idx + 1).padStart(2, "0")}
-                </span>
-              }
-              rightSlot={
-                <ReorderActionGroup
-                  index={idx}
-                  total={draft.roles.length}
-                  itemLabel={`role ${idx + 1}`}
-                  canRemove={draft.roles.length > 1}
-                  onMoveUp={() => handleMoveRole(idx, "up")}
-                  onMoveDown={() => handleMoveRole(idx, "down")}
-                  onRemove={() => handleRemoveRole(idx)}
-                />
-              }
-            />
-          ))}
+        <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-4 items-start">
+          {draft.roles.map((role, idx) => {
+            const roleKey = roleIds[idx] ?? `role-fallback-${idx}`;
+            return (
+              <HeroRoleRow
+                key={roleKey}
+                index={idx}
+                totalRoles={draft.roles.length}
+                value={role}
+                forceTouched={forceTouched}
+                onChange={(nextVal) => handleUpdateRole(idx, nextVal)}
+                onMove={(dir) => handleMoveRole(idx, dir)}
+                onRemove={() => handleRemoveRole(idx)}
+              />
+            );
+          })}
         </div>
 
-        <div className="max-w-lg pt-2">
+        <div className="max-w-lg pt-3 border-t border-(--border-subtle)/60">
           <TextField
             label="Add New Role Title"
             value={newRole}
@@ -847,8 +856,12 @@ export function ProfileHeroManager({
             minLength={2}
             maxLength={60}
             showCounter
+            wrapRightSlotOnMobile
             rightSlot={
-              <FieldSlotButton onClick={handleAddRole}>
+              <FieldSlotButton
+                onClick={handleAddRole}
+                className="w-full sm:w-auto justify-center"
+              >
                 <Plus className="w-3.5 h-3.5 text-(--text-accent)" aria-hidden="true" />
                 <span>Add Role</span>
               </FieldSlotButton>
@@ -861,11 +874,11 @@ export function ProfileHeroManager({
           )}
         </div>
       </div>
+  );
 
-      {/* 6. Education & Contact Info (with Cascading PSGC Fields) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <div className="bg-[#111114] border border-white/10 rounded-sm p-6 space-y-5">
-          <h3 className="font-display text-xl uppercase tracking-tight text-[#f3f1ea] border-b border-white/10 pb-3">
+  const educationCardNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+          <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) border-b border-(--border-subtle) pb-3">
             6. Education Credentials
           </h3>
           <div className="space-y-4">
@@ -928,10 +941,12 @@ export function ProfileHeroManager({
             />
           </div>
         </div>
+  );
 
-        <div className="bg-[#111114] border border-white/10 rounded-sm p-6 space-y-5">
-          <h3 className="font-display text-xl uppercase tracking-tight text-[#f3f1ea] border-b border-white/10 pb-3">
-            7. Contact, Social Links & PSGC Address
+  const contactCardNode = (
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+          <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) border-b border-(--border-subtle) pb-3">
+            7. Contact, Social Links &amp; PSGC Address
           </h3>
           <div className="space-y-4">
             <EmailField
@@ -976,7 +991,7 @@ export function ProfileHeroManager({
               />
             </div>
 
-            <div className="pt-2 border-t border-white/10">
+            <div className="pt-3 border-t border-(--border-subtle)">
               <PsgcAddressFields
                 address={draft.contact.address}
                 formattedLocation={draft.contact.location}
@@ -1010,7 +1025,80 @@ export function ProfileHeroManager({
             />
           </div>
         </div>
-      </div>
+  );
+
+  const mobileProfilePanels = [
+    <div key="hero" className="space-y-4">
+      <ProfileLivePreviewCard draft={draft} publishedProfile={savedBaseline} />
+      {identitySectionNode}
+      {rolesSectionNode}
+    </div>,
+    <div key="assets" className="space-y-4">
+      {assetsMediaGridNode}
+      {resumeSectionNode}
+    </div>,
+    educationCardNode,
+    contactCardNode,
+  ];
+
+  return (
+    <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 sm:space-y-8">
+      {/* Header & Sticky Save Bar */}
+      <AdminModuleHeaderBar
+        icon={<User className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
+        title="Profile, Hero & Identity Manager"
+        tooltipLabel="Profile & identity publishing rules"
+        tooltipContent="Changes update the Hero headline, portrait cutout, roles, Resume PDF URL, and contact details cleanly across the live site once published. Draft state is preserved locally while editing."
+        subtitle="Manage identity typography, monogram & browser tab favicon, portrait cutout, roles, birth date, education, and PSGC location."
+        liveErrorsCount={forceTouched ? liveErrorsCount : 0}
+        onFollowIssue={() => jumpToValidationIssue("next")}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onDiscard={handleDiscardDraft}
+        saving={saving}
+      />
+
+      {formError && (
+        <AdminAlertBanner
+          variant="error"
+          message={formError}
+          actionLabel={forceTouched ? "Follow Issue" : undefined}
+          onAction={
+            forceTouched ? () => jumpToValidationIssue("next") : undefined
+          }
+          onDismiss={() => setFormError(null)}
+        />
+      )}
+
+      {isMobileOrTablet ? (
+        <AdminMobileStepView
+          ariaLabel="Profile and hero sections"
+          steps={mobileSteps}
+          activeStep={activeStep}
+          direction={stepDirection}
+          onChangeStep={(next) => switchStep(next as ProfileStep)}
+          finalAction={{
+            label: saving ? "Saving..." : "Save & Publish",
+            type: "submit",
+            variant: "primary",
+            disabled: saving,
+            icon: <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
+          }}
+        >
+          {mobileProfilePanels[activeStep] ?? mobileProfilePanels[0]}
+        </AdminMobileStepView>
+      ) : (
+        <>
+          <ProfileLivePreviewCard draft={draft} publishedProfile={savedBaseline} />
+          {identitySectionNode}
+          {assetsMediaGridNode}
+          {resumeSectionNode}
+          {rolesSectionNode}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
+            {educationCardNode}
+            {contactCardNode}
+          </div>
+        </>
+      )}
 
       <ConfirmModal
         open={Boolean(confirmState)}

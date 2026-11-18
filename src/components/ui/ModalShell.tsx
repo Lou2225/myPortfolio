@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { usePresenceTransition } from "@/lib/usePresenceTransition";
 import { cn } from "@/lib/utils";
 
 export interface ModalShellProps {
@@ -13,13 +14,15 @@ export interface ModalShellProps {
   maxWidthClassName?: string;
   children: React.ReactNode;
   panelClassName?: string;
+  backdropClassName?: string;
 }
 
-const EXIT_DURATION_MS = 240;
+const EXIT_DURATION_MS = 260;
 
 /**
- * Reusable GPU-accelerated portal modal with smooth enter & exit transitions
- * (`opacity`, `scale`, and `translate3d`). Keeps DOM mounted until exit animation finishes.
+ * Reusable GPU-accelerated portal modal with two-stage post-commit reveal,
+ * an isolated compositor scrim (eliminating Chromium backdrop-blur fade flashes),
+ * and smooth enter/exit transitions (`opacity`, `scale`, `translate3d`).
  */
 export function ModalShell({
   open,
@@ -30,37 +33,14 @@ export function ModalShell({
   maxWidthClassName = "max-w-md",
   children,
   panelClassName,
+  backdropClassName,
 }: ModalShellProps) {
-  const [mounted, setMounted] = useState(open);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      let nestedRaf = 0;
-      const mountRaf = requestAnimationFrame(() => {
-        setMounted(true);
-        nestedRaf = requestAnimationFrame(() => {
-          setVisible(true);
-        });
-      });
-      return () => {
-        cancelAnimationFrame(mountRaf);
-        cancelAnimationFrame(nestedRaf);
-      };
-    }
-
-    const hideRaf = requestAnimationFrame(() => {
-      setVisible(false);
-    });
-    const unmountTimer = setTimeout(() => {
-      setMounted(false);
-    }, EXIT_DURATION_MS);
-
-    return () => {
-      cancelAnimationFrame(hideRaf);
-      clearTimeout(unmountTimer);
-    };
-  }, [open]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const { mounted, visible } = usePresenceTransition(
+    open,
+    EXIT_DURATION_MS,
+    panelRef
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -90,18 +70,31 @@ export function ModalShell({
         if (!closeDisabled) onClose();
       }}
       className={cn(
-        "fixed inset-0 z-120 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm transition-opacity duration-240 ease-out",
-        visible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        "fixed inset-0 z-120 flex items-center justify-center p-3 sm:p-4",
+        visible ? "pointer-events-auto" : "pointer-events-none",
+        backdropClassName
       )}
     >
+      {/* Isolated GPU-promoted scrim avoids Chromium backdrop-filter opacity flash */}
       <div
-        onClick={(e) => e.stopPropagation()}
+        aria-hidden="true"
+        style={{ transform: "translateZ(0)" }}
         className={cn(
-          "w-full rounded-xl bg-(--bg-surface) border border-(--border-strong) shadow-[0_24px_64px_rgba(0,0,0,0.65)] overflow-hidden transition-[transform,opacity] duration-240 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform",
+          "fixed inset-0 bg-black/72 backdrop-blur-xs transition-opacity duration-240 ease-out will-change-[opacity]",
+          visible ? "opacity-100" : "opacity-0"
+        )}
+      />
+
+      <div
+        ref={panelRef}
+        onClick={(e) => e.stopPropagation()}
+        style={{ backfaceVisibility: "hidden" }}
+        className={cn(
+          "relative z-10 w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] flex flex-col rounded-xl bg-(--bg-surface) border border-(--border-strong) shadow-[0_24px_64px_rgba(0,0,0,0.65)] overflow-hidden transition-[transform,opacity] duration-260 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[transform,opacity]",
           maxWidthClassName,
           visible
             ? "opacity-100 scale-100 translate-y-0"
-            : "opacity-0 scale-95 translate-y-3",
+            : "opacity-0 scale-[0.97] translate-y-2.5",
           panelClassName
         )}
       >

@@ -48,11 +48,27 @@ export function ConfirmModal({
     requireTypedPhrase,
   });
 
-  // Preserve dialog content while close animation plays & reset typed input on open
+  // Clear typed confirmation input after exit completes (never re-rendering mid-open)
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      const timer = setTimeout(() => {
+        setTypedPhrase("");
+      }, 260);
+      return () => clearTimeout(timer);
+    }
+
+    if (
+      cached.title === title &&
+      cached.description === description &&
+      cached.confirmLabel === confirmLabel &&
+      cached.cancelLabel === cancelLabel &&
+      cached.variant === variant &&
+      cached.requireTypedPhrase === requireTypedPhrase
+    ) {
+      return;
+    }
+
     const rafId = requestAnimationFrame(() => {
-      setTypedPhrase("");
       setCached({
         title,
         description,
@@ -71,6 +87,7 @@ export function ConfirmModal({
     cancelLabel,
     variant,
     requireTypedPhrase,
+    cached,
   ]);
 
   const activeTitle = open ? title : cached.title || title;
@@ -98,7 +115,7 @@ export function ConfirmModal({
       ariaDescribedBy="confirm-modal-desc"
       maxWidthClassName="max-w-md"
     >
-      <div className="p-5 sm:p-6 space-y-4">
+      <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 lou-scrollarea">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <span
@@ -147,13 +164,13 @@ export function ConfirmModal({
         </div>
 
         {activePhrase && (
-          <div className="p-3.5 rounded-sm bg-(--bg-surface-2) border border-rose-500/30 space-y-2">
+          <div className="p-3.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-rose-500/30 space-y-2">
             <label
               htmlFor="confirm-modal-phrase-input"
               className="text-xs font-mono text-(--text-secondary) block"
             >
               Type{" "}
-              <code className="px-1.5 py-0.5 rounded-sm bg-(--bg-surface) border border-(--border-subtle) text-rose-400 font-semibold select-all">
+              <code className="px-1.5 py-0.5 rounded-(--radius-control) bg-(--bg-surface) border border-(--border-subtle) text-rose-400 font-semibold select-all">
                 {activePhrase}
               </code>{" "}
               to unlock action:
@@ -164,7 +181,6 @@ export function ConfirmModal({
               value={typedPhrase}
               onChange={(e) => setTypedPhrase(e.target.value)}
               disabled={loading}
-              autoFocus={open}
               autoComplete="off"
               spellCheck={false}
               placeholder={activePhrase}
@@ -177,7 +193,7 @@ export function ConfirmModal({
         )}
       </div>
 
-      <div className="px-5 py-3.5 sm:px-6 bg-(--bg-surface-2) border-t border-(--border-subtle) flex items-center justify-end gap-2.5">
+      <div className="px-4 py-3 sm:px-6 sm:py-3.5 bg-(--bg-surface-2) border-t border-(--border-subtle) flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 shrink-0">
         <Button
           type="button"
           variant="outline"
@@ -194,7 +210,6 @@ export function ConfirmModal({
           size="sm"
           onClick={() => void onConfirm()}
           disabled={loading || !phraseSatisfied}
-          autoFocus={open && !activePhrase}
           className={
             isDanger
               ? "keep-white bg-rose-600 hover:bg-rose-500 border-rose-500 text-white hover:text-white hover:shadow-[0_6px_24px_rgba(244,63,94,0.3)]"

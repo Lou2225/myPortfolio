@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeftRight,
   Check,
   Copy,
   Database,
@@ -16,6 +17,8 @@ import {
   Smartphone,
   Tablet,
   Trash2,
+  Users,
+  Zap,
 } from "lucide-react";
 import {
   type AnalyticsCountMode,
@@ -23,10 +26,9 @@ import {
   type AnalyticsRangeKey,
   type AnalyticsSnapshotSummary,
 } from "@/lib/analytics";
-import { Tabs, type TabItem } from "@/components/ui/Tabs";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { Tooltip } from "@/components/ui/Tooltip";
+import { InfoTooltip, Tooltip } from "@/components/ui/Tooltip";
 import { AnalyticsDateRangePicker } from "./AnalyticsDateRangePicker";
 import type { SettingsSectionId } from "@/components/admin/layout/types";
 import { cn } from "@/lib/utils";
@@ -57,11 +59,6 @@ export interface AnalyticsCommandCardProps {
   onRequestClearLogs: () => void;
   onNavigateSettingsSection?: (section: SettingsSectionId) => void;
 }
-
-const COUNT_MODE_TABS: readonly TabItem<AnalyticsCountMode>[] = [
-  { id: "sessions", label: "Sessions" },
-  { id: "events", label: "Events" },
-];
 
 /**
  * Compact Right-Column Control & Operations Card:
@@ -149,7 +146,7 @@ export function AnalyticsCommandCard({
       {/* Header: Non-shifting single-row toolbar */}
       <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-(--border-subtle)">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="w-7.5 h-7.5 rounded-full bg-(--bg-badge-highlight) border border-brand/35 flex items-center justify-center text-(--text-accent) shrink-0">
+          <span className="w-8 h-8 rounded-(--radius-control) bg-(--bg-badge-highlight) border border-brand/35 flex items-center justify-center text-(--text-accent) shrink-0">
             {storageMode === "supabase" ? (
               <Database className="w-3.5 h-3.5" aria-hidden="true" />
             ) : (
@@ -161,10 +158,11 @@ export function AnalyticsCommandCard({
               <span className="text-[11px] font-mono uppercase tracking-[0.14em] font-semibold text-(--text-primary) truncate">
                 Filters &amp; Reports
               </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-(--text-success) shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-(--text-success) animate-pulse" />
-                {storageMode === "supabase" ? "Postgres" : "Local"}
-              </span>
+              <InfoTooltip
+                label="About filters, slicers & exports"
+                content="Combines date window, counting methodology, and multi-select Device/Source filters across every telemetry card. Export exact active slices as CSV, JSON, or Markdown."
+                side="bottom"
+              />
             </div>
             <p
               suppressHydrationWarning
@@ -226,7 +224,7 @@ export function AnalyticsCommandCard({
         </div>
       </div>
 
-      {/* Row 1: Unified Date Dropdown + Counting Mode */}
+      {/* Row 1: Unified Date Dropdown + Counting Mode Toggle */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <AnalyticsDateRangePicker
           range={range}
@@ -238,14 +236,59 @@ export function AnalyticsCommandCard({
           onApplyRange={onApplyCustomDates}
         />
 
-        <Tabs
-          items={COUNT_MODE_TABS}
-          value={countMode}
-          onChange={onChangeCountMode}
-          ariaLabel="Counting methodology"
-          size="sm"
-          variant="surface"
-        />
+        <Tooltip
+          content={
+            countMode === "sessions"
+              ? "Counting Unique Sessions · Switch to Raw Events"
+              : "Counting Raw Events · Switch to Unique Sessions"
+          }
+          side="top"
+        >
+          <button
+            type="button"
+            onClick={() =>
+              onChangeCountMode(countMode === "sessions" ? "events" : "sessions")
+            }
+            aria-label={
+              countMode === "sessions"
+                ? "Counting mode: Sessions. Switch to Events view"
+                : "Counting mode: Events. Switch to Sessions view"
+            }
+            aria-pressed={countMode === "events"}
+            className={cn(
+              "h-8 px-2.5 rounded-full border text-[0.6875rem] font-mono uppercase tracking-[0.12em] inline-flex items-center gap-1.5 transition-all duration-200 cursor-pointer select-none active:scale-95 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+              countMode === "events"
+                ? "bg-brand/15 border-brand/45 text-(--text-primary)"
+                : "bg-(--bg-surface-2) border-(--border-strong) text-(--text-primary) hover:border-brand"
+            )}
+          >
+            <span className="relative inline-flex items-center justify-center w-3.5 h-3.5">
+              <Users
+                aria-hidden="true"
+                className={cn(
+                  "w-3.5 h-3.5 transition-all duration-300",
+                  countMode === "sessions"
+                    ? "scale-100 opacity-100 text-(--text-accent)"
+                    : "scale-0 opacity-0 absolute"
+                )}
+              />
+              <Zap
+                aria-hidden="true"
+                className={cn(
+                  "w-3.5 h-3.5 transition-all duration-300",
+                  countMode === "events"
+                    ? "scale-100 opacity-100 text-(--text-accent)"
+                    : "scale-0 opacity-0 absolute"
+                )}
+              />
+            </span>
+            <span>{countMode === "sessions" ? "Sessions" : "Events"}</span>
+            <ArrowLeftRight
+              className="w-3 h-3 text-(--text-muted)"
+              aria-hidden="true"
+            />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Row 2: Compact Side-by-Side Checkbox Slicer Lists (Zero Scrollbars) */}

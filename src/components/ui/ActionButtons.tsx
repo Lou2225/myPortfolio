@@ -20,7 +20,7 @@ const ICON_SIZE_CLASSES: Record<
   string
 > = {
   xs: "h-6 w-6 rounded-full",
-  field: "h-10 w-10 rounded-full",
+  field: "h-10.5 w-10.5 rounded-full",
   square: "h-10 w-10 rounded-full",
   compact: "h-8.5 w-8.5 rounded-full",
 };
@@ -32,7 +32,7 @@ const ICON_INTENT_CLASSES: Record<
   neutral:
     "bg-(--bg-surface-2) hover:bg-(--bg-badge-highlight) border border-(--border-strong) hover:border-brand text-(--text-muted) hover:text-(--text-accent)",
   danger:
-    "bg-(--bg-surface-2) hover:bg-rose-500/15 border border-(--border-strong) hover:border-rose-500/45 text-(--text-muted) hover:text-rose-400",
+    "bg-rose-500/12 hover:bg-rose-500/22 border border-rose-500/40 hover:border-rose-500/65 text-rose-500 hover:text-rose-400",
 };
 
 /**

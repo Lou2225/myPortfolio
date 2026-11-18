@@ -6,7 +6,7 @@ import type { AnalyticsSnapshotSummary } from "@/lib/analytics";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { TruncatedText } from "@/components/ui/Tooltip";
+import { InfoTooltip, TruncatedText } from "@/components/ui/Tooltip";
 import { Button } from "@/components/ui/Button";
 import { AnimatedCounter } from "@/components/motion/AdminMotion";
 import { shouldReduceMotion } from "@/lib/appearance";
@@ -59,14 +59,22 @@ export function ProjectPerformanceCard({
   }, []);
 
   return (
-    <div className="h-full bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-6 flex flex-col justify-between gap-4">
+    <div className="h-full bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 flex flex-col justify-between gap-4">
       <div>
         <SectionHeader
           eyebrow="Conversion Leaderboard · Grouped"
           title="Project Interactions"
           size="sm"
           className="mb-3"
-          rightSlot={<FolderGit2 className="w-5 h-5 text-(--text-accent)" />}
+          rightSlot={
+            <div className="flex items-center gap-2">
+              <InfoTooltip
+                label="Project engagement & attribution"
+                content="Ranks published systems by total card interactions, modal case-study opens, external Demo/Repo clicks, and view-to-click CTR inside the active window."
+              />
+              <FolderGit2 className="w-5 h-5 text-(--text-accent)" />
+            </div>
+          }
         />
 
         {/* Segmented Legend */}

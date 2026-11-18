@@ -180,22 +180,41 @@ export function AnalyticsKpiGrid({
         {/* Right Stack: 3 Companion Metrics */}
         <div className="md:col-span-6 flex flex-col gap-px bg-(--border-subtle)">
           {/* Right Row 1: Project Engagement */}
-          <button
-            type="button"
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => onNavigateTab("projects")}
+            onKeyDown={(e) => {
+              if (
+                e.target !== e.currentTarget &&
+                (e.target as HTMLElement).closest("button")
+              ) {
+                return;
+              }
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onNavigateTab("projects");
+              }
+            }}
             className="flex-1 text-left bg-(--bg-surface) hover:bg-(--bg-surface-2)/75 px-4 py-3 flex flex-col justify-between gap-1.5 cursor-pointer transition-colors duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
           >
             <div className="flex items-center justify-between gap-2 text-(--text-muted) w-full">
-              <span className="text-[10.5px] font-mono uppercase tracking-[0.15em] truncate group-hover:text-(--text-primary) transition-colors">
-                Project Clicks
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[10.5px] font-mono uppercase tracking-[0.15em] truncate group-hover:text-(--text-primary) transition-colors">
+                  Project Clicks
+                </span>
+                <InfoTooltip
+                  label="Project clicks & CTR tracking"
+                  content="Aggregates project card clicks, case-study modal opens, and live Demo/Repo link clicks. Tap this tile to open the Projects manager."
+                />
+              </div>
               <span className="inline-flex items-center gap-1 shrink-0">
                 <MousePointerClick
                   className="w-3.5 h-3.5 text-(--text-accent)"
                   aria-hidden="true"
                 />
                 <ArrowUpRight
-                  className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="w-3.5 h-3.5 text-(--text-muted) opacity-75 group-hover:opacity-100 group-hover:text-(--text-accent) group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all"
                   aria-hidden="true"
                 />
               </span>
@@ -226,25 +245,44 @@ export function AnalyticsKpiGrid({
                 className="h-7"
               />
             </div>
-          </button>
+          </div>
 
           {/* Right Row 2: Inquiries & Conversions */}
-          <button
-            type="button"
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => onNavigateTab("inbox")}
+            onKeyDown={(e) => {
+              if (
+                e.target !== e.currentTarget &&
+                (e.target as HTMLElement).closest("button")
+              ) {
+                return;
+              }
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onNavigateTab("inbox");
+              }
+            }}
             className="flex-1 text-left bg-(--bg-surface) hover:bg-(--bg-surface-2)/75 px-4 py-3 flex flex-col justify-between gap-1.5 cursor-pointer transition-colors duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
           >
             <div className="flex items-center justify-between gap-2 text-(--text-muted) w-full">
-              <span className="text-[10.5px] font-mono uppercase tracking-[0.15em] truncate group-hover:text-(--text-primary) transition-colors">
-                Inquiries &amp; Goals
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[10.5px] font-mono uppercase tracking-[0.15em] truncate group-hover:text-(--text-primary) transition-colors">
+                  Inquiries &amp; Goals
+                </span>
+                <InfoTooltip
+                  label="Inquiries & conversion goals"
+                  content="Tracks submitted contact messages alongside CV viewer opens and direct mailto clicks. Tap this tile to open the Inbox."
+                />
+              </div>
               <span className="inline-flex items-center gap-1 shrink-0">
                 <Mail
                   className="w-3.5 h-3.5 text-(--text-accent)"
                   aria-hidden="true"
                 />
                 <ArrowUpRight
-                  className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="w-3.5 h-3.5 text-(--text-muted) opacity-75 group-hover:opacity-100 group-hover:text-(--text-accent) group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all"
                   aria-hidden="true"
                 />
               </span>
@@ -283,12 +321,25 @@ export function AnalyticsKpiGrid({
                 className="h-7"
               />
             </div>
-          </button>
+          </div>
 
           {/* Right Row 3: Published Inventory */}
-          <button
-            type="button"
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => onNavigateTab("skills")}
+            onKeyDown={(e) => {
+              if (
+                e.target !== e.currentTarget &&
+                (e.target as HTMLElement).closest("button")
+              ) {
+                return;
+              }
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onNavigateTab("skills");
+              }
+            }}
             className="flex-1 text-left bg-(--bg-surface) hover:bg-(--bg-surface-2)/75 px-4 py-3 flex flex-col justify-between gap-1.5 cursor-pointer transition-colors duration-200 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
           >
             <div className="flex items-center justify-between gap-2 text-(--text-muted) w-full">
@@ -307,7 +358,7 @@ export function AnalyticsKpiGrid({
                   aria-hidden="true"
                 />
                 <ArrowUpRight
-                  className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="w-3.5 h-3.5 text-(--text-muted) opacity-75 group-hover:opacity-100 group-hover:text-(--text-accent) group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all"
                   aria-hidden="true"
                 />
               </span>
@@ -337,7 +388,7 @@ export function AnalyticsKpiGrid({
                 className="h-7"
               />
             </div>
-          </button>
+          </div>
         </div>
       </div>
     </section>

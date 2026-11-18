@@ -4,6 +4,7 @@ export * from "./NameField";
 export * from "./EmailField";
 export * from "./SubjectField";
 export * from "./MessageField";
+export * from "./MessageFocusModal";
 export * from "./UrlField";
 export * from "./NumberField";
 export * from "./TextField";

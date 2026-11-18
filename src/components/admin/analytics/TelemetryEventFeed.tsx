@@ -7,6 +7,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Tabs, type TabItem } from "@/components/ui/Tabs";
+import { InfoTooltip } from "@/components/ui/Tooltip";
 import { shouldReduceMotion } from "@/lib/appearance";
 import { Activity } from "lucide-react";
 
@@ -90,7 +91,7 @@ export function TelemetryEventFeed({ events }: TelemetryEventFeedProps) {
   return (
     <div
       data-cascade
-      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-6 space-y-4"
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 space-y-4"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <SectionHeader
@@ -98,7 +99,13 @@ export function TelemetryEventFeed({ events }: TelemetryEventFeedProps) {
           title="Recorded Event Stream"
           size="sm"
           rightSlot={
-            <Activity className="w-4 h-4 text-(--text-accent) lg:hidden" />
+            <div className="flex items-center gap-2">
+              <InfoTooltip
+                label="Recorded telemetry stream"
+                content="Inspects up to the latest 60 chronological events matching active date, device, and referral slicers. Filter pills narrow by action type."
+              />
+              <Activity className="w-4 h-4 text-(--text-accent) lg:hidden" />
+            </div>
           }
         />
 

@@ -36,11 +36,26 @@ export function Button({
   const { scrollTo } = useSmoothScroll();
   const { triggerSlideNavigate } = useBrandPortal();
 
+  const hasResponsiveAutoWidth = Boolean(
+    className && /\b(sm|md|lg|xl):w-auto\b/.test(className)
+  );
   const isFullWidth =
-    fullWidth || Boolean(className && /\bw-full\b/.test(className));
+    fullWidth ||
+    (Boolean(className && /\bw-full\b/.test(className)) &&
+      !hasResponsiveAutoWidth);
+
+  const wrapperLayoutTokens = (className || "")
+    .split(/\s+/)
+    .filter((token) =>
+      /^(?:(?:sm|md|lg|xl|2xl):)?(?:w-full|w-auto|flex-1|flex-\[[^\]]+\]|flex-none|flex-initial|min-w-0)$/.test(
+        token
+      )
+    );
+  const hasWrapperLayout =
+    !isFullWidth && wrapperLayoutTokens.length > 0;
 
   const baseStyles =
-    "group relative overflow-hidden items-center justify-center whitespace-nowrap font-medium uppercase tracking-[0.14em] transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand select-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
+    "group relative overflow-hidden items-center justify-center whitespace-nowrap font-medium leading-none uppercase tracking-[0.14em] transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand select-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed";
 
   const widthStyles = isFullWidth ? "flex w-full" : "inline-flex shrink-0";
 
@@ -50,10 +65,10 @@ export function Button({
   };
 
   const sizeStyles = {
-    icon: "h-8.5 w-8.5 p-0 text-xs",
-    sm: "h-8.5 px-4 text-[11px] gap-1.5",
-    md: "h-11 px-6 text-xs gap-2",
-    lg: "h-12 sm:h-13 px-7 sm:px-8 text-xs sm:text-sm font-semibold gap-2.5",
+    icon: "h-[2.125rem] w-[2.125rem] p-0 text-[0.75rem]",
+    sm: "h-[2.125rem] px-3.5 sm:px-4 text-[0.6875rem] gap-1.5",
+    md: "h-[2.75rem] px-5 sm:px-6 text-[0.75rem] gap-2",
+    lg: "h-[3rem] sm:h-[3.25rem] px-6 sm:px-8 text-[0.75rem] sm:text-[0.875rem] font-semibold gap-2.5",
   };
 
   const variantStyles = {
@@ -77,6 +92,7 @@ export function Button({
     variantStyles[variant],
     className
   );
+  const magneticButtonClasses = hasWrapperLayout ? cn(classes, "w-full") : classes;
 
   const innerContent = slideDirection ? (
     <>
@@ -89,7 +105,7 @@ export function Button({
       />
       <span
         className={cn(
-          "relative z-10 inline-flex items-center justify-center [gap:inherit] transition-transform duration-300 ease-out",
+          "relative z-10 inline-flex items-center justify-center gap-[inherit] transition-transform duration-300 ease-out",
           slideDirection === "left"
             ? "group-hover:-translate-x-1"
             : "group-hover:translate-x-1"
@@ -134,61 +150,76 @@ export function Button({
     }
   };
 
-  const content = href ? (
-    external ? (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={props["aria-label"]}
-        title={props.title}
-        onClick={(e) => {
-          if (onClick) {
-            onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
+  const renderElement = (btnClasses: string) =>
+    href ? (
+      external ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={props["aria-label"]}
+          title={props.title}
+          onClick={(e) => {
+            if (onClick) {
+              onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
+            }
+          }}
+          className={btnClasses}
+        >
+          {innerContent}
+        </a>
+      ) : href.startsWith("#") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ? (
+        <a
+          href={href}
+          aria-label={props["aria-label"]}
+          title={props.title}
+          onClick={
+            href.startsWith("#")
+              ? handleHashClick
+              : (e) => {
+                  if (onClick) {
+                    onClick(
+                      e as unknown as React.MouseEvent<HTMLButtonElement>
+                    );
+                  }
+                }
           }
-        }}
-        className={classes}
-      >
-        {innerContent}
-      </a>
-    ) : href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:") ? (
-      <a
-        href={href}
-        aria-label={props["aria-label"]}
-        title={props.title}
-        onClick={href.startsWith("#") ? handleHashClick : (e) => {
-          if (onClick) {
-            onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
-          }
-        }}
-        className={classes}
-      >
-        {innerContent}
-      </a>
+          className={btnClasses}
+        >
+          {innerContent}
+        </a>
+      ) : (
+        <Link
+          href={href}
+          aria-label={props["aria-label"]}
+          title={props.title}
+          onClick={handleRouteLinkClick}
+          className={btnClasses}
+        >
+          {innerContent}
+        </Link>
+      )
     ) : (
-      <Link
-        href={href}
-        aria-label={props["aria-label"]}
-        title={props.title}
-        onClick={handleRouteLinkClick}
-        className={classes}
-      >
+      <button className={btnClasses} onClick={onClick} {...props}>
         {innerContent}
-      </Link>
-    )
-  ) : (
-    <button className={classes} onClick={onClick} {...props}>
-      {innerContent}
-    </button>
-  );
+      </button>
+    );
 
   if (magnetic && !props.disabled) {
     return (
-      <Magnetic strength={isFullWidth ? 0.08 : 0.2} fullWidth={isFullWidth}>
-        {content}
+      <Magnetic
+        strength={isFullWidth ? 0.08 : 0.2}
+        fullWidth={isFullWidth}
+        className={
+          hasWrapperLayout ? cn("inline-flex", ...wrapperLayoutTokens) : undefined
+        }
+      >
+        {renderElement(magneticButtonClasses)}
       </Magnetic>
     );
   }
 
-  return content;
+  return renderElement(classes);
 }

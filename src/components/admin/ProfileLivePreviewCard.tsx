@@ -39,20 +39,20 @@ export function ProfileLivePreviewCard({
   const locationDisplay = draft.contact.location || "Philippines";
 
   return (
-    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-5 sm:p-6 space-y-5">
+    <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-4 sm:p-6 space-y-4 sm:space-y-5">
       {/* Header Row & Simulated Browser Tab */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-(--border-subtle)">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-4 pb-3.5 sm:pb-4 border-b border-(--border-subtle)">
         <div className="min-w-0">
           <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-(--text-accent) block">
             Live Identity & Browser Tab Preview
           </span>
-          <p className="text-xs text-(--text-muted) mt-0.5">
+          <p className="text-xs text-(--text-muted) mt-0.5 leading-relaxed">
             Reflects how your published monogram logo, favicon, age, and PSGC location render sitewide.
           </p>
         </div>
 
         {/* Simulated Browser Tab */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-t-md bg-(--bg-surface-2) border border-(--border-subtle) max-w-full sm:max-w-xs min-w-0">
+        <div className="flex w-full sm:inline-flex sm:w-auto sm:max-w-xs items-center gap-2 px-3 py-1.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) min-w-0">
           <span className="w-4 h-4 rounded-full overflow-hidden shrink-0 inline-flex items-center justify-center">
             {resolvedMonogramUrl ? (
               <TransformedImage
@@ -80,8 +80,8 @@ export function ProfileLivePreviewCard({
       </div>
 
       {/* Clean Executive Identity & Metadata Row */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3.5 xl:gap-6">
+        <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
           <MonogramBadge
             monogram={liveMediaSource.monogram}
             imageUrl={liveMediaSource.monogramImageUrl}
@@ -89,15 +89,16 @@ export function ProfileLivePreviewCard({
             alt={`${fullDisplay} monogram preview`}
             className={
               liveMediaSource.monogramImageUrl
-                ? "w-16 h-16 rounded-full border border-brand/80 bg-transparent text-(--text-accent) font-bold text-sm tracking-wider"
-                : "w-16 h-16 rounded-full border border-brand bg-brand/10 text-(--text-accent) font-bold text-sm tracking-wider"
+                ? "w-14 h-14 sm:w-16 sm:h-16 rounded-full border border-brand/80 bg-transparent text-(--text-accent) font-bold text-sm tracking-wider"
+                : "w-14 h-14 sm:w-16 sm:h-16 rounded-full border border-brand bg-brand/10 text-(--text-accent) font-bold text-sm tracking-wider"
             }
           />
           <div className="min-w-0 flex-1">
             <TruncatedText
               as="p"
               text={fullDisplay}
-              className="text-base font-semibold text-(--text-primary) tracking-tight block"
+              clampClassName="whitespace-normal wrap-break-word"
+              className="text-[0.9375rem] sm:text-base font-semibold text-(--text-primary) tracking-tight leading-snug block"
             />
             <TruncatedText
               as="p"
@@ -105,13 +106,14 @@ export function ProfileLivePreviewCard({
                 draft.headline ||
                 "Full-Stack Developer & Business Analytics Specialist"
               }
-              className="text-xs text-(--text-muted) mt-0.5 block"
+              clampClassName="whitespace-normal wrap-break-word"
+              className="text-xs text-(--text-muted) mt-0.5 leading-snug block"
             />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:justify-end min-w-0">
-          <div className="inline-flex items-center gap-2 text-center shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-x-5 sm:gap-y-2 xl:justify-end min-w-0">
+          <div className="inline-flex items-center gap-2 shrink-0">
             <Cake className="w-4 h-4 text-(--text-accent) shrink-0" />
             <span className="text-xs sm:text-sm font-medium text-(--text-primary) tabular-nums whitespace-nowrap">
               {computedAge} yrs{" "}
@@ -121,16 +123,12 @@ export function ProfileLivePreviewCard({
             </span>
           </div>
 
-          <span
-            aria-hidden="true"
-            className="hidden sm:inline-block w-px h-5 bg-(--border-subtle)"
-          />
-
-          <div className="inline-flex items-center gap-2 min-w-0 max-w-full sm:max-w-xs">
-            <MapPin className="w-4 h-4 text-(--text-accent) shrink-0" />
+          <div className="inline-flex items-start sm:items-center gap-2 min-w-0 max-w-full xl:max-w-sm">
+            <MapPin className="w-4 h-4 text-(--text-accent) shrink-0 mt-0.5 sm:mt-0" />
             <TruncatedText
               text={locationDisplay}
-              className="text-xs sm:text-sm font-medium text-(--text-primary) block"
+              clampClassName="whitespace-normal wrap-break-word"
+              className="text-xs sm:text-sm font-medium text-(--text-primary) leading-snug block"
             />
           </div>
         </div>

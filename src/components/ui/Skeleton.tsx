@@ -40,7 +40,7 @@ export function AdminDashboardSkeleton() {
     <div
       role="status"
       aria-label="Loading Portfolio Management Dashboard"
-      className="min-h-screen bg-(--bg-canvas) text-(--text-primary) pb-28 md:pb-16"
+      className="min-h-screen w-full max-w-full overflow-x-clip bg-(--bg-canvas) text-(--text-primary) pb-32 md:pb-16"
     >
       {/* Top Admin Header Bar Skeleton */}
       <div className="h-16 bg-(--bg-surface)/90 border-b border-(--border-subtle) px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
