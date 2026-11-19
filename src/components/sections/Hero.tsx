@@ -14,6 +14,7 @@ import { ArrowDown, FileText } from "lucide-react";
 export function Hero() {
   const { profile, appearance, trackEvent } = usePortfolio();
   const [resumeOpen, setResumeOpen] = useState(false);
+  const [hasSlicedPortrait, setHasSlicedPortrait] = useState(false);
   const prewarmedResumeRef = useRef<string | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -258,6 +259,7 @@ export function Hero() {
         <Avatar
           imageSrc={profile.avatarUrl || "/assets/hero/avatar.png"}
           transform={profile.avatarTransform}
+          onFirstSlice={() => setHasSlicedPortrait(true)}
         />
       </div>
 
@@ -268,7 +270,7 @@ export function Hero() {
       />
 
       {/* LAYER 4 (Bottom Scroll Bar, z-30 — pl-12 clears the bottom-left LV BrandPortalOrb) */}
-      <div className="relative z-30 max-w-(--container-max) mx-auto w-full flex items-center justify-center sm:justify-between pl-12 sm:pl-14 2xl:pl-0 pr-12 sm:pr-14 2xl:pr-0 pt-2.5 sm:pt-3 border-t border-(--border-subtle)">
+      <div className="relative z-30 max-w-(--container-max) mx-auto w-full flex items-center justify-center sm:justify-between gap-4 pl-12 sm:pl-14 2xl:pl-0 pr-12 sm:pr-14 2xl:pr-0 pt-2.5 sm:pt-3 border-t border-(--border-subtle)">
         <a
           href="#story"
           className="flex items-center gap-2.5 text-[0.625rem] sm:text-[0.75rem] font-mono uppercase tracking-[0.2em] text-(--text-muted) hover:text-(--text-primary) transition-colors pointer-events-auto"
@@ -276,6 +278,19 @@ export function Hero() {
           <span className="w-6 sm:w-8 h-px bg-brand" />
           <span>{profile.heroScrollCue || "Scroll to enter the story"}</span>
         </a>
+
+        {appearance.liquidDistortion && !reducedMotion && (
+          <span
+            aria-hidden="true"
+            className={`hidden [@media(hover:hover)_and_(pointer:fine)_and_(min-width:1024px)]:inline-flex items-center gap-1.5 text-[0.625rem] font-mono uppercase tracking-[0.22em] text-(--text-muted) transition-opacity duration-700 pointer-events-none select-none ${
+              hasSlicedPortrait ? "opacity-0" : "opacity-75"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+            <span>Swipe portrait to reveal</span>
+          </span>
+        )}
+
         <MonoLabel tone="secondary" className="hidden sm:inline">
           00 // PROLOGUE — {profile.education.major}
         </MonoLabel>

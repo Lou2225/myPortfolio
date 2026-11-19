@@ -1177,8 +1177,8 @@ export function AppearanceSettings({
           }
         />
         <ToggleRow
-          label="Liquid SVG Turbulence Hover"
-          description="Organic GPU displacement ripple when the pointer passes over your hero portrait & showcase project images."
+          label="Avatar Particle-Smoke Slice & Hover FX"
+          description="Shatters and vaporizes your hero portrait into impact-driven avatar particles on cursor pass, plus GPU hover sheen on showcase images."
           checked={draft.liquidDistortion}
           onToggle={(liquidDistortion) =>
             updateDraft((prev) => ({ ...prev, liquidDistortion }))

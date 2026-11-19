@@ -149,18 +149,32 @@ export function TechBento({ skills, sectionHeaders }: TechBentoProps) {
           </BodyText>
         </ScrollReveal>
 
-        {/* DESKTOP / TABLET (>= 768px): Balanced 2x2 Bento Matrix */}
-        <div className="hidden md:grid md:grid-cols-2 gap-5 lg:gap-6 w-full">
-          {skills.map((category, idx) => (
-            <ScrollReveal
-              key={category.id}
-              variant="fade-up"
-              delayMs={idx * 75}
-              className="bento-card-item flex h-full w-full"
-            >
-              <BentoCard category={category} className="w-full h-full" />
-            </ScrollReveal>
-          ))}
+        {/* DESKTOP / TABLET (>= 768px): Asymmetric Editorial Bento Matrix */}
+        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-12 gap-5 lg:gap-6 w-full">
+          {skills.map((category, idx) => {
+            const bentoSpan =
+              skills.length === 4
+                ? idx === 0 || idx === 3
+                  ? "lg:col-span-7"
+                  : "lg:col-span-5"
+                : skills.length === 3 && idx === 0
+                  ? "lg:col-span-12"
+                  : "lg:col-span-6";
+            return (
+              <ScrollReveal
+                key={category.id}
+                variant="fade-up"
+                delayMs={idx * 75}
+                className={cn("bento-card-item flex h-full w-full", bentoSpan)}
+              >
+                <BentoCard
+                  category={category}
+                  index={idx}
+                  className="w-full h-full"
+                />
+              </ScrollReveal>
+            );
+          })}
         </div>
 
         {/* MOBILE (< 768px): Horizontally Scrollable Layer Tabs + Single Compact Bento Card */}
@@ -207,7 +221,11 @@ export function TechBento({ skills, sectionHeaders }: TechBentoProps) {
                         : "opacity-0 translate-y-2.5 scale-[0.985] z-0 pointer-events-none invisible"
                     )}
                   >
-                    <BentoCard category={cat} className="w-full h-full" />
+                    <BentoCard
+                      category={cat}
+                      index={idx}
+                      className="w-full h-full"
+                    />
                   </div>
                 );
               })}

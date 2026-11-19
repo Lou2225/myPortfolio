@@ -8,7 +8,11 @@ import {
   PRELOADER_SEEN_SESSION_KEY,
   resolveEffectiveReducedMotion,
 } from "@/lib/appearance";
-import { isWorkspaceBootReady } from "@/lib/brandPortalStatus";
+import {
+  isWorkspaceBootReady,
+  PRELOADER_ARM_EVENT,
+  PRELOADER_START_EVENT,
+} from "@/lib/brandPortalStatus";
 
 export function Preloader() {
   const { profile, appearance } = usePortfolio();
@@ -18,23 +22,65 @@ export function Preloader() {
 
   const [complete, setComplete] = useState(() => preloaderMode === "off");
   const [exiting, setExiting] = useState(false);
+  const [armedHold, setArmedHold] = useState(false);
+  const [forceRun, setForceRun] = useState(false);
+  const [runNonce, setRunNonce] = useState(0);
   const countRef = useRef<HTMLSpanElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
-  // Mount the full-viewport curtain strictly on the flagship "/" storytelling entry.
-  const skipPreloader = !pathname || pathname !== "/";
+  // Listen for Admin -> Public Portfolio curtain handoff so the sliding curtain exits
+  // directly onto the "Preparing workspace & systems" loading screen with zero Hero flash.
+  useEffect(() => {
+    const handleArm = () => {
+      if (preloaderMode === "off" || reducedMotion) return;
+      setComplete(false);
+      setExiting(false);
+      setForceRun(true);
+      setArmedHold(true);
+      if (countRef.current) countRef.current.textContent = "0";
+      if (barRef.current) barRef.current.style.transform = "scaleX(0)";
+    };
+
+    const handleStart = () => {
+      setArmedHold(false);
+      setRunNonce((n) => n + 1);
+    };
+
+    window.addEventListener(PRELOADER_ARM_EVENT, handleArm);
+    window.addEventListener(PRELOADER_START_EVENT, handleStart);
+    return () => {
+      window.removeEventListener(PRELOADER_ARM_EVENT, handleArm);
+      window.removeEventListener(PRELOADER_START_EVENT, handleStart);
+    };
+  }, [preloaderMode, reducedMotion]);
+
+  // Safety fallback: never stay paused at 0% if a curtain transition is interrupted
+  useEffect(() => {
+    if (!armedHold) return;
+    const timer = window.setTimeout(() => {
+      setArmedHold(false);
+      setRunNonce((n) => n + 1);
+    }, 3200);
+    return () => window.clearTimeout(timer);
+  }, [armedHold]);
+
+  // Mount the full-viewport curtain on "/" (and while armed behind the exiting Admin slide curtain).
+  const skipPreloader = !armedHold && (!pathname || pathname !== "/");
 
   useEffect(() => {
-    if (skipPreloader || complete) {
+    if (skipPreloader || complete || armedHold) {
       return;
     }
 
     if (preloaderMode === "off") {
-      const id = requestAnimationFrame(() => setComplete(true));
+      const id = requestAnimationFrame(() => {
+        setForceRun(false);
+        setComplete(true);
+      });
       return () => cancelAnimationFrame(id);
     }
 
-    if (preloaderMode === "once-per-session") {
+    if (preloaderMode === "once-per-session" && !forceRun) {
       try {
         if (window.sessionStorage.getItem(PRELOADER_SEEN_SESSION_KEY) === "1") {
           const id = requestAnimationFrame(() => setComplete(true));
@@ -46,7 +92,10 @@ export function Preloader() {
     }
 
     if (reducedMotion) {
-      const id = requestAnimationFrame(() => setComplete(true));
+      const id = requestAnimationFrame(() => {
+        setForceRun(false);
+        setComplete(true);
+      });
       return () => cancelAnimationFrame(id);
     }
 
@@ -60,16 +109,19 @@ export function Preloader() {
       }
     };
 
-    const minCountDurationMs = 360;
+    const minCountDurationMs = forceRun ? 760 : 360;
     const maxBootWaitMs = 950;
-    const holdAtFullMs = 40;
-    const exitDurationMs = 380;
+    const holdAtFullMs = forceRun ? 110 : 40;
+    const exitDurationMs = 460;
     const startTime = performance.now();
     let rafId = 0;
     let lastShown = -1;
     let lastCommitAt = 0;
     let pauseTimer: ReturnType<typeof setTimeout> | null = null;
     let doneTimer: ReturnType<typeof setTimeout> | null = null;
+
+    if (countRef.current) countRef.current.textContent = "0";
+    if (barRef.current) barRef.current.style.transform = "scaleX(0)";
 
     const tick = (now: number) => {
       const elapsed = now - startTime;
@@ -109,6 +161,7 @@ export function Preloader() {
           setExiting(true);
           doneTimer = setTimeout(() => {
             markSeen();
+            setForceRun(false);
             setComplete(true);
           }, exitDurationMs);
         }, holdAtFullMs);
@@ -122,7 +175,7 @@ export function Preloader() {
       if (pauseTimer !== null) clearTimeout(pauseTimer);
       if (doneTimer !== null) clearTimeout(doneTimer);
     };
-  }, [skipPreloader, complete, preloaderMode, reducedMotion]);
+  }, [skipPreloader, complete, armedHold, forceRun, runNonce, preloaderMode, reducedMotion]);
 
   if (complete || skipPreloader || preloaderMode === "off") {
     return null;

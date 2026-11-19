@@ -35,6 +35,7 @@ export function Navbar() {
   const [activeSection, setActiveSection] = useState<string>("top");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const seenChaptersRef = useRef<Set<string>>(new Set(["top"]));
+  const progressBarRef = useRef<HTMLSpanElement | null>(null);
   const { scrollTo } = useSmoothScroll();
 
   const isAdminRoute = pathname?.startsWith("/admin");
@@ -67,6 +68,13 @@ export function Navbar() {
 
     if (isHomeRoute && scrollY <= 24) {
       setActiveSection("top");
+    }
+
+    if (progressBarRef.current) {
+      const docEl = document.documentElement;
+      const maxScroll = Math.max(1, docEl.scrollHeight - window.innerHeight);
+      const ratio = Math.min(1, Math.max(0, scrollY / maxScroll));
+      progressBarRef.current.style.transform = `scaleX(${ratio.toFixed(4)})`;
     }
   }, [isAdminRoute, isHomeRoute]);
 
@@ -302,6 +310,22 @@ export function Navbar() {
             )}
           </div>
         </nav>
+
+        {/* Subtle GPU-only Brand Reading Progress Ribbon (transparent track — zero full-width white border) */}
+        {isHomeRoute && !isOfflineRoute && (
+          <div
+            aria-hidden="true"
+            className={`absolute inset-x-0 bottom-0 h-[2px] pointer-events-none transition-opacity duration-300 ${
+              scrolled ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <span
+              ref={progressBarRef}
+              className="block w-full h-full bg-brand origin-left will-change-transform"
+              style={{ transform: "scaleX(0)" }}
+            />
+          </div>
+        )}
       </header>
 
       {/* Mobile / Tablet Drawer Navigation */}

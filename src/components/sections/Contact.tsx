@@ -168,7 +168,7 @@ export function Contact() {
     <section
       id="contact"
       aria-label="Contact Section"
-      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) bg-(--bg-canvas)/74"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) bg-(--bg-surface)/42"
     >
       <div className="max-w-(--container-max) mx-auto w-full flex flex-col gap-10 sm:gap-14">
         {/* Header */}

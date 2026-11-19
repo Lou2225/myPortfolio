@@ -90,6 +90,8 @@ function getBrandPortalSnapshot(): BrandPortalSnapshot {
 
 export const DEVICE_STORAGE_KEY = "lou_registered_device";
 export const DEVICE_SYNC_EVENT = "lou-device-change";
+export const PRELOADER_ARM_EVENT = "lou-preloader-arm";
+export const PRELOADER_START_EVENT = "lou-preloader-start";
 
 let workspaceBootReady = false;
 

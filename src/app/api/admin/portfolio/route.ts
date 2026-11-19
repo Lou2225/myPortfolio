@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { isAdminAuthenticated } from "@/lib/auth";
 import {
+  getPortfolioContent,
   getPortfolioDB,
   savePortfolioDB,
   getDefaultSeedDatabase,
@@ -58,7 +59,7 @@ export async function PUT(request: Request) {
     const body = (await request.json()) as Partial<PortfolioDatabase>;
 
     let nextProfileError: string | null = null;
-    const currentSnapshot = await getPortfolioDB();
+    const currentSnapshot = await getPortfolioContent();
 
     if (body.profile) {
       const candidateProfile = {

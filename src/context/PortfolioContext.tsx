@@ -68,6 +68,22 @@ export function usePortfolio() {
   return useContext(PortfolioContext);
 }
 
+function pickNewestPortfolioSnapshot(
+  ssrData?: PublicPortfolioData,
+  persistedData?: PublicPortfolioData
+): PublicPortfolioData {
+  if (ssrData && persistedData) {
+    if (
+      persistedData.updatedAt &&
+      (!ssrData.updatedAt || persistedData.updatedAt > ssrData.updatedAt)
+    ) {
+      return persistedData;
+    }
+    return ssrData;
+  }
+  return ssrData || persistedData || defaultPublicData;
+}
+
 function PortfolioStateBridge({
   initialData,
   children,
@@ -103,7 +119,8 @@ function PortfolioStateBridge({
       writePersistedPublicCache(fresh);
       return fresh;
     },
-    initialData: () => initialData || readPersistedPublicCache() || defaultPublicData,
+    initialData: () =>
+      pickNewestPortfolioSnapshot(initialData, readPersistedPublicCache()),
     initialDataUpdatedAt: 0,
     staleTime: 10 * 1000,
     refetchOnWindowFocus: !pathname?.startsWith("/admin"),

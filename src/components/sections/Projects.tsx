@@ -166,7 +166,7 @@ export function Projects() {
       id="projects"
       aria-label="Selected Projects and Systems"
       onPointerDownCapture={markUserPresent}
-      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-surface)/42"
     >
       <div className="max-w-(--container-max) mx-auto w-full flex flex-col gap-5 sm:gap-8">
         {/* Header Row */}
@@ -253,23 +253,35 @@ export function Projects() {
             className={cn(
               "grid grid-cols-1 gap-5 sm:gap-6 w-full",
               totalProjects === 1
-                ? "max-w-[42rem] mx-auto"
+                ? "max-w-[46rem] mx-auto"
                 : "md:grid-cols-2"
             )}
           >
-            {visibleProjects.map((project, idx) => (
-              <div
-                key={project.id}
-                style={
-                  !reducedMotion
-                    ? { animationDelay: `${idx * 75}ms` }
-                    : undefined
-                }
-                className="lou-view-morph w-full h-full flex"
-              >
-                <ProjectCard project={project} />
-              </div>
-            ))}
+            {visibleProjects.map((project, idx) => {
+              const promoteFeaturedHero =
+                totalProjects >= 3 && totalProjects % 2 === 1 && idx === 0;
+              return (
+                <div
+                  key={project.id}
+                  style={
+                    !reducedMotion
+                      ? { animationDelay: `${idx * 75}ms` }
+                      : undefined
+                  }
+                  className={cn(
+                    "lou-view-morph w-full h-full flex",
+                    promoteFeaturedHero && "md:col-span-2"
+                  )}
+                >
+                  <ProjectCard
+                    project={project}
+                    layout={
+                      promoteFeaturedHero ? "featured-horizontal" : "vertical"
+                    }
+                  />
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div

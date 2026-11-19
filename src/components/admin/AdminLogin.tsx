@@ -31,7 +31,7 @@ interface AdminLoginProps {
 }
 
 export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
-  const { triggerLoginPortal } = useBrandPortal();
+  const { triggerLoginPortal, triggerSlideNavigate } = useBrandPortal();
   const [password, setPassword] = useState("");
   const [requiresTotp, setRequiresTotp] = useState(false);
   const [totpCode, setTotpCode] = useState("");
@@ -170,6 +170,10 @@ export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
           variant="ghost"
           size="sm"
           slideDirection="left"
+          onClick={(e) => {
+            e.preventDefault();
+            triggerSlideNavigate("/", "left");
+          }}
           className="px-2.5 sm:px-3 -ml-2 sm:-ml-3"
         >
           <ArrowLeft className="w-4 h-4 text-(--text-accent)" />

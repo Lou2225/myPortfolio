@@ -100,6 +100,9 @@ export const SETTINGS_SECTIONS_META: readonly SettingsSectionMeta[] = [
       "preloader",
       "marquee",
       "magnetic",
+      "smoke",
+      "slice",
+      "avatar",
       "liquid",
       "smooth scroll",
       "reduced motion",
@@ -238,9 +241,9 @@ export const SETTINGS_RECOMMENDATIONS: readonly SettingsRecommendationItem[] = [
   {
     id: "rec-motion-posture",
     section: "appearance",
-    title: "Motion, Lenis Scroll, Preloader & Ambient Starfield",
-    description: "Configure GSAP animations, ambient starfield, magnetic pull, liquid FX & reduced motion",
-    keywords: ["motion", "animation", "reduced", "transitions", "gsap", "lenis", "preloader", "marquee", "magnetic", "liquid", "fps", "starfield", "stars", "ambient"],
+    title: "Motion, Lenis Scroll, Preloader & Smoke-Slice FX",
+    description: "Configure GSAP animations, avatar smoke-slice reveal, starfield, magnetic pull & reduced motion",
+    keywords: ["motion", "animation", "reduced", "transitions", "gsap", "lenis", "preloader", "marquee", "magnetic", "smoke", "slice", "avatar", "liquid", "fps", "starfield", "stars", "ambient"],
   },
   {
     id: "rec-custom-cursor-fx",

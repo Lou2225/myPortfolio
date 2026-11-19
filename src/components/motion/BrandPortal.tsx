@@ -24,6 +24,8 @@ import {
   DEVICE_SYNC_EVENT,
   dismissBrandPortalNotice,
   markWorkspaceBootReady,
+  PRELOADER_ARM_EVENT,
+  PRELOADER_START_EVENT,
 } from "@/lib/brandPortalStatus";
 import {
   queryKeys,
@@ -59,6 +61,7 @@ interface PendingSlideState {
   targetPath: string;
   direction: "left" | "right";
   exitToX: number;
+  revealPreloader: boolean;
   slideInComplete: boolean;
   routeReady: boolean;
   exited: boolean;
@@ -427,6 +430,11 @@ export function BrandPortalProvider({
                 xPercent: pending.exitToX,
                 duration: 0.48,
                 ease: "expo.inOut",
+                onStart: () => {
+                  if (pending.revealPreloader) {
+                    window.dispatchEvent(new CustomEvent(PRELOADER_START_EVENT));
+                  }
+                },
               },
               "-=0.08"
             );
@@ -675,10 +683,14 @@ export function BrandPortalProvider({
       const enterFromX = direction === "right" ? 100 : -100;
       const exitToX = direction === "right" ? -100 : 100;
 
+      const revealPreloader =
+        Boolean(pathname?.startsWith("/admin")) && targetPath === "/";
+
       const state: PendingSlideState = {
         targetPath,
         direction,
         exitToX,
+        revealPreloader,
         slideInComplete: false,
         routeReady: false,
         exited: false,
@@ -723,6 +735,11 @@ export function BrandPortalProvider({
               // Dismiss the transient portal greeting behind the opaque curtain so mobile
               // transitions smoothly into /admin with no lingering orb capsule over the dock.
               dismissBrandPortalNotice();
+              // Arm the Preloader behind the opaque curtain when exiting /admin -> / so
+              // sliding the curtain away reveals "Preparing workspace & systems" cleanly.
+              if (state.revealPreloader) {
+                window.dispatchEvent(new CustomEvent(PRELOADER_ARM_EVENT));
+              }
               router.push(href);
               if (targetPath.startsWith("/admin")) {
                 window.dispatchEvent(new CustomEvent("lou-check-admin-ready"));

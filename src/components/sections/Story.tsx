@@ -21,13 +21,13 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
     <section
       id="story"
       aria-label="About and Origin Story"
-      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-surface)/42"
     >
-      <div className="max-w-(--container-max) mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-12 lg:gap-16">
-        {/* Left Column: Origin Narrative */}
+      <div className="max-w-(--container-max) mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-12 lg:gap-16 items-start">
+        {/* Left Column: Sticky Origin Narrative on Desktop */}
         <ScrollReveal
           variant="fade-up"
-          className="lg:col-span-5 flex flex-col justify-start"
+          className="lg:col-span-5 lg:sticky lg:top-28 lg:self-start flex flex-col justify-start"
         >
           <Eyebrow withDot className="mb-2.5 sm:mb-3">
             {sectionHeaders.storyEyebrow}
@@ -87,8 +87,12 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
                 as="li"
                 variant="fade-up"
                 delayMs={i * 65}
-                className="story-pillar-item py-4 sm:py-7 flex flex-row items-baseline gap-3.5 sm:gap-7 group px-1 sm:px-4 transition-colors duration-300 rounded-sm"
+                className="story-pillar-item relative py-4 sm:py-7 flex flex-row items-baseline gap-3.5 sm:gap-7 group pl-3 sm:pl-5 pr-1 sm:pr-4 hover:bg-(--bg-surface)/60 transition-colors duration-300 rounded-sm overflow-hidden"
               >
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-y-3 left-0 w-0.5 bg-brand origin-top scale-y-0 group-hover:scale-y-100 transition-transform duration-400 ease-out"
+                />
                 <DisplayHeading
                   as="span"
                   size="sm"

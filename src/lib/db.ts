@@ -63,7 +63,12 @@ let serverMemoryCache: {
   data: PortfolioDatabase;
   expiresAt: number;
 } | null = null;
+let inflightContentRead: {
+  scopeKey: string;
+  promise: Promise<PortfolioDatabase>;
+} | null = null;
 const MEMORY_CACHE_TTL_MS = 60_000;
+const SEED_BASELINE_UPDATED_AT = "2026-01-01T00:00:00.000Z";
 let legacyRelationalBackfilled = false;
 
 function getCacheScopeKey(): string {
@@ -85,7 +90,7 @@ export function getDefaultSeedDatabase(): PortfolioDatabase {
     appearance: DEFAULT_APPEARANCE,
     messages: [getDefaultWelcomeMessage()],
     analytics: [],
-    updatedAt: new Date().toISOString(),
+    updatedAt: SEED_BASELINE_UPDATED_AT,
   };
 }
 
@@ -496,6 +501,7 @@ export async function probeDatabaseHealth(): Promise<DatabaseHealthReport> {
  */
 export function clearPortfolioMemoryCache(): void {
   serverMemoryCache = null;
+  inflightContentRead = null;
   try {
     revalidateTag(PORTFOLIO_CACHE_TAG, "max");
     revalidatePath("/", "layout");
@@ -626,17 +632,36 @@ export async function getPortfolioContent(options?: {
       return serverMemoryCache.data;
     }
 
-    try {
-      const cached = await getCachedPortfolioContentFromNext();
-      serverMemoryCache = {
-        scopeKey,
-        data: cached,
-        expiresAt: Date.now() + MEMORY_CACHE_TTL_MS,
-      };
-      return cached;
-    } catch {
-      // Fallback to direct read if outside Next.js request context
+    if (inflightContentRead && inflightContentRead.scopeKey === scopeKey) {
+      return inflightContentRead.promise;
     }
+
+    const loadCachedPromise = (async () => {
+      try {
+        const cached = await getCachedPortfolioContentFromNext();
+        serverMemoryCache = {
+          scopeKey,
+          data: cached,
+          expiresAt: Date.now() + MEMORY_CACHE_TTL_MS,
+        };
+        return cached;
+      } catch {
+        const direct = await readPortfolioContentUncached();
+        serverMemoryCache = {
+          scopeKey,
+          data: direct,
+          expiresAt: Date.now() + MEMORY_CACHE_TTL_MS,
+        };
+        return direct;
+      } finally {
+        if (inflightContentRead?.scopeKey === scopeKey) {
+          inflightContentRead = null;
+        }
+      }
+    })();
+
+    inflightContentRead = { scopeKey, promise: loadCachedPromise };
+    return loadCachedPromise;
   }
 
   const fresh = await readPortfolioContentUncached();

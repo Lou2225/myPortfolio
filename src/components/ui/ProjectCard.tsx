@@ -20,23 +20,54 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function ProjectCard({ project }: { project: Project }) {
+export interface ProjectCardProps {
+  project: Project;
+  layout?: "vertical" | "featured-horizontal";
+}
+
+export function ProjectCard({
+  project,
+  layout = "vertical",
+}: ProjectCardProps) {
   const { trackEvent } = usePortfolio();
   const caseStudyHref = `/projects/${encodeURIComponent(project.id)}`;
+  const isHorizontal = layout === "featured-horizontal";
 
   return (
-    <article className="group relative h-full w-full flex flex-col bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) overflow-hidden hover:border-(--border-strong) transition-all duration-500 shadow-xl">
-      {/* Compact Widescreen Liquid Image Showcase with Hover Distortion */}
+    <article
+      className={cn(
+        "group relative h-full w-full bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) overflow-hidden hover:border-(--border-strong) transition-all duration-500 shadow-xl",
+        isHorizontal
+          ? "flex flex-col md:grid md:grid-cols-12"
+          : "flex flex-col"
+      )}
+    >
+      {/* Cinematic Project Image Showcase with GPU Hover Sheen */}
       <LiquidImage
         src={project.image}
         alt={project.title}
         placeholderText={project.title}
-        aspectRatio="h-[6rem] sm:h-[8.5rem] md:h-[9.5rem]"
-        className="border-0 border-b border-(--border-subtle) rounded-none shrink-0"
+        aspectRatio={
+          isHorizontal
+            ? "h-[11rem] sm:h-[14rem] md:h-full md:min-h-[21rem]"
+            : "h-[10.5rem] sm:h-[13rem] lg:h-[14.5rem]"
+        }
+        className={cn(
+          "border-0 rounded-none shrink-0",
+          isHorizontal
+            ? "md:col-span-6 border-b md:border-b-0 md:border-r border-(--border-subtle)"
+            : "border-b border-(--border-subtle)"
+        )}
       />
 
-      <div className="p-3 sm:p-4 md:p-5 flex flex-col flex-1 justify-between gap-2.5 sm:gap-3">
+      <div
+        className={cn(
+          "p-3.5 sm:p-5 md:p-6 flex flex-col flex-1 justify-between gap-2.5 sm:gap-3.5",
+          isHorizontal && "md:col-span-6"
+        )}
+      >
         <div>
           {/* Header row: Category, Featured badge & Year */}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
