@@ -59,9 +59,9 @@ export function Preloader() {
       }
     };
 
-    const countDurationMs = 560;
-    const holdAtFullMs = 80;
-    const exitDurationMs = 520;
+    const countDurationMs = 360;
+    const holdAtFullMs = 40;
+    const exitDurationMs = 380;
     const startTime = performance.now();
     let rafId = 0;
     let lastShown = -1;
@@ -156,6 +156,7 @@ export function Preloader() {
             imageUrl={profile.monogramImageUrl}
             transform={profile.monogramTransform}
             alt={`${profile.fullName} monogram`}
+            loading="eager"
             className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-(--border-strong) font-bold text-xs tracking-wider"
           />
           <div className="min-w-0">

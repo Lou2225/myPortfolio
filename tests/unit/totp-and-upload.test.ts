@@ -146,6 +146,11 @@ describe("Upload Magic-Byte Verification", () => {
       verifyUploadMagicBytes(Buffer.from([0x00, 0x00, 0x01, 0x00, 0x01]), ".ico")
         .valid
     ).toBe(true);
+
+    const validCurBuf = Buffer.alloc(24);
+    validCurBuf[2] = 0x02; // TYPE_CUR = 2
+    validCurBuf.writeUInt16LE(1, 4); // 1 image entry
+    expect(verifyUploadMagicBytes(validCurBuf, ".cur").valid).toBe(true);
   });
 
   it("rejects SVGs, scripts, executables, and mismatched magic bytes", () => {
@@ -166,6 +171,44 @@ describe("Upload Magic-Byte Verification", () => {
         Buffer.from("%PDF-1.7\nspoofed-pdf", "ascii"),
         ".jpg"
       ).valid
+    ).toBe(false);
+
+    const icoAsCurBuf = Buffer.alloc(24);
+    icoAsCurBuf[2] = 0x01; // ICO type instead of CUR
+    icoAsCurBuf.writeUInt16LE(1, 4);
+    expect(verifyUploadMagicBytes(icoAsCurBuf, ".cur").valid).toBe(false);
+
+    // Valid MP3 (ID3 & MPEG sync), WAV, OGG headers vs spoofed bytes
+    expect(
+      verifyUploadMagicBytes(Buffer.from("ID3\x04\x00\x00", "ascii"), ".mp3")
+        .valid
+    ).toBe(true);
+    expect(
+      verifyUploadMagicBytes(Buffer.from([0xff, 0xfb, 0x90, 0x00]), ".mp3")
+        .valid
+    ).toBe(true);
+    expect(
+      verifyUploadMagicBytes(Buffer.from("MZ\x90\x00", "ascii"), ".mp3").valid
+    ).toBe(false);
+
+    const wavBuf = Buffer.concat([
+      Buffer.from("RIFF", "ascii"),
+      Buffer.from([0x24, 0x00, 0x00, 0x00]),
+      Buffer.from("WAVE", "ascii"),
+    ]);
+    expect(verifyUploadMagicBytes(wavBuf, ".wav").valid).toBe(true);
+    expect(
+      verifyUploadMagicBytes(
+        Buffer.from("RIFF\x24\x00\x00\x00WEBP", "ascii"),
+        ".wav"
+      ).valid
+    ).toBe(false);
+
+    expect(
+      verifyUploadMagicBytes(Buffer.from("OggS\x00\x02", "ascii"), ".ogg").valid
+    ).toBe(true);
+    expect(
+      verifyUploadMagicBytes(Buffer.from("NOT_OGG", "ascii"), ".ogg").valid
     ).toBe(false);
   });
 });

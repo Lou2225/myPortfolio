@@ -7,6 +7,10 @@ export interface ValidationResult {
 
 export const IMAGE_FILE_ACCEPT =
   ".png,.jpg,.jpeg,.webp,.avif,.ico,image/png,image/jpeg,image/webp,image/avif,image/x-icon,image/vnd.microsoft.icon";
+export const CURSOR_FILE_ACCEPT =
+  ".png,.webp,.ico,.cur,.jpg,.jpeg,.avif,image/png,image/webp,image/x-icon,image/vnd.microsoft.icon,image/jpeg,image/avif";
+export const AUDIO_FILE_ACCEPT =
+  ".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave,audio/ogg";
 export const PDF_FILE_ACCEPT = ".pdf,application/pdf";
 
 export const ALLOWED_IMAGE_EXTENSIONS = [
@@ -28,7 +32,37 @@ export const ALLOWED_IMAGE_MIME_TYPES = [
   "image/vnd.microsoft.icon",
 ] as const;
 
+export const ALLOWED_CURSOR_EXTENSIONS = [
+  ".png",
+  ".webp",
+  ".ico",
+  ".cur",
+] as const;
+
+export const ALLOWED_CURSOR_MIME_TYPES = [
+  "image/png",
+  "image/webp",
+  "image/x-icon",
+  "image/vnd.microsoft.icon",
+  "application/octet-stream",
+] as const;
+
+export const ALLOWED_AUDIO_EXTENSIONS = [".mp3", ".wav", ".ogg"] as const;
+
+export const ALLOWED_AUDIO_MIME_TYPES = [
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/x-mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/ogg",
+  "application/ogg",
+] as const;
+
 export const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
+export const MAX_CURSOR_UPLOAD_BYTES = 512 * 1024; // 512 KB
+export const MAX_AUDIO_UPLOAD_BYTES = 2.5 * 1024 * 1024; // 2.5 MB
 export const MAX_PDF_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export function validateImageFile(file: File): ValidationResult {
@@ -85,6 +119,119 @@ export function validatePdfFile(file: File): ValidationResult {
     };
   }
 
+  return { valid: true };
+}
+
+/**
+ * Validates cursor asset uploads in the browser before canvas resize or upload.
+ * Accepts direct cursor formats (.png, .webp, .ico, .cur) plus JPEG/AVIF sources
+ * that are converted cleanly into transparent PNG cursor assets on the client.
+ */
+export function validateCursorFile(file: File): ValidationResult {
+  const name = file.name.toLowerCase();
+  const isSourceImage = ALLOWED_IMAGE_EXTENSIONS.some((ext) =>
+    name.endsWith(ext)
+  );
+  const isNativeCur = name.endsWith(".cur");
+  const mime = (file.type || "").toLowerCase();
+
+  const validMime = isNativeCur
+    ? mime === "" ||
+      mime === "image/x-icon" ||
+      mime === "image/vnd.microsoft.icon" ||
+      mime === "application/octet-stream"
+    : mime === ""
+      ? isSourceImage
+      : (ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(mime);
+
+  if ((!isSourceImage && !isNativeCur) || !validMime) {
+    return {
+      valid: false,
+      error: "Only cursor files (.png, .cur, .webp, .ico, .jpg, .avif) are permitted.",
+    };
+  }
+
+  if (file.size <= 0) {
+    return { valid: false, error: "Selected cursor file is empty." };
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    return {
+      valid: false,
+      error: "Source cursor file size cannot exceed 5 MB.",
+    };
+  }
+
+  return { valid: true };
+}
+
+export function validateAudioFile(file: File): ValidationResult {
+  const name = file.name.toLowerCase();
+  const hasValidExt = ALLOWED_AUDIO_EXTENSIONS.some((ext) => name.endsWith(ext));
+  const mime = (file.type || "").toLowerCase();
+  const hasValidMime =
+    mime === ""
+      ? hasValidExt
+      : (ALLOWED_AUDIO_MIME_TYPES as readonly string[]).includes(mime);
+
+  if (!hasValidExt || !hasValidMime) {
+    return {
+      valid: false,
+      error: "Only short audio files (.mp3, .wav, .ogg) are permitted.",
+    };
+  }
+
+  if (file.size <= 0) {
+    return { valid: false, error: "Selected audio file is empty." };
+  }
+
+  if (file.size > MAX_AUDIO_UPLOAD_BYTES) {
+    return {
+      valid: false,
+      error: "Audio clip size cannot exceed 2.5 MB.",
+    };
+  }
+
+  return { valid: true };
+}
+
+const UNSAFE_CSS_URL_CHARS = /["'()\\;<>\s\r\n]/;
+
+/**
+ * Sanitizes cursor asset URLs so CSS `cursor: url("...")` cannot be escaped or
+ * injected with arbitrary styles, data URLs, or scripts.
+ */
+export function sanitizeCursorAssetUrl(raw?: string | null): string {
+  const trimmed = (raw || "").trim();
+  if (!trimmed || UNSAFE_CSS_URL_CHARS.test(trimmed)) {
+    return "";
+  }
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && trimmed.length >= 2) {
+    return trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+export function validateCursorAssetUrl(raw: string): ValidationResult {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: true };
+  }
+  if (!sanitizeCursorAssetUrl(trimmed)) {
+    return {
+      valid: false,
+      error:
+        "Use an uploaded /uploads/ path, /assets/ path, or safe https:// URL without spaces or quotes.",
+    };
+  }
   return { valid: true };
 }
 

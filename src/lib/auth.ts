@@ -61,6 +61,12 @@ interface StealthPassPayload {
   exp: number;
 }
 
+interface DeviceChallengePayload {
+  kind: "device_ecdsa_challenge";
+  nonce: string;
+  exp: number;
+}
+
 const SCRYPT_PREFIX = "scrypt";
 
 function getSecret(): string | null {
@@ -212,6 +218,59 @@ export function createStealthUnlockPass(): string {
     kind: "stealth_unlock_pass",
     exp: Date.now() + 1000 * 60 * 10, // 10 minutes
   });
+}
+
+/**
+ * Generates a short-lived signed challenge for silent WebCrypto ECDSA device re-recognition.
+ */
+export function createDeviceChallengeToken(): string | null {
+  if (!isSessionSecretConfigured()) return null;
+  return signPayload({
+    kind: "device_ecdsa_challenge",
+    nonce: crypto.randomBytes(16).toString("base64url"),
+    exp: Date.now() + 1000 * 60 * 3, // 3 minutes
+  });
+}
+
+export function verifyDeviceChallengeToken(token?: string | null): boolean {
+  if (!token) return false;
+  const payload = verifySignedToken<DeviceChallengePayload>(token);
+  return (
+    payload?.kind === "device_ecdsa_challenge" &&
+    typeof payload.nonce === "string" &&
+    payload.nonce.length >= 16
+  );
+}
+
+/**
+ * Verifies an IEEE P1363 ECDSA P-256 SHA-256 signature created by `crypto.subtle.sign`
+ * against the stored base64 SPKI public key on a trusted device record.
+ */
+export function verifyEcdsaDeviceSignature(params: {
+  publicKeySpkiBase64: string;
+  challenge: string;
+  signatureBase64Url: string;
+}): boolean {
+  try {
+    const keyObject = crypto.createPublicKey({
+      key: Buffer.from(params.publicKeySpkiBase64, "base64"),
+      format: "der",
+      type: "spki",
+    });
+    const sigBytes = Buffer.from(params.signatureBase64Url, "base64url");
+    if (sigBytes.length < 32) return false;
+    return crypto.verify(
+      "sha256",
+      Buffer.from(params.challenge, "utf8"),
+      {
+        key: keyObject,
+        dsaEncoding: "ieee-p1363",
+      },
+      sigBytes
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function setSessionCookie(

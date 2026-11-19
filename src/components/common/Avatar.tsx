@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { ImageTransform } from "@/types/portfolio";
 import { usePortfolio } from "@/context/PortfolioContext";
 import { isIdentityImageTransform } from "@/lib/imageTransform";
+import { dispatchJumpscareTrigger } from "@/lib/jumpscare";
+import { useLiquidRipple } from "@/lib/useLiquidRipple";
+import { LiquidSvgFilter } from "@/components/motion/LiquidSvgFilter";
 import { TransformedImage } from "@/components/ui/TransformedImage";
 import { cn } from "@/lib/utils";
 
@@ -21,11 +24,44 @@ export function Avatar({
 }: AvatarProps) {
   const { appearance, profile } = usePortfolio();
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const tapStreakRef = useRef<{ count: number; lastMs: number }>({
+    count: 0,
+    lastMs: 0,
+  });
+
+  const handleAvatarTap = () => {
+    if (
+      !appearance.jumpscareEnabled ||
+      (appearance.jumpscareTrigger || "secret-taps") !== "secret-taps"
+    ) {
+      return;
+    }
+    const now = Date.now();
+    const withinWindow = now - tapStreakRef.current.lastMs < 2500;
+    const nextCount = withinWindow ? tapStreakRef.current.count + 1 : 1;
+    tapStreakRef.current = { count: nextCount, lastMs: now };
+    if (nextCount >= 5) {
+      tapStreakRef.current = { count: 0, lastMs: 0 };
+      dispatchJumpscareTrigger("secret-taps", true);
+    }
+  };
+  const {
+    filterId,
+    turbRef,
+    dispRef,
+    filterActive,
+    baseFrequencyDefault,
+    pointerHandlers,
+  } = useLiquidRipple({
+    baseFreqX: 0.011,
+    baseFreqY: 0.015,
+    maxScale: 22,
+    enterImpulse: 16,
+  });
   const useTransformedView =
     Boolean(transform) && !isIdentityImageTransform(transform, "squircle");
 
   const hasCustomImage = Boolean(imageSrc) && failedSrc !== imageSrc;
-  const alwaysColor = appearance.imageColorMode === "always-color";
   const showRimGlow = appearance.heroRimGlow;
   const displayAlt = profile.fullName || profile.name || "Portfolio portrait";
   const monogramLabel = profile.monogram || "P";
@@ -33,11 +69,21 @@ export function Avatar({
 
   return (
     <div
+      {...pointerHandlers}
+      onClick={handleAvatarTap}
       className={cn(
         "relative h-[clamp(17.5rem,44svh,26rem)] sm:h-[clamp(18rem,52svh,34rem)] lg:h-[clamp(22rem,62svh,46rem)] [@media(max-height:640px)]:h-[clamp(14rem,47svh,21rem)] aspect-3/4 max-w-[92vw] flex items-end justify-center select-none pointer-events-auto group",
         className
       )}
     >
+      <LiquidSvgFilter
+        active={filterActive}
+        filterId={filterId}
+        baseFrequency={baseFrequencyDefault}
+        turbRef={turbRef}
+        dispRef={dispRef}
+      />
+
       {/* Subtle cinematic rim glow behind avatar */}
       {showRimGlow && (
         <div className="absolute inset-x-6 bottom-8 top-1/5 rounded-full bg-[radial-gradient(ellipse_at_bottom,var(--bg-badge-highlight)_0%,transparent_72%)] pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity duration-700" />
@@ -45,7 +91,10 @@ export function Avatar({
 
       {/* Real Photo Cutout or Dynamic Profile Fallback */}
       {hasCustomImage ? (
-        <div className="relative w-full h-full flex items-end justify-center">
+        <div
+          className="relative w-full h-full flex items-end justify-center"
+          style={filterActive ? { filter: `url(#${filterId})` } : undefined}
+        >
           {useTransformedView ? (
             <TransformedImage
               src={imageSrc}
@@ -57,11 +106,7 @@ export function Avatar({
               loading="eager"
               fetchPriority="high"
               className="w-full h-full"
-              imgClassName={cn(
-                "[@media(hover:hover)_and_(pointer:fine)]:contrast-105 transition-[transform,filter] duration-700 ease-out",
-                !alwaysColor &&
-                  "[@media(hover:hover)_and_(pointer:fine)]:grayscale [@media(hover:hover)_and_(pointer:fine)]:group-hover:grayscale-0"
-              )}
+              imgClassName="[@media(hover:hover)_and_(pointer:fine)]:contrast-105 transition-transform duration-700 ease-out"
               onError={() => setFailedSrc(imageSrc)}
             />
           ) : (
@@ -72,11 +117,7 @@ export function Avatar({
               loading="eager"
               fetchPriority="high"
               sizes="(max-width: 640px) 70vw, (max-width: 1024px) 45vw, 32vw"
-              className={cn(
-                "object-contain object-bottom [@media(hover:hover)_and_(pointer:fine)]:contrast-105 group-hover:scale-[1.02] transition-[transform,filter] duration-700 ease-out",
-                !alwaysColor &&
-                  "[@media(hover:hover)_and_(pointer:fine)]:grayscale [@media(hover:hover)_and_(pointer:fine)]:group-hover:grayscale-0"
-              )}
+              className="object-contain object-bottom [@media(hover:hover)_and_(pointer:fine)]:contrast-105 group-hover:scale-[1.02] transition-transform duration-700 ease-out"
               onError={() => setFailedSrc(imageSrc)}
             />
           )}
@@ -102,8 +143,8 @@ export function Avatar({
         </div>
       )}
 
-      {/* Gradient Melt Base — Melts the portrait base seamlessly into canvas */}
-      <div className="avatar-bottom-melt absolute inset-x-0 bottom-0 h-20 sm:h-28 lg:h-36 bg-linear-to-b from-transparent via-[#08080a]/80 to-[#08080a] pointer-events-none z-20" />
+      {/* Gradient Melt Base — Crisp bottom seam fade without veiling portrait or name */}
+      <div className="avatar-bottom-melt absolute inset-x-0 bottom-0 h-8 sm:h-12 lg:h-14 bg-linear-to-b from-transparent via-[#08080a]/50 to-[#08080a] pointer-events-none z-20" />
     </div>
   );
 }

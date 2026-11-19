@@ -462,56 +462,63 @@ flowchart TD
 ## 4. Public Portfolio System & Feature Breakdown
 
 ### 1. Viewport Curtain Preloader (`Preloader.tsx`)
-- **Full-Viewport Curtain:** Sits at `z-200` fixed over the viewport, preventing flash-of-unstyled-content (FOUC) while fonts and assets initialize.
-- **Tabular Numeric Counter:** Animates smoothly from `0%` to `100%` using direct DOM text node manipulation to avoid per-frame React re-renders.
-- **GPU ScaleX Progress Bar:** Hardware-accelerated progress line mutating only `transform: scaleX(...)`.
-- **Curtain Wipe Exit:** GSAP timeline executes a vertical curtain wipe revealing the hero section and unlocking the Lenis scroll container.
+- **Configurable Preload Policy:** Controlled via Appearance Studio (`once-per-session`, `always`, or `off`) and bypassed automatically on Reduced Motion and secondary routes (`/admin`, `/projects/[id]`, `/offline`).
+- **Tabular Numeric Counter & GPU Wipe:** Animates smoothly from `0%` to `100%` via direct DOM refs (`requestAnimationFrame`), advances a hardware-accelerated `scaleX` progress bar, and exits via a pure GPU `translate3d(0, -100%, 0)` transition without per-frame React re-renders.
 
-### 2. Cinematic Hero Section (`Hero.tsx`)
+### 2. Ambient WebGL Starfield & Custom Cursor (`StarfieldCanvas.tsx`, `webglStarfield.ts`)
+- **Single-Pass WebGL2/WebGL1 Shader Canvas:** Renders depth-layered point-sprite stars and a corner nebula backdrop synchronized dynamically with active theme (`dark`/`light`) and CSS `--accent` tokens (`MutationObserver` + `APPEARANCE_SYNC_EVENT`).
+- **Graceful Hardware Degradation:** Initializes with `failIfMajorPerformanceCaveat: true`, caps DPR, scales star count on narrow viewports, pauses automatically on hidden tabs or Reduced Motion, and falls back to pure CSS obsidian gradients cleanly when hardware WebGL is unavailable.
+- **Custom Cursor Engine (`useCustomCursor` & `cursorUpload.ts`):** Scoped strictly to fine desktop pointers (`(hover: hover) and (pointer: fine)`), supporting custom `.png`, `.webp`, and `.cur` cursor images with per-pixel hotspot calibration (`customCursorHotspotX/Y`) and non-destructive transform matrices.
+
+### 3. Cinematic Hero Section (`Hero.tsx`)
 - **Kinetic Split-Text Stagger:** Letter-by-letter and line-by-line staggered reveal for owner name and professional titles.
-- **Interactive Avatar Cutout (`Avatar.tsx`):** Layered portrait cutout featuring bottom obsidian vignette gradient and dynamic fallback handling.
-- **In-App Resume CTA:** Prewarms the resume PDF on mouse hover or touch focus; on click, opens the custom in-app viewer modal rather than navigating to a third-party tab.
+- **Interactive Avatar Cutout (`Avatar.tsx`):** Layered portrait cutout with non-destructive framing (`TransformedImage.tsx`), dynamic fallback handling, and optional 5-tap Easter egg trigger hook.
+- **In-App Resume & Contact CTAs:** Prewarms the resume PDF on mouse hover or touch focus; on click, opens the custom in-app viewer modal rather than navigating to a third-party tab. The primary **Contact Me** / **Get In Touch** buttons also honor the optional Jumpscare Easter Egg trigger when enabled.
 
-### 3. In-App PDF Resume Viewer (`ResumeViewerModal.tsx` & `/api/resume`)
+### 4. In-App PDF Resume Viewer (`ResumeViewerModal.tsx` & `/api/resume`)
 - **SSRF-Guarded Proxy (`/api/resume`):** Fetches external resume PDF assets server-side with strict host allowlisting (Supabase CDN, Google Drive, raw document hosts). Explicitly blocks loopback (`127.0.0.1`, `localhost`) and private RFC1918 IP addresses.
 - **Magic-Byte Inspection:** Verifies the `%PDF-` binary signature to prevent MIME spoofing.
 - **Modal Controls:** Features a Fullscreen Toggle (`Maximize2` / `Minimize2`), A4 Skeleton document loading placeholder, direct PDF download trigger, and responsive iframe containment.
 - **CSP Integration:** Configured in `next.config.ts` with `frame-src 'self' blob: https://drive.google.com` to eliminate X-Frame-Options blocking.
 
-### 4. Marquee Principles Ticker (`Marquee.tsx`)
+### 5. Marquee Principles Ticker (`Marquee.tsx`)
 - High-velocity, infinite marquee scrolling core architectural mindsets (*"Architect The Database • Build End-To-End • Data-Driven Thinking"*).
-- Hardware-accelerated infinite CSS keyframe translation running smoothly at 120 FPS.
+- Hardware-accelerated infinite CSS keyframe translation tuned via `marqueeSpeed` (`slow`, `normal`, `fast`) running smoothly at 120 FPS.
 
-### 5. Origin Story & 4 Core Pillars (`Story.tsx`)
+### 6. Origin Story & 4 Core Pillars (`Story.tsx`)
 - Narrative detailing Lou's experience stepping up as the sole lead developer across Database, Backend, and Frontend.
-- 4 interactive pillar cards with animated hover accent borders highlighting architectural discipline.
+- 4 interactive pillar cards with animated hover accent borders highlighting architectural discipline and `ScrollReveal` async viewport entrances.
 
-### 6. Full-Stack & Analytics Bento Grid (`TechBento.tsx`)
+### 7. Full-Stack & Analytics Bento Grid (`TechBento.tsx`)
 - Interactive 4-layer bento grid categorized into:
   1. *Database & Architecture* (PostgreSQL, MySQL, Supabase, Schemas)
   2. *Backend & APIs* (Node.js, Next.js API Routes, RESTful services, Authentication)
   3. *Frontend & UI/UX* (React 19, Tailwind CSS v4, GSAP, Lenis)
   4. *Business Analytics & Tools* (Funnel tracking, Data Modeling, Git, Vitest)
-- Live category filter tabs and visual "Highlight" badges configured from the CMS.
+- Live category filter tabs, Prev/Next keyboard-accessible controls (`label-content-name-mismatch` compliant), and visual "Highlight" badges configured from the CMS.
 
-### 7. Selected Systems & Projects Showcase (`Projects.tsx`)
+### 8. Selected Systems & Projects Showcase (`Projects.tsx`)
 - Offset 2-column layout showcasing major systems with live URLs, GitHub repositories, and outcome metrics.
-- **Liquid Image Hover Effect (`LiquidImage.tsx`):** SVG turbulence displacement filter (`feTurbulence` + `feDisplacementMap`) triggering fluid distortion on fine-pointer desktop hover.
+- **Liquid Image Hover Effect (`LiquidImage.tsx` & `useLiquidRipple.ts`):** SVG turbulence displacement filter (`feTurbulence` + `feDisplacementMap`) triggering fluid distortion on fine-pointer desktop hover.
 - **Case Study Subsystem (`/projects/[id]` & `ProjectCaseStudyView.tsx`):** Deep dive into the Problem, Engineered Solution, Impact Metrics, and Architecture.
 
-### 8. Impact Counters (`Impact.tsx`)
-- By-the-numbers metrics counter celebrating key achievements (100% Stack Ownership, BSIT Class of 2026, 3+ Production Systems, 60-120 FPS Target).
+### 9. Impact Counters (`Impact.tsx` & `CountUpMetric.tsx`)
+- By-the-numbers scalar metrics counter (`requestAnimationFrame` count-up while leaving non-scalar ranges static) celebrating key achievements (100% Stack Ownership, BSIT Class of 2026, 3+ Production Systems, 60-120 FPS Target).
 
-### 9. Interactive Contact Outbox (`Contact.tsx`)
+### 10. Interactive Contact Outbox (`Contact.tsx`)
 - In-site messaging interface eliminating cumbersome `mailto:` client redirects.
-- Client-side validation powered by Zod with live required/valid field indicators.
+- Client-side validation powered by Zod (`inputValidation.ts`) with live required/valid field indicators and offline queueing (`OfflineManager.tsx` auto-flush on reconnect).
 - **Spam Prevention:** Invisible honeypot field traps automated spam bots without user-facing CAPTCHAs.
 - Dual-dispatch pipeline: stores submissions in the database inbox and dispatches instantaneous email alerts to Lou's personal inbox via Resend.
 
-### 10. BrandPortal Stealth Gateway (`BrandPortal.tsx` & `BrandPortalOrb.tsx`)
-- Draggable, persistent floating orb functioning as an administrative gateway.
-- Click triggers the private `/admin` authentication gate.
-- Clean stealth behavior with zero conflicting scroll-to-top actions.
+### 11. BrandPortal Stealth Gateway (`BrandPortal.tsx` & `BrandPortalOrb.tsx`)
+- Draggable, persistent floating orb functioning as an administrative gateway with cryptographic device recovery (`signExistingDeviceChallenge`).
+- Click triggers the private `/admin` authentication gate or workspace status hub cleanly without conflicting with scroll-to-top actions.
+
+### 12. Optional Prank / Jumpscare Easter Egg (`JumpscareController.tsx`, `jumpscare.ts`, `jumpscareAudio.ts`)
+- **Recruiter-Safe Toggle:** Disabled (`false`) by default and toggled live from Admin Appearance Studio (`Live on Public Site` vs `Paused · Recruiter Safe`).
+- **4 Trigger Strategies:** `secret-taps` (Portrait 5x tap, typing `"boo"`, or footer pill), `get-in-touch` (fires on desktop navbar **Get In Touch** & mobile hero **Contact Me** while pausing contact smooth-scroll), `prank-link` (fires silently on first click when visited via `/?prank=1`), and `first-click`.
+- **Zero-Delay RAM Audio & Full-Screen Visuals:** Pre-fetches configured audio clips (`.mp3`/`.wav`/`.ogg`) immediately into an in-RAM `blob:` `HTMLAudioElement`, trims leading quiet encoder padding off-band via `scheduleDeferredOnsetDetection` (with `sessionStorage` onset caching & single-pass channel reads to avoid browser farbling stalls), preserves explicit `0%` mute (`resolveJumpscareVolume`), and falls back cleanly to a synthesized Web Audio sting or reduced-motion accessible toast when `data-motion="reduced"` is active.
 
 ---
 
@@ -530,7 +537,7 @@ The private management dashboard gives Lou full runtime control over the entire 
    - Rebalanced 2-column layout displaying vector QR code on the left and PIN/security permissions on the right.
    - Requires optional desktop approval before trust is granted.
    - Clean terminal status handling (`approved`, `cancelled`, `expired`).
-6. **Trusted Devices Manager:** Hardware fingerprint inspector displaying platform, browser, OS, GPU renderer, public key thumbprint, and IP. Features a 360px height-limited scroll area with 3-item incremental pagination ("Load more").
+6. **Trusted Devices Manager:** Hardware fingerprint inspector (`deviceTelemetry.ts`) displaying platform, browser, OS, GPU renderer, ECDSA P-256 public key thumbprint, and IP. Features a constrained scrollable list with incremental pagination.
 
 ### B. Executive Business Analytics & Telemetry Engine
 1. **Cookieless Event Ingest (`/api/analytics`):** First-party telemetry recording page views, chapter scroll depth, project clicks, and goal conversions with zero invasive tracking cookies.
@@ -542,16 +549,16 @@ The private management dashboard gives Lou full runtime control over the entire 
 4. **Data Exports:** 1-click export of analytics telemetry to formatted CSV, raw JSON, or an Executive Text Brief for stakeholder review.
 
 ### C. Content Management Modules
-1. **Profile & Hero Manager:** Edit name, headline, bio pitch, availability status, contact email, social handles, and resume URL; crop and upload new hero cutout avatars.
+1. **Profile & Hero Manager:** Edit name, headline, bio pitch, availability status, PSGC Philippine address selector (`PsgcAddressFields.tsx` + `/api/psgc`), contact email, social handles, and resume URL; crop and upload new hero cutout avatars & monograms.
 2. **Story & Principles Manager:** Edit the 4 origin pillars, story narrative paragraphs, and infinite marquee ticker statements.
 3. **Skills & Bento Manager:** Reorder and curate skills across all 4 system layers; toggle priority highlight pills.
 4. **Projects CRUD Manager:** Create, update, reorder, or draft systems; edit technical stack tags, problem/solution narratives, and metric results.
 5. **Message Inbox & Resend Dispatcher:** Inspect incoming contact submissions; mark as read, star, or delete; compose and send direct email replies through Resend from inside the dashboard.
 6. **Settings Hub & Snapshot Vault:**
-   - *Appearance Studio:* Customize accent themes, glow intensities, and typography pairings.
-   - *Security & Access:* Manage trusted devices, TOTP 2FA, session resets, and audit trails.
-   - *Database & Snapshots:* 1-click database synchronization and automated Snapshot Vault checkpoints allowing instant rollback to safe states.
-   - *Danger Zone:* Factory reset to initial seed defaults with automatic pre-reset snapshot creation.
+   - *Appearance Studio (`AppearanceSettings.tsx`):* Customize theme mode, accent presets/custom hex, font pairings, corner radii, motion mode, WebGL starfield, custom cursor uploads (`CursorUploadSettings.tsx`), and the Jumpscare Easter Egg (`JumpscareSettings.tsx`) with live post-commit draft previewing.
+   - *Security & Access (`SecurityAccessSettings.tsx`):* Manage trusted devices, TOTP 2FA, session resets, and audit trails.
+   - *Offline & PWA (`OfflinePwaSettings.tsx`):* Inspect service worker caching (`sw.js`), pre-cache triggers, and offline inquiry outbox status.
+   - *Database & Snapshots / Danger Zone:* 1-click database synchronization, automated Snapshot Vault checkpoints for instant rollback, and factory reset protection.
 
 ---
 
@@ -567,6 +574,9 @@ myPortfolio/
 ├── package.json                       # Dependencies & execution scripts
 ├── playwright.config.ts               # End-to-end testing configuration
 ├── vitest.config.mts                  # Unit & integration testing configuration
+├── public/
+│   ├── icons/                         # PWA app icons
+│   └── sw.js                          # Offline PWA Service Worker cache & outbox sync
 ├── supabase/
 │   └── schema.sql                     # Production PostgreSQL DDL & RLS policies
 ├── data/                              # Local JSON persistence store
@@ -574,9 +584,9 @@ myPortfolio/
 │   └── admin-security.json            # Device store, pairings, and audit logs
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx                 # Root layout, fonts, and PortfolioProvider
+│   │   ├── layout.tsx                 # Root layout, fonts, QueryProvider & PortfolioProvider
 │   │   ├── page.tsx                   # Public single-page orchestrator
-│   │   ├── globals.css                # Fluid CSS tokens & Tailwind directives
+│   │   ├── globals.css                # Fluid CSS tokens, cursor vars & scare keyframes
 │   │   ├── manifest.ts                # Dynamic Web App Manifest
 │   │   ├── sitemap.ts                 # Dynamic SEO XML sitemap
 │   │   ├── admin/
@@ -588,27 +598,32 @@ myPortfolio/
 │   │       ├── analytics/route.ts     # Public telemetry ingestion endpoint
 │   │       ├── contact/route.ts       # Zod-validated inbox & Resend email dispatch
 │   │       ├── github/route.ts        # GitHub stats proof proxy
+│   │       ├── portfolio/route.ts     # Public portfolio JSON endpoint (no-store)
+│   │       ├── psgc/route.ts          # Philippine Standard Geographic Code proxy
 │   │       ├── resume/route.ts        # SSRF-guarded same-origin PDF proxy
-│   │       ├── portfolio/route.ts     # Public portfolio JSON endpoint
 │   │       └── admin/                 # Private CMS endpoints (auth, devices, CRUD, upload)
 │   ├── components/
 │   │   ├── admin/                     # Modular CMS partials (Analytics, Profile, Projects, Inbox)
 │   │   │   ├── analytics/             # Command cards, KPI grids, funnel charts, event feeds
 │   │   │   ├── layout/                # Admin navbar, sidebar, global search, profile dropdown
-│   │   │   └── settings/              # Security, devices, TOTP, appearance, backups
-│   │   ├── motion/                    # Preloader, Lenis SmoothScroll, BrandPortal, LiquidImage
+│   │   │   └── settings/              # Security, Appearance, CursorUpload, Jumpscare, Backups
+│   │   ├── appearance/                # AppearanceRuntimeSync (CSS tokens & cross-tab sync)
+│   │   ├── motion/                    # Preloader, SmoothScroll, StarfieldCanvas, ScrollReveal,
+│   │   │                              # CountUpMetric, BrandPortal, LiquidImage, JumpscareController
+│   │   ├── pwa/                       # OfflineManager, OfflineBanner, FaviconSync
 │   │   ├── sections/                  # Hero, Marquee, Story, TechBento, Projects, Impact, Contact
 │   │   ├── common/                    # Avatar, MonogramBadge, ResumeViewerModal
 │   │   └── ui/                        # Atomic primitives: Button, ModalShell, ScrollArea, Tooltip
-│   │       └── fields/                # Strict validated form fields (Name, Email, Subject, etc.)
+│   │       └── fields/                # Strict validated form fields (Name, Email, PSGC, etc.)
 │   ├── context/
-│   │   └── PortfolioContext.tsx       # Live client-side state & analytics context
-│   ├── lib/                           # Database adapter, auth, security, crypto, validation
-│   ├── data/                          # Initial seed defaults (projects, skills, pillars, principles)
+│   │   └── PortfolioContext.tsx       # React Query + localStorage cross-tab live portfolio state
+│   ├── lib/                           # Database adapter, auth, security, crypto, validation,
+│   │                                  # webglStarfield, cursorUpload, jumpscare, jumpscareAudio
+│   ├── data/                          # Initial seed defaults (projects, skills, pillars, appearance)
 │   └── types/                         # TypeScript interfaces (portfolio, security, analytics)
 └── tests/
-    ├── e2e/                           # Playwright end-to-end browser specifications
-    └── unit/                          # Vitest unit test suites
+    ├── e2e/                           # Playwright specs (public-portfolio, admin-cms)
+    └── unit/                          # Vitest suites (auth, security, totp, jumpscare, starfield...)
 ```
 
 ---
@@ -617,20 +632,20 @@ myPortfolio/
 
 ### Security Perimeter
 1. **SSRF Guarded Proxy:** Any external URL requested by `/api/resume` is validated against strict hostname allowlists with DNS resolution blocking private RFC1918 subnets and loopback addresses.
-2. **File Upload Hardening:** `POST /api/admin/upload` inspects binary magic bytes (`image/jpeg`, `image/png`, `image/webp`), enforces size ceilings (5 MB), and blocks executable `.svg` vectors to prevent stored XSS attacks.
-3. **CSP & Security Headers:** `next.config.ts` injects strict `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Referrer-Policy: strict-origin-when-cross-origin`.
+2. **Binary Upload Hardening (`uploadSecurity.ts`):** `POST /api/admin/upload` inspects binary magic bytes across images (`.png`, `.jpg`/`.jpeg`, `.webp`, `.avif`, `.ico`, `.cur`), documents (`.pdf`), and jumpscare audio clips (`.mp3`, `.wav`, `.ogg`), blocking executable/SVG vectors to prevent stored XSS attacks.
+3. **CSP & Security Headers:** `next.config.ts` injects strict `Content-Security-Policy` (including `media-src 'self' blob: data: https://*.supabase.co` and `blob:` in `connect-src` for pre-buffered audio blobs), `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 4. **Input Sanitization:** Every string input passed to the CMS or contact endpoint is sanitized with Zod schemas, stripping HTML tags and control characters.
 
 ### Performance & Zero-Lag Enforcement
-1. **Composite-Only Transforms:** Animations strictly manipulate `transform` (`translate3d`, `scale`) and `opacity`. Never animate layout dimensions (`width`, `height`, `margin`, `padding`).
-2. **GSAP + Lenis RAF Sync:** Lenis drives the scroll thread and directly delivers delta values to GSAP's ticker with lag smoothing enabled:
+1. **Composite-Only Transforms:** Animations strictly manipulate `transform` (`translate3d`, `scale`, `scaleX`) and `opacity`. Never animate layout dimensions (`width`, `height`, `margin`, `padding`).
+2. **Zero Forced Reflow (`ScrollReveal.tsx`):** Reads geometry asynchronously inside `IntersectionObserver` callbacks rather than calling synchronous `getBoundingClientRect()` during React commit, eliminating main-thread reflow stalls on hydration.
+3. **GSAP + Lenis RAF Sync:** Lenis drives the scroll thread and directly delivers delta values to GSAP's ticker with lag smoothing disabled:
    ```typescript
    lenis.on('scroll', ScrollTrigger.update);
    gsap.ticker.add((time) => lenis.raf(time * 1000));
    gsap.ticker.lagSmoothing(0);
    ```
-3. **Memory Management:** All GSAP ScrollTriggers and timelines are scoped inside `gsap.context()` to guarantee clean disposal on component unmount.
-4. **0% Idle CPU Usage:** Offscreen interactive components pause animations via `IntersectionObserver` when scrolled outside the active viewport.
+4. **Memory & Thread Discipline:** Heavy audio onset trimming (`jumpscareAudio.ts`) avoids repeated `getChannelData()` crossings in microtasks, caches onset timestamps in `sessionStorage`, and runs off the startup hot path; `StarfieldCanvas.tsx` uses `failIfMajorPerformanceCaveat: true`, pauses on hidden tabs, and yields cleanly when Reduced Motion is active.
 
 ---
 
@@ -660,17 +675,18 @@ myPortfolio/
    Open `http://localhost:3000` to preview the public portfolio. Access `/admin` to log into the CMS.
 
 ### Automated Testing Suite
-Run the full test suite before any deployment:
+Run all quality checks before any deployment:
 ```bash
+# Type check & linter
+npx tsc --noEmit
+npm run lint
+
 # Run unit and integration tests (Vitest)
 npm run test
 
-# Run end-to-end browser tests (Playwright)
+# Run production build (Webpack) & Playwright E2E suite
+npm run build
 npm run test:e2e
-
-# Run linter and type checker
-npm run lint
-npx tsc --noEmit
 ```
 
 ### Production Build & Vercel Deployment

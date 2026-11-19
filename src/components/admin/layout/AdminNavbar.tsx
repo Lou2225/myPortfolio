@@ -48,6 +48,7 @@ export function AdminNavbar({
               imageUrl={db.profile.monogramImageUrl}
               transform={db.profile.monogramTransform}
               alt="Portfolio CMS monogram"
+              loading="eager"
               className={cn(
                 "w-8.5 h-8.5 sm:w-10 sm:h-10 rounded-full text-brand-contrast font-display text-sm tracking-wider transition-all duration-300",
                 db.profile.monogramImageUrl

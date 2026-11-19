@@ -71,6 +71,8 @@ import {
   AppearancePreviewCard,
   FONT_PAIRING_STYLE_MAP,
 } from "./AppearancePreviewCard";
+import { CursorUploadSettings } from "./CursorUploadSettings";
+import { JumpscareSettings } from "./JumpscareSettings";
 import type { SettingsFeedback } from "./types";
 import type {
   AppearanceConfig,
@@ -333,6 +335,15 @@ export function AppearanceSettings({
     [draft, savedSnapshot]
   );
 
+  const hasLivePreviewRef = useRef(false);
+
+  // Sync live WYSIWYG preview cleanly post-commit (never inside a state updater)
+  useEffect(() => {
+    if (!isDirty && !hasLivePreviewRef.current) return;
+    hasLivePreviewRef.current = isDirty;
+    setPreviewAppearance(isDirty ? draft : null);
+  }, [draft, isDirty, setPreviewAppearance]);
+
   useBrandPortalWorkspaceSync({
     moduleId: "settings-appearance",
     moduleLabel: "Appearance & Theme",
@@ -343,13 +354,9 @@ export function AppearanceSettings({
   const updateDraft = useCallback(
     (updater: (prev: AppearanceConfig) => AppearanceConfig) => {
       onFeedback(null);
-      setDraft((prev) => {
-        const next = updater(prev);
-        setPreviewAppearance(next);
-        return next;
-      });
+      setDraft((prev) => updater(prev));
     },
-    [onFeedback, setPreviewAppearance]
+    [onFeedback]
   );
 
   const handleSelectSiteDefaultTheme = (
@@ -1130,7 +1137,7 @@ export function AppearanceSettings({
 
         <div className="space-y-2">
           <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-(--text-muted) block">
-            Media &amp; Portrait Color Grade
+            Project Media Color Grade
           </span>
           <SegmentedPills<ImageColorMode>
             value={draft.imageColorMode}
@@ -1149,6 +1156,14 @@ export function AppearanceSettings({
       {/* Fine-Grained Feature Toggles */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 pt-2 border-t border-(--border-subtle)">
         <ToggleRow
+          label="Ambient Starfield Tunnel (WebGL)"
+          description="Interactive deep-space starfield with scroll dive, barrel roll, and cursor repulsion behind public sections."
+          checked={draft.ambientStarfield !== false}
+          onToggle={(ambientStarfield) =>
+            updateDraft((prev) => ({ ...prev, ambientStarfield }))
+          }
+        />
+        <ToggleRow
           label="Smooth Momentum Scroll (Lenis)"
           description="Interpolated Lenis + GSAP ScrollTrigger scroll physics on the public portfolio."
           checked={draft.smoothScroll}
@@ -1166,7 +1181,7 @@ export function AppearanceSettings({
         />
         <ToggleRow
           label="Liquid SVG Turbulence Hover"
-          description="Organic GPU displacement hover wave across showcase project thumbnails."
+          description="Organic GPU displacement ripple when the pointer passes over your hero portrait & showcase project images."
           checked={draft.liquidDistortion}
           onToggle={(liquidDistortion) =>
             updateDraft((prev) => ({ ...prev, liquidDistortion }))
@@ -1181,6 +1196,20 @@ export function AppearanceSettings({
           }
         />
       </div>
+
+      <CursorUploadSettings
+        draft={draft}
+        savedSnapshot={savedSnapshot}
+        onUpdateDraft={updateDraft}
+        onFeedback={onFeedback}
+      />
+
+      <JumpscareSettings
+        draft={draft}
+        savedSnapshot={savedSnapshot}
+        onUpdateDraft={updateDraft}
+        onFeedback={onFeedback}
+      />
     </div>
   );
 
@@ -1370,94 +1399,95 @@ export function AppearanceSettings({
       <div
         data-cascade
         data-sticky-ceiling="true"
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4 lg:sticky lg:top-16 [@media(max-height:620px)]:static z-20 shadow-lg"
+        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 lg:p-6 space-y-3 sm:space-y-4 lg:sticky lg:top-16 [@media(max-height:620px)]:static z-20 shadow-xl"
       >
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-(--text-accent)">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
-                  <span>Theme &amp; Token Studio</span>
-                </span>
-                {isDirty && (
-                  <StatusPill
-                    label="Unsaved Draft"
-                    variant="warning"
-                    size="xs"
+        <div className="flex flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-(--text-accent)">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
+                <span>Theme &amp; Token Studio</span>
+              </span>
+              {isDirty && (
+                <StatusPill
+                  label="Unsaved Draft"
+                  variant="warning"
+                  size="xs"
+                />
+              )}
+            </div>
+
+            <h2 className="font-display text-lg sm:text-2xl uppercase tracking-tight leading-tight text-(--text-primary)">
+              Design Token, Theme &amp; Motion{" "}
+              <span className="whitespace-nowrap">
+                Studio
+                <span className="inline-flex align-middle ml-1.5">
+                  <InfoTooltip
+                    label="Live preview vs published defaults"
+                    content="Every tweak previews instantaneously across Admin & the Stage Preview without modifying the database until you confirm Save & Publish."
                   />
-                )}
-              </div>
-
-              <h2 className="font-display text-lg sm:text-2xl uppercase tracking-tight leading-tight text-(--text-primary)">
-                Design Token, Theme &amp; Motion{" "}
-                <span className="whitespace-nowrap">
-                  Studio
-                  <span className="inline-flex align-middle ml-1.5">
-                    <InfoTooltip
-                      label="Live preview vs published defaults"
-                      content="Every tweak previews instantaneously across Admin & the Stage Preview without modifying the database until you confirm Save & Publish."
-                    />
-                  </span>
                 </span>
-              </h2>
-            </div>
-
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-(--radius-control) bg-(--bg-badge-highlight) border border-brand/40 flex items-center justify-center shrink-0 text-(--text-accent)">
-              <Palette className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
+              </span>
+            </h2>
           </div>
 
+          <Palette
+            className="w-5 h-5 text-(--text-accent) shrink-0 mt-0.5 sm:mt-0"
+            aria-hidden="true"
+          />
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2.5 sm:pt-3 border-t border-(--border-subtle)/70">
           <p className="text-[11px] sm:text-xs text-(--text-muted) leading-snug">
             <span className="sm:hidden">Previews live across components · Publish to save</span>
             <span className="hidden sm:inline">
               Changes preview live across every component. Publish to persist site-wide defaults.
             </span>
           </p>
-        </div>
 
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto shrink-0">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={saving}
-            onClick={() => setConfirmResetOpen(true)}
-            className="w-full sm:w-auto text-(--text-secondary) border border-(--border-subtle) sm:border-transparent"
-          >
-            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-            <span>Reset Defaults</span>
-          </Button>
-
-          {isDirty && (
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto shrink-0">
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="sm"
               disabled={saving}
-              onClick={handleDiscard}
-              className="w-full sm:w-auto"
+              onClick={() => setConfirmResetOpen(true)}
+              className="w-full sm:w-auto text-(--text-secondary) border border-(--border-subtle) sm:border-transparent"
             >
-              <span>Discard Draft</span>
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <span>Reset Defaults</span>
             </Button>
-          )}
 
-          <div className={cn(isDirty && "col-span-2 sm:col-span-1")}>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              disabled={!isDirty || saving}
-              onClick={() => setConfirmSaveOpen(true)}
-              className="w-full sm:w-auto"
-            >
-              {saving ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-              ) : (
-                <Save className="w-3.5 h-3.5 shrink-0" />
-              )}
-              <span>{saving ? "Publishing..." : "Save & Publish"}</span>
-            </Button>
+            {isDirty && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={saving}
+                onClick={handleDiscard}
+                className="w-full sm:w-auto"
+              >
+                <span>Discard Draft</span>
+              </Button>
+            )}
+
+            <div className={cn(isDirty && "col-span-2 sm:col-span-1")}>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={!isDirty || saving}
+                onClick={() => setConfirmSaveOpen(true)}
+                className="w-full sm:w-auto"
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                ) : (
+                  <Save className="w-3.5 h-3.5 shrink-0" />
+                )}
+                <span>{saving ? "Publishing..." : "Save & Publish"}</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>

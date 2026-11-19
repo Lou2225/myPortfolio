@@ -384,11 +384,22 @@ export function OfflineManager({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Register native Next.js Service Worker (production or explicit opt-in)
+  // Register native Next.js Service Worker (production or explicit opt-in);
+  // in development, unregister any stale prior SW so dev chunks & HMR never hang.
   useEffect(() => {
-    if (isSwDisabledInDev) return;
-
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    if (isSwDisabledInDev) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => {
+          regs.forEach((reg) => {
+            void reg.unregister();
+          });
+        })
+        .catch(() => {});
       return;
     }
 

@@ -12,6 +12,7 @@ import { OfflineBanner } from "@/components/pwa/OfflineBanner";
 import { FaviconSync } from "@/components/pwa/FaviconSync";
 import { SmoothScroll } from "@/components/motion/SmoothScroll";
 import { Preloader } from "@/components/motion/Preloader";
+import { JumpscareController } from "@/components/motion/JumpscareController";
 import { BrandPortalProvider } from "@/components/motion/BrandPortal";
 import { Navbar } from "@/components/ui/Navbar";
 import { Footer } from "@/components/ui/Footer";
@@ -121,6 +122,7 @@ export default async function RootLayout({
           <FaviconSync />
           <OfflineManager>
             <Preloader />
+            <JumpscareController />
             <SmoothScroll>
               <BrandPortalProvider>
                 <Navbar />

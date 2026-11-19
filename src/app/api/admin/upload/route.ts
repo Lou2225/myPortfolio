@@ -5,13 +5,32 @@ import { isAdminAuthenticated } from "@/lib/auth";
 import { getStorageMode, buildSupabaseHeaders } from "@/lib/db";
 import { verifyUploadMagicBytes } from "@/lib/uploadSecurity";
 import {
+  ALLOWED_AUDIO_EXTENSIONS,
+  ALLOWED_AUDIO_MIME_TYPES,
+  ALLOWED_CURSOR_EXTENSIONS,
+  ALLOWED_CURSOR_MIME_TYPES,
   ALLOWED_IMAGE_EXTENSIONS,
   ALLOWED_IMAGE_MIME_TYPES,
+  MAX_AUDIO_UPLOAD_BYTES,
+  MAX_CURSOR_UPLOAD_BYTES,
   MAX_IMAGE_UPLOAD_BYTES,
   MAX_PDF_UPLOAD_BYTES,
 } from "@/lib/validation";
 
-const IMAGE_UPLOAD_FOLDERS = new Set(["hero", "monogram", "projects", "general"]);
+const IMAGE_UPLOAD_FOLDERS = new Set([
+  "hero",
+  "monogram",
+  "projects",
+  "scares",
+  "general",
+]);
+
+function resolveEffectiveCursorMime(ext: string, rawMime: string): string {
+  if (ext === ".cur") {
+    return "image/x-icon";
+  }
+  return rawMime;
+}
 
 export async function POST(request: Request) {
   if (!(await isAdminAuthenticated())) {
@@ -55,6 +74,46 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+    } else if (folder === "cursors") {
+      const validExt = (ALLOWED_CURSOR_EXTENSIONS as readonly string[]).includes(ext);
+      const validMime =
+        (ALLOWED_CURSOR_MIME_TYPES as readonly string[]).includes(mime) &&
+        (mime !== "application/octet-stream" || ext === ".cur");
+
+      if (!validExt || !validMime) {
+        return NextResponse.json(
+          {
+            error:
+              "Only cursor files (.png, .cur, .webp, .ico) are permitted in cursors.",
+          },
+          { status: 400 }
+        );
+      }
+      if (file.size <= 0 || file.size > MAX_CURSOR_UPLOAD_BYTES) {
+        return NextResponse.json(
+          { error: "Cursor file must be between 1 byte and 512 KB." },
+          { status: 400 }
+        );
+      }
+    } else if (folder === "audio") {
+      const validExt = (ALLOWED_AUDIO_EXTENSIONS as readonly string[]).includes(ext);
+      const validMime = (ALLOWED_AUDIO_MIME_TYPES as readonly string[]).includes(mime);
+
+      if (!validExt || !validMime) {
+        return NextResponse.json(
+          {
+            error:
+              "Only short audio files (.mp3, .wav, .ogg) are permitted in audio.",
+          },
+          { status: 400 }
+        );
+      }
+      if (file.size <= 0 || file.size > MAX_AUDIO_UPLOAD_BYTES) {
+        return NextResponse.json(
+          { error: "Audio clip must be between 1 byte and 2.5 MB." },
+          { status: 400 }
+        );
+      }
     } else if (IMAGE_UPLOAD_FOLDERS.has(folder)) {
       const validExt = (ALLOWED_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
       const validMime = (ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(mime);
@@ -93,6 +152,8 @@ export async function POST(request: Request) {
     }
 
     const safeExt = ext || (folder === "resume" ? ".pdf" : ".png");
+    const effectiveMime =
+      folder === "cursors" ? resolveEffectiveCursorMime(safeExt, mime) : mime;
     const baseName =
       path
         .basename(file.name, path.extname(file.name))
@@ -112,7 +173,7 @@ export async function POST(request: Request) {
         {
           method: "POST",
           headers: buildSupabaseHeaders(supabaseKey, {
-            "Content-Type": mime,
+            "Content-Type": effectiveMime,
             "x-upsert": "true",
           }),
           body: buffer,

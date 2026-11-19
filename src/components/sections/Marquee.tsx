@@ -25,7 +25,7 @@ export function Marquee({
   return (
     <section
       aria-label="Operating Principles"
-      className="w-full overflow-hidden border-y border-(--border-subtle) py-3.5 sm:py-5 bg-(--bg-surface) select-none"
+      className="relative z-10 w-full overflow-hidden border-y border-(--border-subtle) py-3.5 sm:py-5 bg-(--bg-surface)/92 backdrop-blur-xs select-none"
     >
       <div
         style={{ animationDuration: duration }}

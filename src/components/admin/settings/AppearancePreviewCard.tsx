@@ -9,6 +9,7 @@ import {
 import {
   resolveAccentBaseHex,
   resolveAccentPalette,
+  resolveCursorCssVars,
 } from "@/lib/appearance";
 import type { AppearanceConfig, PortfolioTheme } from "@/types/portfolio";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -98,6 +99,8 @@ export function AppearancePreviewCard({
     palette.contrastOnButton < 3.0 ||
     Math.min(palette.contrastOnDarkCanvas, palette.contrastOnLightCanvas) < 4.5;
 
+  const cursorVars = useMemo(() => resolveCursorCssVars(draft), [draft]);
+
   return (
     <div
       data-cascade={!embedded || undefined}
@@ -134,6 +137,13 @@ export function AppearancePreviewCard({
               variant="neutral"
               size="xs"
             />
+            {cursorVars.active && (
+              <StatusPill
+                label="Custom Cursor"
+                variant="accent"
+                size="xs"
+              />
+            )}
           </div>
         </div>
       )}
@@ -146,10 +156,24 @@ export function AppearancePreviewCard({
           borderColor: hairline,
           borderRadius: radiusMeta.pxCard,
           fontFamily: fonts.sans,
+          cursor: cursorVars.active ? cursorVars.defaultCss : "auto",
           ...textureStyle,
         }}
-        className="border overflow-hidden transition-colors duration-300"
+        className="relative border overflow-hidden transition-colors duration-300"
       >
+        {draft.ambientStarfield !== false && (
+          <div
+            aria-hidden="true"
+            style={{
+              backgroundImage: isLight
+                ? "radial-gradient(rgba(10,10,14,0.55) 1px, transparent 1px), radial-gradient(rgba(10,10,14,0.28) 1px, transparent 1px)"
+                : `radial-gradient(rgba(234,255,242,0.65) 1px, transparent 1px), radial-gradient(${palette.accent} 1px, transparent 1px)`,
+              backgroundSize: "34px 34px, 52px 52px",
+              backgroundPosition: "0 0, 17px 21px",
+            }}
+            className="pointer-events-none absolute inset-0 opacity-65"
+          />
+        )}
         {/* Mock Navbar Strip */}
         <div
           style={{
@@ -218,8 +242,9 @@ export function AppearancePreviewCard({
                   color: palette.contrastInk,
                   borderRadius: radiusMeta.pxControl,
                   boxShadow: `0 6px 20px ${palette.glowRgba}`,
+                  cursor: cursorVars.active ? cursorVars.pointerCss : "pointer",
                 }}
-                className="px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] inline-flex items-center gap-1.5"
+                className="px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
               >
                 Explore Systems
               </span>

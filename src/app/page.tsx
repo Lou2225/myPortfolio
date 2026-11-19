@@ -7,6 +7,7 @@ import {
   DeferredProjects,
   DeferredContact,
 } from "@/components/sections/DeferredSections";
+import { StarfieldCanvas } from "@/components/motion/StarfieldCanvas";
 import { getPortfolioContent } from "@/lib/db";
 import { getSiteOrigin } from "@/lib/siteUrl";
 
@@ -41,6 +42,7 @@ export default async function Home() {
 
   return (
     <main className="lou-public-root relative w-full overflow-x-hidden">
+      <StarfieldCanvas />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

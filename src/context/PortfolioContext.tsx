@@ -16,6 +16,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  PUBLIC_CACHE_STORAGE_KEY,
   getQueryClient,
   queryKeys,
   readPersistedPublicCache,
@@ -87,12 +88,44 @@ function PortfolioStateBridge({
         throw new Error("Failed to fetch public portfolio data");
       }
       const fresh = (await res.json()) as PublicPortfolioData;
+      const existing = queryClient.getQueryData<PublicPortfolioData>(
+        queryKeys.publicPortfolio
+      );
+      if (
+        existing &&
+        existing.updatedAt &&
+        fresh.updatedAt &&
+        existing.updatedAt === fresh.updatedAt &&
+        JSON.stringify(existing.appearance) === JSON.stringify(fresh.appearance)
+      ) {
+        return existing;
+      }
       writePersistedPublicCache(fresh);
       return fresh;
     },
     initialData: () => initialData || readPersistedPublicCache() || defaultPublicData,
-    staleTime: 60 * 1000,
+    initialDataUpdatedAt: 0,
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: !pathname?.startsWith("/admin"),
   });
+
+  // Live-sync portfolio state across open tabs (e.g. saving in /admin updates open public tab immediately)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key !== PUBLIC_CACHE_STORAGE_KEY || !e.newValue) return;
+      try {
+        const parsed = JSON.parse(e.newValue) as PublicPortfolioData;
+        if (parsed && parsed.profile && parsed.appearance) {
+          queryClient.setQueryData(queryKeys.publicPortfolio, parsed);
+        }
+      } catch {
+        // Ignore malformed storage snapshot
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [queryClient]);
 
   const refreshPortfolio = useCallback(async () => {
     await queryClient.invalidateQueries({

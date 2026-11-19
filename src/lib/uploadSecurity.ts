@@ -74,6 +74,52 @@ export function verifyUploadMagicBytes(
     return { valid: true };
   }
 
+  if (lowerExt === ".cur") {
+    if (buffer.length < 22) {
+      return { valid: false, error: "Invalid CUR cursor file header." };
+    }
+    const reservedOk = buffer[0] === 0x00 && buffer[1] === 0x00;
+    const typeOk = buffer[2] === 0x02 && buffer[3] === 0x00;
+    const entryCount = buffer.readUInt16LE(4);
+    if (!reservedOk || !typeOk || entryCount < 1) {
+      return { valid: false, error: "File header does not match a valid Windows .cur cursor." };
+    }
+    return { valid: true };
+  }
+
+  if (lowerExt === ".mp3") {
+    const head = buffer.subarray(0, Math.min(buffer.length, 64));
+    const hasId3 = head.toString("ascii").includes("ID3");
+    let hasMpegSync = false;
+    for (let i = 0; i < head.length - 1; i++) {
+      if (head[i] === 0xff && (head[i + 1] & 0xe0) === 0xe0) {
+        hasMpegSync = true;
+        break;
+      }
+    }
+    if (!hasId3 && !hasMpegSync) {
+      return { valid: false, error: "File header does not match a valid MP3 audio clip." };
+    }
+    return { valid: true };
+  }
+
+  if (lowerExt === ".wav") {
+    const riff = buffer.length >= 12 ? buffer.subarray(0, 4).toString("ascii") : "";
+    const wave = buffer.length >= 12 ? buffer.subarray(8, 12).toString("ascii") : "";
+    if (riff !== "RIFF" || wave !== "WAVE") {
+      return { valid: false, error: "File header does not match a valid WAV audio clip." };
+    }
+    return { valid: true };
+  }
+
+  if (lowerExt === ".ogg") {
+    const ogg = buffer.length >= 4 ? buffer.subarray(0, 4).toString("ascii") : "";
+    if (ogg !== "OggS") {
+      return { valid: false, error: "File header does not match a valid Ogg audio clip." };
+    }
+    return { valid: true };
+  }
+
   return {
     valid: false,
     error: "Unsupported file format for upload.",

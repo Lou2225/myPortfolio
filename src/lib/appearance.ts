@@ -1,6 +1,10 @@
 import { ACCENT_PRESETS, DEFAULT_APPEARANCE } from "@/data/appearance";
+import { sanitizeImageTransform } from "@/lib/imageTransform";
+import { sanitizeCursorAssetUrl } from "@/lib/inputValidation";
 import type {
   AppearanceConfig,
+  CursorSizeMode,
+  JumpscareTriggerMode,
   PortfolioTheme,
   PortfolioThemeMode,
 } from "@/types/portfolio";
@@ -330,25 +334,154 @@ export function shouldReduceMotion(): boolean {
   return false;
 }
 
+const ALLOWED_CURSOR_SIZES = new Set<number>([32, 48, 64, 96]);
+
+export function clampCursorHotspot(raw: unknown, fallback = 4): number {
+  const num = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(0, Math.min(128, Math.round(num)));
+}
+
+export function normalizeCursorSize(raw: unknown): CursorSizeMode {
+  const num = typeof raw === "number" ? raw : Number(raw);
+  return ALLOWED_CURSOR_SIZES.has(num) ? (num as CursorSizeMode) : 48;
+}
+
 /**
- * Synchronizes resolved theme, accent CSS custom properties, typography, corner radius,
- * canvas texture, navbar style, and motion flags onto `<html>` (`document.documentElement`).
+ * Formats a sanitized CSS `cursor` value safely. When `targetSize` and `sourceWidth`
+ * differ on raster assets (`.png`/`.webp`), uses `image-set(url(...) Xx)` so switching
+ * cursor size scales cleanly from the crisp master upload without re-uploading.
+ */
+export function buildCssCursorValue(
+  rawUrl: string | undefined | null,
+  fallback: "auto" | "pointer",
+  hotspotX = 4,
+  hotspotY = 4,
+  targetSize?: CursorSizeMode,
+  sourceWidth?: number
+): string {
+  const safeUrl = sanitizeCursorAssetUrl(rawUrl);
+  if (!safeUrl) return fallback;
+  const hx = clampCursorHotspot(hotspotX, 4);
+  const hy = clampCursorHotspot(hotspotY, 4);
+  const isNativeBinary = /\.(cur|ico)(?:$|\?)/i.test(safeUrl);
+
+  if (
+    !isNativeBinary &&
+    targetSize &&
+    sourceWidth &&
+    sourceWidth >= 16 &&
+    sourceWidth !== targetSize
+  ) {
+    const dppx = Number(
+      Math.max(0.25, Math.min(4, sourceWidth / targetSize)).toFixed(4)
+    );
+    if (dppx !== 1) {
+      return `image-set(url("${safeUrl}") ${dppx}x) ${hx} ${hy}, ${fallback}`;
+    }
+  }
+
+  return `url("${safeUrl}") ${hx} ${hy}, ${fallback}`;
+}
+
+export function resolveCursorCssVars(
+  appearanceInput?: Partial<AppearanceConfig> | null
+): {
+  active: boolean;
+  defaultCss: string;
+  defaultFallbackCss: string;
+  pointerCss: string;
+  pointerFallbackCss: string;
+} {
+  if (!appearanceInput?.customCursorEnabled) {
+    return {
+      active: false,
+      defaultCss: "auto",
+      defaultFallbackCss: "auto",
+      pointerCss: "pointer",
+      pointerFallbackCss: "pointer",
+    };
+  }
+
+  const defaultUrl = sanitizeCursorAssetUrl(appearanceInput.customCursorDefaultUrl);
+  const pointerUrl =
+    sanitizeCursorAssetUrl(appearanceInput.customCursorPointerUrl) || defaultUrl;
+
+  if (!defaultUrl && !pointerUrl) {
+    return {
+      active: false,
+      defaultCss: "auto",
+      defaultFallbackCss: "auto",
+      pointerCss: "pointer",
+      pointerFallbackCss: "pointer",
+    };
+  }
+
+  const targetSize = normalizeCursorSize(appearanceInput.customCursorSize ?? 48);
+  const defaultSourceWidth =
+    typeof appearanceInput.customCursorDefaultSourceSize === "number" &&
+    appearanceInput.customCursorDefaultSourceSize >= 16
+      ? appearanceInput.customCursorDefaultSourceSize
+      : undefined;
+  const pointerSourceWidth =
+    typeof appearanceInput.customCursorPointerSourceSize === "number" &&
+    appearanceInput.customCursorPointerSourceSize >= 16
+      ? appearanceInput.customCursorPointerSourceSize
+      : appearanceInput.customCursorPointerUrl
+        ? undefined
+        : defaultSourceWidth;
+
+  const hx = clampCursorHotspot(appearanceInput.customCursorHotspotX, 4);
+  const hy = clampCursorHotspot(appearanceInput.customCursorHotspotY, 4);
+
+  return {
+    active: true,
+    defaultFallbackCss: defaultUrl
+      ? buildCssCursorValue(defaultUrl, "auto", hx, hy)
+      : "auto",
+    defaultCss: defaultUrl
+      ? buildCssCursorValue(
+          defaultUrl,
+          "auto",
+          hx,
+          hy,
+          targetSize,
+          defaultSourceWidth
+        )
+      : "auto",
+    pointerFallbackCss: pointerUrl
+      ? buildCssCursorValue(pointerUrl, "pointer", hx, hy)
+      : "pointer",
+    pointerCss: pointerUrl
+      ? buildCssCursorValue(
+          pointerUrl,
+          "pointer",
+          hx,
+          hy,
+          targetSize,
+          pointerSourceWidth
+        )
+      : "pointer",
+  };
+}
+
+/**
+ * Resolves full appearance state and applies semantic `data-*` attributes,
+ * canvas texture, navbar style, cursor state, and motion flags onto `<html>`.
  */
 export function applyAppearanceToDocument(
   appearanceInput?: Partial<AppearanceConfig> | null,
   options?: {
     deviceThemeOverride?: DeviceThemeOverride;
     deviceMotionOverride?: DeviceMotionOverride;
+    pathname?: string;
   }
 ): {
   effectiveTheme: PortfolioTheme;
   effectiveReducedMotion: boolean;
   palette: DerivedAccentPalette;
 } {
-  const appearance: AppearanceConfig = {
-    ...DEFAULT_APPEARANCE,
-    ...(appearanceInput || {}),
-  };
+  const appearance = sanitizeAppearanceConfig(appearanceInput);
 
   const deviceThemeOverride =
     options?.deviceThemeOverride ?? getStoredDeviceThemeOverride();
@@ -366,9 +499,14 @@ export function applyAppearanceToDocument(
 
   const baseHex = resolveAccentBaseHex(appearance);
   const palette = resolveAccentPalette(baseHex);
+  const cursorVars = resolveCursorCssVars(appearance);
 
   if (typeof document !== "undefined") {
     const root = document.documentElement;
+    const activePath =
+      options?.pathname ??
+      (typeof window !== "undefined" ? window.location.pathname : "/");
+    const routeScope = activePath.startsWith("/admin") ? "admin" : "public";
     const setAttr = (name: string, val: string) => {
       if (root.getAttribute(name) !== val) {
         root.setAttribute(name, val);
@@ -380,6 +518,8 @@ export function applyAppearanceToDocument(
       }
     };
 
+    setAttr("data-route-scope", routeScope);
+    setAttr("data-custom-cursor", cursorVars.active ? "on" : "off");
     setAttr("data-theme", effectiveTheme);
     const shouldDark = effectiveTheme === "dark";
     if (root.classList.contains("dark") !== shouldDark) {
@@ -407,6 +547,10 @@ export function applyAppearanceToDocument(
     setVar("--accent-glow", palette.glowRgba);
     setVar("--bg-badge-highlight", palette.badgeBgRgba);
     setVar("--accent-ring", palette.ringRgba);
+    setVar("--lou-cursor-default-fallback", cursorVars.defaultFallbackCss);
+    setVar("--lou-cursor-default", cursorVars.defaultCss);
+    setVar("--lou-cursor-pointer-fallback", cursorVars.pointerFallbackCss);
+    setVar("--lou-cursor-pointer", cursorVars.pointerCss);
     setVar(
       "--text-accent",
       effectiveTheme === "light" ? palette.textOnLight : palette.textOnDark
@@ -429,26 +573,98 @@ export function applyAppearanceToDocument(
 export function sanitizeAppearanceConfig(
   raw?: Partial<AppearanceConfig> | null
 ): AppearanceConfig {
-  return {
+  const cleaned = {
     ...DEFAULT_APPEARANCE,
     ...(raw || {}),
+    ambientStarfield:
+      raw?.ambientStarfield ?? DEFAULT_APPEARANCE.ambientStarfield ?? true,
+    customCursorEnabled: Boolean(raw?.customCursorEnabled),
+    customCursorDefaultUrl: sanitizeCursorAssetUrl(raw?.customCursorDefaultUrl),
+    customCursorPointerUrl: sanitizeCursorAssetUrl(raw?.customCursorPointerUrl),
+    customCursorDefaultTransform: raw?.customCursorDefaultTransform
+      ? sanitizeImageTransform(raw.customCursorDefaultTransform, "squircle")
+      : undefined,
+    customCursorPointerTransform: raw?.customCursorPointerTransform
+      ? sanitizeImageTransform(raw.customCursorPointerTransform, "squircle")
+      : undefined,
+    customCursorDefaultSourceSize:
+      typeof raw?.customCursorDefaultSourceSize === "number" &&
+      Number.isFinite(raw.customCursorDefaultSourceSize)
+        ? Math.max(16, Math.min(512, Math.round(raw.customCursorDefaultSourceSize)))
+        : undefined,
+    customCursorPointerSourceSize:
+      typeof raw?.customCursorPointerSourceSize === "number" &&
+      Number.isFinite(raw.customCursorPointerSourceSize)
+        ? Math.max(16, Math.min(512, Math.round(raw.customCursorPointerSourceSize)))
+        : undefined,
+    customCursorSize: normalizeCursorSize(
+      raw?.customCursorSize ?? DEFAULT_APPEARANCE.customCursorSize
+    ),
+    customCursorHotspotX: clampCursorHotspot(
+      raw?.customCursorHotspotX,
+      DEFAULT_APPEARANCE.customCursorHotspotX ?? 4
+    ),
+    customCursorHotspotY: clampCursorHotspot(
+      raw?.customCursorHotspotY,
+      DEFAULT_APPEARANCE.customCursorHotspotY ?? 4
+    ),
+    jumpscareEnabled: Boolean(raw?.jumpscareEnabled),
+    jumpscareTrigger: (
+      raw?.jumpscareTrigger === "get-in-touch" ||
+      raw?.jumpscareTrigger === "prank-link" ||
+      raw?.jumpscareTrigger === "first-click" ||
+      raw?.jumpscareTrigger === "secret-taps"
+        ? raw.jumpscareTrigger
+        : "secret-taps"
+    ) as JumpscareTriggerMode,
+    jumpscareImageUrl: sanitizeCursorAssetUrl(raw?.jumpscareImageUrl),
+    jumpscareImageTransform: raw?.jumpscareImageTransform
+      ? sanitizeImageTransform(raw.jumpscareImageTransform, "squircle")
+      : undefined,
+    jumpscareAudioUrl: sanitizeCursorAssetUrl(raw?.jumpscareAudioUrl),
+    jumpscareVolume:
+      typeof raw?.jumpscareVolume === "number" && Number.isFinite(raw.jumpscareVolume)
+        ? Math.max(0, Math.min(1, Number(raw.jumpscareVolume.toFixed(2))))
+        : 0.65,
+    jumpscareCaption:
+      typeof raw?.jumpscareCaption === "string"
+        ? raw.jumpscareCaption.trim().slice(0, 80)
+        : "GOTCHA.",
     customAccentHex: normalizeHexColor(
       raw?.customAccentHex,
       DEFAULT_APPEARANCE.customAccentHex
     ),
-  };
+  } as AppearanceConfig & { customCursor?: unknown };
+  delete cleaned.customCursor;
+  if (!cleaned.customCursorDefaultTransform) {
+    delete cleaned.customCursorDefaultTransform;
+  }
+  if (!cleaned.customCursorPointerTransform) {
+    delete cleaned.customCursorPointerTransform;
+  }
+  if (!cleaned.customCursorDefaultSourceSize) {
+    delete cleaned.customCursorDefaultSourceSize;
+  }
+  if (!cleaned.customCursorPointerSourceSize) {
+    delete cleaned.customCursorPointerSourceSize;
+  }
+  if (!cleaned.jumpscareImageTransform) {
+    delete cleaned.jumpscareImageTransform;
+  }
+  return cleaned;
 }
 
 /**
  * Generates an inline pre-paint script embedded in `<head>` by `RootLayout`
- * so `data-theme`, `data-font`, `data-radius`, `data-motion`, and accent CSS variables
- * resolve BEFORE first paint without FOUC.
+ * so `data-theme`, `data-font`, `data-radius`, `data-motion`, cursor variables,
+ * and accent CSS variables resolve BEFORE first paint without FOUC.
  */
 export function buildPrePaintAppearanceScript(
   appearance: AppearanceConfig
 ): string {
   const safe = sanitizeAppearanceConfig(appearance);
   const palette = resolveAccentPalette(resolveAccentBaseHex(safe));
+  const cursorVars = resolveCursorCssVars(safe);
 
   const payload = JSON.stringify({
     defaultTheme: safe.defaultTheme,
@@ -460,12 +676,13 @@ export function buildPrePaintAppearanceScript(
     imageColorMode: safe.imageColorMode,
     motionMode: safe.motionMode,
     palette,
+    cursorVars,
   });
 
   return `(()=>{try{var c=${payload};var d=document.documentElement;var tKey=${JSON.stringify(
     THEME_OVERRIDE_STORAGE_KEY
   )};var mKey=${JSON.stringify(
     MOTION_OVERRIDE_STORAGE_KEY
-  )};var st=localStorage.getItem(tKey);var tMode=(st==="dark"||st==="light"||st==="system")?st:c.defaultTheme;var effT=tMode==="light"?"light":tMode==="dark"?"dark":(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");var sm=localStorage.getItem(mKey);var sysRed=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;var effRed=sm==="reduced"||c.motionMode==="reduced"||(c.motionMode==="system"&&sysRed);d.setAttribute("data-theme",effT);d.classList.toggle("dark",effT==="dark");d.classList.toggle("light",effT==="light");d.setAttribute("data-font",c.fontPairing);d.setAttribute("data-scale",c.displayScale);d.setAttribute("data-radius",c.surfaceRadius);d.setAttribute("data-texture",c.canvasTexture);d.setAttribute("data-navbar",c.navbarStyle);d.setAttribute("data-image-tone",c.imageColorMode);d.setAttribute("data-motion",effRed?"reduced":"full");var p=c.palette;d.style.setProperty("--accent",p.accent);d.style.setProperty("--accent-hover",p.hover);d.style.setProperty("--accent-deep",p.deep);d.style.setProperty("--accent-solid",p.solidBg);d.style.setProperty("--accent-solid-hover",p.solidHover);d.style.setProperty("--accent-contrast",p.contrastInk);d.style.setProperty("--accent-glow",p.glowRgba);d.style.setProperty("--bg-badge-highlight",p.badgeBgRgba);d.style.setProperty("--accent-ring",p.ringRgba);d.style.setProperty("--text-accent",effT==="light"?p.textOnLight:p.textOnDark);}catch(_){}})();`;
+  )};var st=localStorage.getItem(tKey);var tMode=(st==="dark"||st==="light"||st==="system")?st:c.defaultTheme;var effT=tMode==="light"?"light":tMode==="dark"?"dark":(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");var sm=localStorage.getItem(mKey);var sysRed=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;var effRed=sm==="reduced"||c.motionMode==="reduced"||(c.motionMode==="system"&&sysRed);var scope=window.location&&window.location.pathname&&window.location.pathname.indexOf("/admin")===0?"admin":"public";d.setAttribute("data-route-scope",scope);d.setAttribute("data-custom-cursor",c.cursorVars&&c.cursorVars.active?"on":"off");d.setAttribute("data-theme",effT);d.classList.toggle("dark",effT==="dark");d.classList.toggle("light",effT==="light");d.setAttribute("data-font",c.fontPairing);d.setAttribute("data-scale",c.displayScale);d.setAttribute("data-radius",c.surfaceRadius);d.setAttribute("data-texture",c.canvasTexture);d.setAttribute("data-navbar",c.navbarStyle);d.setAttribute("data-image-tone",c.imageColorMode);d.setAttribute("data-motion",effRed?"reduced":"full");var p=c.palette;d.style.setProperty("--accent",p.accent);d.style.setProperty("--accent-hover",p.hover);d.style.setProperty("--accent-deep",p.deep);d.style.setProperty("--accent-solid",p.solidBg);d.style.setProperty("--accent-solid-hover",p.solidHover);d.style.setProperty("--accent-contrast",p.contrastInk);d.style.setProperty("--accent-glow",p.glowRgba);d.style.setProperty("--bg-badge-highlight",p.badgeBgRgba);d.style.setProperty("--accent-ring",p.ringRgba);if(c.cursorVars){d.style.setProperty("--lou-cursor-default-fallback",c.cursorVars.defaultFallbackCss);d.style.setProperty("--lou-cursor-default",c.cursorVars.defaultCss);d.style.setProperty("--lou-cursor-pointer-fallback",c.cursorVars.pointerFallbackCss);d.style.setProperty("--lou-cursor-pointer",c.cursorVars.pointerCss);}d.style.setProperty("--text-accent",effT==="light"?p.textOnLight:p.textOnDark);}catch(_){}})();`;
 }
 

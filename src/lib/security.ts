@@ -525,17 +525,32 @@ export async function touchDeviceActivity(
       return;
     }
 
-    await writeAdminSecurityStore({
-      ...store,
-      devices: store.devices.map((d) =>
-        d.id === deviceId
-          ? {
-              ...d,
-              lastSeenAt: new Date().toISOString(),
-              ipMasked: ipMasked || d.ipMasked,
-            }
-          : d
-      ),
+    await mutateAdminSecurityStore((latest) => {
+      const currentTarget = latest.devices.find(
+        (d) => d.id === deviceId && d.status === "active"
+      );
+      if (!currentTarget) return latest;
+
+      const latestAgeMs = Date.now() - new Date(currentTarget.lastSeenAt).getTime();
+      if (
+        latestAgeMs < LAST_SEEN_THROTTLE_MS &&
+        (!ipMasked || ipMasked === currentTarget.ipMasked)
+      ) {
+        return latest;
+      }
+
+      return {
+        ...latest,
+        devices: latest.devices.map((d) =>
+          d.id === deviceId
+            ? {
+                ...d,
+                lastSeenAt: new Date().toISOString(),
+                ipMasked: ipMasked || d.ipMasked,
+              }
+            : d
+        ),
+      };
     });
   } catch {
     // Non-blocking activity touch

@@ -1,5 +1,7 @@
 import { Metric, SectionHeaders } from "@/types/portfolio";
 import { GitHubProofBar } from "@/components/sections/GitHubProofBar";
+import { ScrollReveal } from "@/components/motion/ScrollReveal";
+import { CountUpMetric } from "@/components/motion/CountUpMetric";
 import {
   Eyebrow,
   DisplayHeading,
@@ -16,25 +18,27 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
     <section
       id="impact"
       aria-label="Impact Metrics"
-      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
     >
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 sm:gap-12">
         {/* Header */}
-        <div>
+        <ScrollReveal variant="fade-up">
           <Eyebrow withDot className="mb-2.5">
             {sectionHeaders.impactEyebrow}
           </Eyebrow>
           <DisplayHeading as="h2" size="lg">
             {sectionHeaders.impactHeading}
           </DisplayHeading>
-        </div>
+        </ScrollReveal>
 
         {/* Uniform 2x2 Mobile / 4-Column Desktop Metrics Grid */}
         <div className="w-full">
           <dl className="grid grid-cols-2 lg:grid-cols-4 border-t border-(--border-subtle) w-full">
             {impactMetrics.map((stat, i) => (
-              <div
+              <ScrollReveal
                 key={stat.label}
+                variant="fade-up"
+                delayMs={i * 75}
                 className={`impact-stat-cell flex flex-col justify-between py-5 sm:py-8 lg:py-10 border-b border-(--border-subtle) ${
                   i !== 0
                     ? "lg:border-l lg:border-(--border-subtle) lg:pl-6 xl:pl-8"
@@ -47,7 +51,7 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
               >
                 <dd className="font-display text-[clamp(2.125rem,6vw,4.5rem)] leading-[0.95] uppercase tracking-tight text-(--text-primary) group-hover:text-(--text-accent) transition-colors duration-300 tabular-nums">
                   {stat.prefix}
-                  {stat.value}
+                  <CountUpMetric value={stat.value} />
                   <span className="text-(--text-accent)">
                     {stat.suffix}
                   </span>
@@ -60,12 +64,14 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
                     {stat.description}
                   </BodyText>
                 </dt>
-              </div>
+              </ScrollReveal>
             ))}
           </dl>
         </div>
 
-        <GitHubProofBar />
+        <ScrollReveal variant="fade-up" delayMs={140}>
+          <GitHubProofBar />
+        </ScrollReveal>
       </div>
     </section>
   );

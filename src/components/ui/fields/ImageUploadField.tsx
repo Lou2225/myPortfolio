@@ -28,7 +28,11 @@ import {
 import { Magnetic } from "@/components/motion/Magnetic";
 import { TransformedImage } from "@/components/ui/TransformedImage";
 import { TruncatedText } from "@/components/ui/Tooltip";
-import { IMAGE_FILE_ACCEPT, validateImageFile } from "@/lib/validation";
+import {
+  IMAGE_FILE_ACCEPT,
+  type ValidationResult,
+  validateImageFile,
+} from "@/lib/validation";
 import {
   registerInstantImage,
   resolveInstantImageUrl,
@@ -57,7 +61,21 @@ export interface ImageUploadFieldProps {
   onTransformChange?: (transform: ImageTransform) => void;
   onPendingFileChange?: (file: File | null) => void;
   onRevertToSaved?: () => void;
-  folder: "hero" | "monogram" | "projects";
+  folder: "hero" | "monogram" | "projects" | "cursors" | "scares";
+  accept?: string;
+  validateFile?: (file: File) => ValidationResult;
+  prepareFileForUpload?: (file: File) => Promise<{
+    file: File;
+    sourceWidth?: number;
+    detectedHotspot?: { x: number; y: number };
+  }>;
+  onUploadMeta?: (meta: {
+    url: string;
+    sourceWidth?: number;
+    detectedHotspot?: { x: number; y: number };
+  }) => void;
+  onNaturalSize?: (size: { width: number; height: number }) => void;
+  removeDescription?: string;
   placeholder?: string;
   required?: boolean;
   allowRelativePath?: boolean;
@@ -89,6 +107,12 @@ export function ImageUploadField({
   onPendingFileChange,
   onRevertToSaved,
   folder,
+  accept = IMAGE_FILE_ACCEPT,
+  validateFile = validateImageFile,
+  prepareFileForUpload,
+  onUploadMeta,
+  onNaturalSize,
+  removeDescription = "This clears the uploaded image path from your draft. If this is your monogram logo, your portfolio and browser tab icon will fall back to your monogram initials until you Save & Publish.",
   placeholder = "/assets/...",
   required = false,
   allowRelativePath = true,
@@ -141,7 +165,7 @@ export function ImageUploadField({
     setCropSession(null);
   };
 
-  const uploadFileImmediately = async (file: File) => {
+  const uploadFileImmediately = async (rawFile: File) => {
     if (isNetworkOffline(isOnline)) {
       reportError("Offline — Reconnect to upload image assets.");
       return;
@@ -151,6 +175,11 @@ export function ImageUploadField({
     setUploading(true);
 
     try {
+      const prepared = prepareFileForUpload
+        ? await prepareFileForUpload(rawFile)
+        : { file: rawFile };
+      const file = prepared.file;
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", folder);
@@ -166,6 +195,11 @@ export function ImageUploadField({
       if (data.url) {
         registerInstantImage(data.url, file);
         onChange(data.url);
+        onUploadMeta?.({
+          url: String(data.url),
+          sourceWidth: prepared.sourceWidth,
+          detectedHotspot: prepared.detectedHotspot,
+        });
         if (onAssetSaved) {
           await onAssetSaved(data.url);
         }
@@ -184,7 +218,7 @@ export function ImageUploadField({
     e.target.value = "";
     if (!file) return;
 
-    const fileCheck = validateImageFile(file);
+    const fileCheck = validateFile(file);
     if (!fileCheck.valid) {
       reportError(
         fileCheck.error ||
@@ -327,7 +361,7 @@ export function ImageUploadField({
             <span>{uploading ? "Uploading..." : "Upload"}</span>
             <input
               type="file"
-              accept={IMAGE_FILE_ACCEPT}
+              accept={accept}
               disabled={uploading}
               onChange={handleFileChange}
               className="hidden"
@@ -339,7 +373,7 @@ export function ImageUploadField({
       {menuItems.length > 0 && (
         <ActionMenuButton
           label={`Actions for ${label}`}
-          size="square"
+          size="field"
           disabled={uploading}
           items={menuItems}
         />
@@ -379,6 +413,7 @@ export function ImageUploadField({
                   transform={transform}
                   defaultFit={previewFit}
                   defaultPosition={previewShape === "squircle" ? "top" : "center"}
+                  onNaturalSize={onNaturalSize}
                   className="w-full h-full"
                 />
                 {editable && (
@@ -413,24 +448,27 @@ export function ImageUploadField({
               valid
               showCounter={false}
             >
-              <div className="relative w-full min-w-0">
-                <div
-                  className={getFieldControlClassName({
-                    hasError: false,
-                    hasLeftIcon: true,
-                    className:
-                      "flex items-center gap-2 pr-3.5 overflow-hidden border-amber-400/50 bg-amber-500/8",
-                  })}
-                >
-                  <FileImage className="w-4 h-4 text-amber-300 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <TruncatedText
-                    text={pendingFile.name}
-                    className="text-xs font-medium text-(--text-primary) block flex-1 min-w-0"
-                  />
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-amber-300 shrink-0">
-                    Staged
-                  </span>
+              <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+                <div className="relative flex-1 min-w-0 sm:min-w-[140px]">
+                  <div
+                    className={getFieldControlClassName({
+                      hasError: false,
+                      hasLeftIcon: true,
+                      className:
+                        "flex items-center gap-2 pr-3.5 overflow-hidden border-amber-400/50 bg-amber-500/8",
+                    })}
+                  >
+                    <FileImage className="w-4 h-4 text-amber-300 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <TruncatedText
+                      text={pendingFile.name}
+                      className="text-xs font-medium text-(--text-primary) block flex-1 min-w-0"
+                    />
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-amber-300 shrink-0">
+                      Staged
+                    </span>
+                  </div>
                 </div>
+                {actionSlot}
               </div>
             </FieldWrapper>
           ) : (
@@ -447,10 +485,9 @@ export function ImageUploadField({
               required={required}
               allowRelativePath={allowRelativePath}
               forceTouched={forceTouched}
+              rightSlot={actionSlot}
             />
           )}
-
-          {actionSlot}
 
           {(pendingFile
             ? hint ||
@@ -489,7 +526,7 @@ export function ImageUploadField({
         open={confirmClearOpen}
         variant="danger"
         title={`Remove ${label}?`}
-        description="This clears the uploaded image path from your draft. If this is your monogram logo, your portfolio and browser tab icon will fall back to your monogram initials until you Save & Publish."
+        description={removeDescription}
         confirmLabel="Remove Image"
         onCancel={() => setConfirmClearOpen(false)}
         onConfirm={() => {

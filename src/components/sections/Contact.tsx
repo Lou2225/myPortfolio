@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { usePortfolio } from "@/context/PortfolioContext";
+import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { Button } from "@/components/ui/Button";
 import {
   Eyebrow,
@@ -167,11 +168,11 @@ export function Contact() {
     <section
       id="contact"
       aria-label="Contact Section"
-      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) bg-(--bg-canvas)"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) bg-(--bg-canvas)/74"
     >
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-10 sm:gap-14">
         {/* Header */}
-        <div>
+        <ScrollReveal variant="fade-up">
           <Eyebrow withDot className="mb-2.5">
             {sectionHeaders.contactEyebrow}
           </Eyebrow>
@@ -196,11 +197,14 @@ export function Contact() {
               <ArrowUpRight className="w-4 h-4 sm:w-6 sm:h-6 text-(--text-accent) group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform shrink-0" />
             </a>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Form Container */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 pt-8 sm:pt-12 border-t border-(--border-subtle) w-full">
-          <div className="lg:col-span-5 flex flex-col justify-between gap-6">
+          <ScrollReveal
+            variant="slide-left"
+            className="lg:col-span-5 flex flex-col justify-between gap-6"
+          >
             <div>
               <DisplayHeading as="h3" size="sm">
                 {sectionHeaders.contactFormTitle}
@@ -234,10 +238,14 @@ export function Contact() {
                 </span>
               </div>
             </div>
-          </div>
+          </ScrollReveal>
 
           {/* Interactive Form Using Reusable Validated Field Partials */}
-          <div className="lg:col-span-7 bg-(--bg-surface) p-4 sm:p-8 md:p-10 rounded-(--radius-card) border border-(--border-subtle) shadow-xl w-full">
+          <ScrollReveal
+            variant="slide-right"
+            delayMs={90}
+            className="lg:col-span-7 bg-(--bg-surface) p-4 sm:p-8 md:p-10 rounded-(--radius-card) border border-(--border-subtle) shadow-xl w-full"
+          >
             {status === "success" ? (
               <div className="py-10 sm:py-12 flex flex-col items-center justify-center text-center">
                 <div className="w-14 h-14 rounded-full bg-(--bg-badge-highlight) border border-brand flex items-center justify-center mb-4">
@@ -385,7 +393,7 @@ export function Contact() {
                 </Button>
               </form>
             )}
-          </div>
+          </ScrollReveal>
         </div>
       </div>
     </section>

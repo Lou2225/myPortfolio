@@ -11,6 +11,7 @@ import {
 import {
   ValidationResult,
   validateBirthDate,
+  validateCursorAssetUrl,
   validateEmail,
   validateMessage,
   validateName,
@@ -983,6 +984,20 @@ const restoreImageTransformSchema = z
   })
   .optional();
 
+const fullImageTransformSchema = z
+  .object({
+    zoom: z.number().min(0.5).max(4).default(1),
+    offsetXPercent: z.number().min(-100).max(100).default(0),
+    offsetYPercent: z.number().min(-100).max(100).default(0),
+    rotation: z.number().min(-360).max(360).default(0),
+    fit: z.enum(["cover", "contain"]).default("contain"),
+    aspect: z
+      .enum(["1:1", "3:4", "4:3", "16:9", "original"])
+      .default("original"),
+    clipCircle: z.boolean().default(false),
+  })
+  .optional();
+
 const restorePsgcAddressSchema = z
   .object({
     regionCode: z.string().max(32),
@@ -1197,7 +1212,57 @@ export const portfolioRestoreSchema = z.object({
       liquidDistortion: z.boolean().optional(),
       imageColorMode: z.enum(["grayscale-hover", "always-color"]).optional(),
       heroRimGlow: z.boolean().optional(),
+      ambientStarfield: z.boolean().optional(),
       projectsLayout: z.enum(["staggered", "aligned"]).optional(),
+      customCursorEnabled: z.boolean().optional(),
+      customCursorDefaultUrl: z
+        .string()
+        .trim()
+        .max(500)
+        .refine((v) => validateCursorAssetUrl(v).valid, {
+          message: "Cursor URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+        })
+        .optional(),
+      customCursorDefaultTransform: restoreImageTransformSchema,
+      customCursorDefaultSourceSize: z.number().int().min(16).max(512).optional(),
+      customCursorPointerUrl: z
+        .string()
+        .trim()
+        .max(500)
+        .refine((v) => validateCursorAssetUrl(v).valid, {
+          message: "Pointer cursor URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+        })
+        .optional(),
+      customCursorPointerTransform: restoreImageTransformSchema,
+      customCursorPointerSourceSize: z.number().int().min(16).max(512).optional(),
+      customCursorSize: z
+        .union([z.literal(32), z.literal(48), z.literal(64), z.literal(96)])
+        .optional(),
+      customCursorHotspotX: z.number().int().min(0).max(128).optional(),
+      customCursorHotspotY: z.number().int().min(0).max(128).optional(),
+      jumpscareEnabled: z.boolean().optional(),
+      jumpscareTrigger: z
+        .enum(["secret-taps", "get-in-touch", "prank-link", "first-click"])
+        .optional(),
+      jumpscareImageUrl: z
+        .string()
+        .trim()
+        .max(500)
+        .refine((v) => validateCursorAssetUrl(v).valid, {
+          message: "Jumpscare image URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+        })
+        .optional(),
+      jumpscareImageTransform: restoreImageTransformSchema,
+      jumpscareAudioUrl: z
+        .string()
+        .trim()
+        .max(500)
+        .refine((v) => validateCursorAssetUrl(v).valid, {
+          message: "Jumpscare audio URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+        })
+        .optional(),
+      jumpscareVolume: z.number().min(0).max(1).optional(),
+      jumpscareCaption: z.string().trim().max(80).optional(),
     })
     .optional(),
 });
@@ -1230,7 +1295,63 @@ export const appearanceConfigSchema = z.object({
   liquidDistortion: z.boolean(),
   imageColorMode: z.enum(["grayscale-hover", "always-color"]),
   heroRimGlow: z.boolean(),
+  ambientStarfield: z.boolean().optional().default(true),
   projectsLayout: z.enum(["staggered", "aligned"]),
+  customCursorEnabled: z.boolean().optional().default(false),
+  customCursorDefaultUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => validateCursorAssetUrl(v).valid, {
+      message: "Cursor URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+    })
+    .optional()
+    .default(""),
+  customCursorDefaultTransform: fullImageTransformSchema,
+  customCursorDefaultSourceSize: z.number().int().min(16).max(512).optional(),
+  customCursorPointerUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => validateCursorAssetUrl(v).valid, {
+      message: "Pointer cursor URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+    })
+    .optional()
+    .default(""),
+  customCursorPointerTransform: fullImageTransformSchema,
+  customCursorPointerSourceSize: z.number().int().min(16).max(512).optional(),
+  customCursorSize: z
+    .union([z.literal(32), z.literal(48), z.literal(64), z.literal(96)])
+    .optional()
+    .default(48),
+  customCursorHotspotX: z.number().int().min(0).max(128).optional().default(4),
+  customCursorHotspotY: z.number().int().min(0).max(128).optional().default(4),
+  jumpscareEnabled: z.boolean().optional().default(false),
+  jumpscareTrigger: z
+    .enum(["secret-taps", "get-in-touch", "prank-link", "first-click"])
+    .optional()
+    .default("secret-taps"),
+  jumpscareImageUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => validateCursorAssetUrl(v).valid, {
+      message: "Jumpscare image URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+    })
+    .optional()
+    .default(""),
+  jumpscareImageTransform: fullImageTransformSchema,
+  jumpscareAudioUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => validateCursorAssetUrl(v).valid, {
+      message: "Jumpscare audio URL must be a valid /uploads/ path, /assets/ path, or https:// URL.",
+    })
+    .optional()
+    .default(""),
+  jumpscareVolume: z.number().min(0).max(1).optional().default(0.65),
+  jumpscareCaption: z.string().trim().max(80).optional().default("GOTCHA."),
 });
 
 export const restoreSectionsSchema = z.object({

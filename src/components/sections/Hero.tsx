@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePortfolio } from "@/context/PortfolioContext";
 import { resolveEffectiveReducedMotion } from "@/lib/appearance";
+import { dispatchJumpscareTrigger } from "@/lib/jumpscare";
 import { Avatar } from "@/components/common/Avatar";
 import { ResumeViewerModal } from "@/components/common/ResumeViewerModal";
 import { SplitText } from "@/components/motion/SplitText";
@@ -35,11 +36,13 @@ export function Hero() {
   const nameLayerRef = useRef<HTMLDivElement>(null);
   const avatarLayerRef = useRef<HTMLDivElement>(null);
 
+  const reducedMotion = resolveEffectiveReducedMotion(appearance);
+
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
 
-    if (resolveEffectiveReducedMotion(appearance)) {
+    if (reducedMotion) {
       if (nameLayerRef.current) nameLayerRef.current.style.transform = "";
       if (avatarLayerRef.current) avatarLayerRef.current.style.transform = "";
       return;
@@ -109,7 +112,7 @@ export function Hero() {
           checkInitialScroll = requestAnimationFrame(() => {
             if (window.scrollY > 0) void setupParallax();
           });
-        }, 150)
+        }, 480)
       : 0;
 
     return () => {
@@ -121,14 +124,14 @@ export function Hero() {
       window.removeEventListener("scroll", onFirstScrollIntent);
       ctx?.revert();
     };
-  }, [appearance]);
+  }, [reducedMotion]);
 
   return (
     <section
       ref={sectionRef}
       id="top"
       aria-label="Hero Section"
-      className="relative h-svh min-h-[29rem] sm:min-h-[32rem] max-h-[72rem] w-full flex flex-col justify-between overflow-hidden pt-[clamp(4.25rem,9.5svh,6.75rem)] pb-3.5 sm:pb-5 px-(--gutter) select-none bg-(--bg-canvas)"
+      className="relative z-10 h-svh min-h-[29rem] sm:min-h-[32rem] max-h-[72rem] w-full flex flex-col justify-between overflow-hidden pt-[clamp(4.25rem,9.5svh,6.75rem)] pb-3.5 sm:pb-5 px-(--gutter) select-none bg-transparent"
     >
       {/* LAYER 4 (Top Foreground UI, z-30): Roles on Left, Pitch & CTAs on Right */}
       <div className="relative z-30 max-w-7xl mx-auto w-full flex flex-col md:flex-row md:items-start justify-between gap-2.5 sm:gap-6">
@@ -161,7 +164,7 @@ export function Hero() {
           <BodyText
             size="sm"
             tone="secondary"
-            className="line-clamp-3 [@media(max-height:640px)]:line-clamp-2"
+            className="[@media(max-height:640px)]:line-clamp-2"
           >
             {profile.bio}
           </BodyText>
@@ -180,6 +183,16 @@ export function Hero() {
               href="#contact"
               variant="outline"
               size="sm"
+              onClick={(e) => {
+                if (
+                  appearance.jumpscareEnabled &&
+                  appearance.jumpscareTrigger === "get-in-touch"
+                ) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  dispatchJumpscareTrigger("get-in-touch", true);
+                }
+              }}
               className="px-3 sm:px-5 text-[0.625rem] sm:text-[0.6875rem] bg-(--bg-surface)/95"
             >
               <span>{profile.heroCtaSecondary || "Contact Me"}</span>
@@ -209,9 +222,9 @@ export function Hero() {
       <div
         ref={nameLayerRef}
         aria-hidden="true"
-        className="absolute inset-x-0 bottom-[10svh] sm:bottom-[8svh] lg:bottom-[6svh] [@media(max-height:640px)]:bottom-[7svh] z-10 flex flex-col items-center justify-center text-center pointer-events-none select-none px-(--gutter) overflow-hidden"
+        className="absolute inset-x-0 bottom-[13svh] sm:bottom-[10svh] lg:bottom-[9svh] [@media(max-height:640px)]:bottom-[9svh] z-10 flex flex-col items-center justify-center text-center pointer-events-none select-none px-(--gutter) overflow-hidden"
       >
-        <div className="font-display uppercase text-[clamp(3.125rem,min(15.8vw,15.5svh),10.5rem)] leading-[0.82] tracking-tighter text-(--text-primary) opacity-90 whitespace-nowrap max-w-full">
+        <div className="font-display uppercase text-[clamp(3.25rem,min(17.8vw,23svh),16.5rem)] sm:text-[clamp(4.25rem,min(18.5vw,25svh),16.5rem)] [@media(max-height:640px)]:text-[clamp(2.5rem,min(15vw,21svh),9.5rem)] leading-[0.82] tracking-tighter text-(--text-primary) opacity-92 whitespace-nowrap max-w-full">
           <SplitText
             key={profile.name}
             text={profile.name.toUpperCase()}
@@ -220,7 +233,7 @@ export function Hero() {
             triggerOnScroll={false}
           />
         </div>
-        <span className="font-display uppercase text-[clamp(3.5rem,min(18vw,17.5svh),12rem)] leading-[0.78] tracking-tighter text-(--text-accent) whitespace-nowrap max-w-full">
+        <span className="font-display uppercase text-[clamp(3.75rem,min(20.2vw,26svh),18.5rem)] sm:text-[clamp(4.75rem,min(21vw,28svh),18.5rem)] [@media(max-height:640px)]:text-[clamp(2.75rem,min(17vw,23svh),10.5rem)] leading-[0.78] tracking-tighter text-(--text-accent) whitespace-nowrap max-w-full">
           <SplitText
             key={profile.lastName || "VALDELLON"}
             text={(profile.lastName || "VALDELLON").toUpperCase()}
@@ -242,10 +255,10 @@ export function Hero() {
         />
       </div>
 
-      {/* LAYER 3 (Full-Width Bottom Gradient Veil, z-25 — Melts name & avatar into canvas) */}
+      {/* LAYER 3 (Full-Width Bottom Gradient Veil, z-25 — Melts bottom border cleanly without veiling display name) */}
       <div
         aria-hidden="true"
-        className="hero-bottom-melt absolute inset-x-0 bottom-0 h-[4.5rem] sm:h-[6.5rem] bg-linear-to-t from-[#08080a] via-[#08080a]/80 to-transparent pointer-events-none z-25"
+        className="hero-bottom-melt absolute inset-x-0 bottom-0 h-8 sm:h-12 bg-linear-to-t from-[#08080a] via-[#08080a]/55 to-transparent pointer-events-none z-25"
       />
 
       {/* LAYER 4 (Bottom Scroll Bar, z-30 — pl-12 clears the bottom-left LV BrandPortalOrb) */}

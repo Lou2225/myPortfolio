@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { usePortfolio } from "@/context/PortfolioContext";
 import {
   APPEARANCE_SYNC_EVENT,
@@ -9,15 +10,16 @@ import {
 
 /**
  * Keeps `<html>` data attributes, CSS accent palette, font pairing, surface radii,
- * motion mode, and browser theme-color synchronized in real time across
- * SSR initial load, CMS live preview edits, local device toggles, and OS media queries.
+ * custom cursor variables, motion mode, and browser theme-color synchronized in real time
+ * across SSR initial load, CMS live preview edits, local device toggles, and OS media queries.
  */
 export function AppearanceRuntimeSync() {
   const { appearance } = usePortfolio();
+  const pathname = usePathname();
 
   useEffect(() => {
     const sync = () => {
-      applyAppearanceToDocument(appearance);
+      applyAppearanceToDocument(appearance, { pathname });
     };
 
     sync();
@@ -36,7 +38,7 @@ export function AppearanceRuntimeSync() {
       window.removeEventListener(APPEARANCE_SYNC_EVENT, sync);
       window.removeEventListener("storage", sync);
     };
-  }, [appearance]);
+  }, [appearance, pathname]);
 
   return null;
 }

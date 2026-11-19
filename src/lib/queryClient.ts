@@ -10,7 +10,7 @@ export const queryKeys = {
   adminPortfolio: ["admin", "portfolio"] as const,
 };
 
-const PUBLIC_CACHE_STORAGE_KEY = "lou_query_cache_public_v1";
+export const PUBLIC_CACHE_STORAGE_KEY = "lou_query_cache_public_v1";
 const ADMIN_CACHE_STORAGE_KEY = "lou_query_cache_admin_v1";
 
 export function readPersistedPublicCache(): PublicPortfolioData | undefined {

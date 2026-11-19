@@ -44,6 +44,10 @@ export function useSmoothScroll() {
 export function SmoothScroll({ children }: { children: React.ReactNode }) {
   const { appearance } = usePortfolio();
   const lenisRef = useRef<Lenis | null>(null);
+  const appearanceRef = useRef(appearance);
+  useEffect(() => {
+    appearanceRef.current = appearance;
+  }, [appearance]);
   const scrollTriggerRef = useRef<{
     refresh: () => void;
     update: () => void;
@@ -92,7 +96,7 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
       const lenis = lenisRef.current;
       const offset = options?.offset ?? (typeof target === "number" ? 0 : -72);
       const duration = options?.duration ?? 1.4;
-      const reduced = resolveEffectiveReducedMotion(appearance);
+      const reduced = resolveEffectiveReducedMotion(appearanceRef.current);
       const immediate = Boolean(options?.immediate) || reduced;
 
       if (lenis) {
@@ -140,7 +144,7 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [appearance]
+    []
   );
 
   useEffect(() => {
@@ -158,6 +162,7 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const handleAnchorClick = (e: MouseEvent) => {
+      if (e.defaultPrevented) return;
       const target = e.target as HTMLElement | null;
       const anchor = target?.closest("a[href^='#']") as HTMLAnchorElement | null;
       if (!anchor) return;
@@ -262,7 +267,7 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
           rafId = requestAnimationFrame(() => {
             if (window.scrollY > 0) void setupScrollEngine();
           });
-        }, 150)
+        }, 480)
       : 0;
 
     return () => {

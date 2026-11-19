@@ -104,6 +104,13 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
+  return arrayBufferToBase64(buffer)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
 function formatThumbprint(digestBuffer: ArrayBuffer): string {
   const bytes = Array.from(new Uint8Array(digestBuffer)).slice(0, 6);
   const hex = bytes
@@ -199,6 +206,51 @@ async function getOrCreateClientDeviceKey(): Promise<{
     };
   } catch {
     return { publicKeySpki: null, keyThumbprint: null, secureContext };
+  }
+}
+
+/**
+ * Checks whether an ECDSA P-256 keypair already exists in IndexedDB (without creating one
+ * for unauthenticated visitors) and signs a server challenge to recover `lou_registered_device`.
+ */
+export async function signExistingDeviceChallenge(challenge: string): Promise<{
+  keyThumbprint: string;
+  signature: string;
+} | null> {
+  if (
+    typeof window === "undefined" ||
+    !challenge ||
+    !window.isSecureContext ||
+    !window.crypto?.subtle ||
+    typeof indexedDB === "undefined"
+  ) {
+    return null;
+  }
+
+  try {
+    const db = await openKeyDb();
+    const pair = await readStoredKeypair(db);
+    if (!pair?.publicKey || !pair?.privateKey) {
+      return null;
+    }
+
+    const spki = await window.crypto.subtle.exportKey("spki", pair.publicKey);
+    const digest = await window.crypto.subtle.digest("SHA-256", spki);
+    const keyThumbprint = formatThumbprint(digest);
+
+    const encodedChallenge = new TextEncoder().encode(challenge);
+    const signatureBuf = await window.crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      pair.privateKey,
+      encodedChallenge
+    );
+
+    return {
+      keyThumbprint,
+      signature: arrayBufferToBase64Url(signatureBuf),
+    };
+  } catch {
+    return null;
   }
 }
 

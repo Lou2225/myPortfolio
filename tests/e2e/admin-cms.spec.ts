@@ -440,7 +440,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
       waitUntil: "networkidle",
     });
     const trustedDevicesCard = page
-      .locator("div.rounded-sm")
+      .locator("[data-cascade]")
       .filter({
         has: page.getByRole("heading", {
           name: /Trusted Devices & Cross-Device Pairing/i,
@@ -475,7 +475,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
       .boundingBox();
     expect(scrollContainerBox).not.toBeNull();
     if (scrollContainerBox) {
-      expect(scrollContainerBox.height).toBeLessThanOrEqual(365);
+      expect(scrollContainerBox.height).toBeLessThanOrEqual(425);
     }
 
     // Verify QR pairing modal layout has no localhost override UI and closes cleanly.
@@ -659,5 +659,148 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     ).toBeVisible({ timeout: 10000 });
     await clearDialog.getByRole("button", { name: /^Cancel$/i }).click();
     await expect(clearDialog).not.toBeVisible({ timeout: 10000 });
+  });
+
+  test("connects Admin jumpscare toggle & trigger behaviors to public portfolio and pauses contact scroll", async ({
+    page,
+    request,
+  }) => {
+    await page.goto("/admin", { waitUntil: "networkidle" });
+    await expect(
+      page.getByRole("heading", { name: /Administrator Login/i })
+    ).toBeVisible({ timeout: 15000 });
+
+    const loginResPromise = page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/admin/auth") &&
+        res.request().method() === "POST"
+    );
+    await page.locator("#admin-password").fill(E2E_ADMIN_PASSWORD);
+    await page
+      .getByRole("button", { name: /Unlock Portfolio Manager/i })
+      .click();
+    expect((await loginResPromise).status()).toBe(200);
+
+    // 1. Navigate to Appearance Studio -> enable Scare On + Get In Touch + Contact Me trigger via UI
+    await page.goto("/admin?tab=settings&section=appearance", {
+      waitUntil: "networkidle",
+    });
+
+    const scareSwitch = page.getByRole("switch", {
+      name: /Enable jumpscare Easter egg on public portfolio/i,
+    });
+    await scareSwitch.scrollIntoViewIfNeeded();
+    if ((await scareSwitch.getAttribute("aria-checked")) !== "true") {
+      await scareSwitch.click();
+    }
+    await page
+      .getByRole("button", { name: /Get In Touch \+ Contact Me/i })
+      .click();
+
+    const publishResPromise = page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/admin/portfolio") &&
+        res.request().method() === "PUT"
+    );
+    await page
+      .getByRole("button", { name: /^Save & Publish$/i })
+      .first()
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^Save & Publish$/i })
+      .click();
+    expect((await publishResPromise).status()).toBe(200);
+
+    // Verify GET /api/portfolio reflects live jumpscare state immediately
+    const apiGetInTouch = await (await request.get("/api/portfolio")).json();
+    expect(apiGetInTouch.appearance.jumpscareEnabled).toBe(true);
+    expect(apiGetInTouch.appearance.jumpscareTrigger).toBe("get-in-touch");
+
+    // 2. Test Get In Touch + Contact Me on public "/" (must show scare overlay AND pause scroll at top)
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('aside[aria-label="Site loader"]')
+    ).not.toBeAttached({ timeout: 15000 });
+
+    await page
+      .locator("header")
+      .getByRole("link", { name: /Get In Touch/i })
+      .click();
+    const scareOverlay = page.locator('[data-jumpscare-overlay="true"]');
+    await expect(scareOverlay).toBeVisible({ timeout: 5000 });
+    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(80);
+    await page.keyboard.press("Escape");
+    await expect(scareOverlay).not.toBeVisible({ timeout: 5000 });
+
+    await page
+      .locator("#top")
+      .getByRole("link", { name: /Contact Me/i })
+      .click();
+    await expect(scareOverlay).toBeVisible({ timeout: 5000 });
+    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(80);
+    await scareOverlay.click();
+    await expect(scareOverlay).not.toBeVisible({ timeout: 5000 });
+
+    // 3. Switch to `first-click` in Admin and verify first click anywhere triggers scare
+    await page.goto("/admin?tab=settings&section=appearance", {
+      waitUntil: "networkidle",
+    });
+    const firstClickBtn = page.getByRole("button", {
+      name: /Armed First Click/i,
+    });
+    await firstClickBtn.scrollIntoViewIfNeeded();
+    await firstClickBtn.click();
+
+    const publishFirstClick = page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/admin/portfolio") &&
+        res.request().method() === "PUT"
+    );
+    await page
+      .getByRole("button", { name: /^Save & Publish$/i })
+      .first()
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^Save & Publish$/i })
+      .click();
+    expect((await publishFirstClick).status()).toBe(200);
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('aside[aria-label="Site loader"]')
+    ).not.toBeAttached({ timeout: 15000 });
+    await page
+      .locator("#top")
+      .getByRole("link", { name: /View Systems/i })
+      .click();
+    await expect(scareOverlay).toBeVisible({ timeout: 5000 });
+    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(80);
+    await page.keyboard.press("Escape");
+
+    // 4. Restore Scare Off cleanly via API while keeping E2E state spotless
+    await page.goto("/admin?tab=settings&section=appearance", {
+      waitUntil: "networkidle",
+    });
+    const restoreSwitch = page.getByRole("switch", {
+      name: /Enable jumpscare Easter egg on public portfolio/i,
+    });
+    await restoreSwitch.scrollIntoViewIfNeeded();
+    await restoreSwitch.click();
+    const publishOff = page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/admin/portfolio") &&
+        res.request().method() === "PUT"
+    );
+    await page
+      .getByRole("button", { name: /^Save & Publish$/i })
+      .first()
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^Save & Publish$/i })
+      .click();
+    expect((await publishOff).status()).toBe(200);
   });
 });

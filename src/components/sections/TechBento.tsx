@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SectionHeaders, SkillCategory } from "@/types/portfolio";
 import { usePortfolio } from "@/context/PortfolioContext";
 import { resolveEffectiveReducedMotion } from "@/lib/appearance";
+import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { BentoCard } from "@/components/ui/BentoCard";
 import { Tabs, TabItem } from "@/components/ui/Tabs";
 import {
@@ -127,11 +128,14 @@ export function TechBento({ skills, sectionHeaders }: TechBentoProps) {
       id="skills"
       aria-label="Technical Skills and Architecture"
       onPointerDownCapture={markUserPresent}
-      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
     >
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 sm:gap-10">
         {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-6">
+        <ScrollReveal
+          variant="fade-up"
+          className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-6"
+        >
           <div>
             <Eyebrow withDot className="mb-2">
               {sectionHeaders.skillsEyebrow}
@@ -143,17 +147,19 @@ export function TechBento({ skills, sectionHeaders }: TechBentoProps) {
           <BodyText size="sm" tone="secondary" className="max-w-md">
             {sectionHeaders.skillsSubtitle}
           </BodyText>
-        </div>
+        </ScrollReveal>
 
         {/* DESKTOP / TABLET (>= 768px): Balanced 2x2 Bento Matrix */}
         <div className="hidden md:grid md:grid-cols-2 gap-5 lg:gap-6 w-full">
-          {skills.map((category) => (
-            <div
+          {skills.map((category, idx) => (
+            <ScrollReveal
               key={category.id}
+              variant="fade-up"
+              delayMs={idx * 75}
               className="bento-card-item flex h-full w-full"
             >
               <BentoCard category={category} className="w-full h-full" />
-            </div>
+            </ScrollReveal>
           ))}
         </div>
 
@@ -215,7 +221,7 @@ export function TechBento({ skills, sectionHeaders }: TechBentoProps) {
                     markUserPresent();
                     stepLayer(-1);
                   }}
-                  aria-label="Previous system layer"
+                  aria-label="Prev system layer"
                   className="h-[1.875rem] px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 text-(--text-accent)" />

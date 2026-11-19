@@ -1,6 +1,7 @@
 "use client";
 
 import { usePortfolio } from "@/context/PortfolioContext";
+import { StarfieldCanvas } from "@/components/motion/StarfieldCanvas";
 import { LiquidImage } from "@/components/motion/LiquidImage";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -36,8 +37,10 @@ export function ProjectCaseStudyView({
   const { trackEvent } = usePortfolio();
 
   return (
-    <main className="lou-public-root min-h-screen w-full bg-(--bg-canvas) text-(--text-primary) pt-24 sm:pt-32 pb-20 sm:pb-28 px-(--gutter)">
-      <article className="max-w-5xl mx-auto w-full space-y-8 sm:space-y-12">
+    <main className="lou-public-root relative min-h-screen w-full text-(--text-primary) overflow-x-clip">
+      <StarfieldCanvas />
+      <div className="relative z-10 min-h-screen w-full bg-(--bg-canvas)/74 pt-24 sm:pt-32 pb-20 sm:pb-28 px-(--gutter)">
+        <article className="max-w-5xl mx-auto w-full space-y-8 sm:space-y-12">
         {/* Back Breadcrumb */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Button
@@ -263,6 +266,7 @@ export function ProjectCaseStudyView({
           </nav>
         )}
       </article>
+      </div>
     </main>
   );
 }

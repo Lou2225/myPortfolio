@@ -21,8 +21,9 @@ const globalCspDirectives = [
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' blob: data: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""}`,
+  `media-src 'self' blob: data: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""}`,
   "font-src 'self' data:",
-  `connect-src 'self' https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""} https://psgc.gitlab.io`,
+  `connect-src 'self' blob: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""} https://psgc.gitlab.io`,
   "frame-src 'self' blob: https://drive.google.com",
   "object-src 'none'",
   "base-uri 'self'",
@@ -51,7 +52,7 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   experimental: {
     staleTimes: {
-      dynamic: 60,
+      dynamic: 0,
       static: 180,
     },
   },

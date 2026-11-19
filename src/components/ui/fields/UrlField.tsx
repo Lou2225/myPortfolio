@@ -98,7 +98,7 @@ export function UrlField({
       className={className}
     >
       <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
-        <div className="relative flex-1 min-w-0 sm:min-w-[180px]">
+        <div className="relative flex-1 min-w-0 sm:min-w-[140px]">
           {showIcon && (
             <Link2 className="w-3.5 h-3.5 text-(--text-muted) absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           )}

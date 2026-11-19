@@ -202,11 +202,12 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
     const projectsSection = page.locator("#projects");
     await projectsSection.scrollIntoViewIfNeeded();
 
-    const analyticsTab = projectsSection.getByRole("tab", {
-      name: /Business Analytics/i,
+    const analyticsSpotlightTab = projectsSection.getByRole("tab", {
+      name: /Predictive Business Analytics Intelligence Hub/i,
     });
-    await expect(analyticsTab).toBeVisible({ timeout: 10000 });
-    await analyticsTab.click();
+    await expect(analyticsSpotlightTab).toBeVisible({ timeout: 10000 });
+    await analyticsSpotlightTab.click();
+    await expect(analyticsSpotlightTab).toHaveAttribute("aria-selected", "true");
 
     await expect(
       projectsSection.getByRole("heading", {
@@ -219,14 +220,29 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
       })
     ).not.toBeVisible();
 
-    await projectsSection
-      .getByRole("tab", { name: /Full-Stack System/i })
-      .click();
+    // Switch back to Capstone System and also test the Grid View toggle
+    const capstoneSpotlightTab = projectsSection.getByRole("tab", {
+      name: /Enterprise Group Capstone System/i,
+    });
+    await capstoneSpotlightTab.click();
+    await expect(capstoneSpotlightTab).toHaveAttribute("aria-selected", "true");
     await expect(
       projectsSection.getByRole("heading", {
         name: /Enterprise Group Capstone System/i,
       })
     ).toBeVisible();
+
+    const gridToggleBtn = projectsSection.getByRole("button", {
+      name: /Switch to Grid View/i,
+    });
+    if (await gridToggleBtn.isVisible()) {
+      await gridToggleBtn.click();
+      await expect(
+        projectsSection.getByRole("heading", {
+          name: /Predictive Business Analytics Intelligence Hub/i,
+        })
+      ).toBeVisible();
+    }
 
     await projectsSection
       .getByRole("link", {

@@ -119,6 +119,12 @@ export function Button({
   );
 
   const handleHashClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (onClick) {
+      onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
+    }
+    if (e.defaultPrevented) {
+      return;
+    }
     if (href && href.startsWith("#")) {
       e.preventDefault();
       scrollTo(href, { offset: href === "#top" ? 0 : -68, duration: 1.4 });
@@ -126,14 +132,14 @@ export function Button({
         window.history.pushState(null, "", href);
       }
     }
-    if (onClick) {
-      onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
-    }
   };
 
   const handleRouteLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (onClick) {
       onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
+    }
+    if (e.defaultPrevented) {
+      return;
     }
     if (
       slideDirection &&

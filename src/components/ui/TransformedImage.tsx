@@ -17,6 +17,7 @@ export interface TransformedImageProps {
   sizes?: string;
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low" | "auto";
+  onNaturalSize?: (size: { width: number; height: number }) => void;
   onError?: () => void;
 }
 
@@ -35,6 +36,7 @@ export function TransformedImage({
   sizes,
   loading,
   fetchPriority,
+  onNaturalSize,
   onError,
 }: TransformedImageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,11 @@ export function TransformedImage({
     };
   }, [hasCustomTransform]);
 
+  const onNaturalSizeRef = useRef(onNaturalSize);
+  useEffect(() => {
+    onNaturalSizeRef.current = onNaturalSize;
+  }, [onNaturalSize]);
+
   const handleImgRef = useCallback(
     (node: HTMLImageElement | null) => {
       imgNodeRef.current = node;
@@ -90,6 +97,10 @@ export function TransformedImage({
         node.naturalWidth > 0 &&
         node.naturalHeight > 0
       ) {
+        onNaturalSizeRef.current?.({
+          width: node.naturalWidth,
+          height: node.naturalHeight,
+        });
         setNatSize((prev) =>
           prev.src === src &&
           prev.w === node.naturalWidth &&
@@ -172,6 +183,10 @@ export function TransformedImage({
   const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const t = e.currentTarget;
     if (t.naturalWidth > 0 && t.naturalHeight > 0) {
+      onNaturalSizeRef.current?.({
+        width: t.naturalWidth,
+        height: t.naturalHeight,
+      });
       setNatSize({ src, w: t.naturalWidth, h: t.naturalHeight });
     }
   };

@@ -23,9 +23,12 @@ vi.mock("next/cache", () => ({
   unstable_cache: <T extends (...args: unknown[]) => unknown>(fn: T) => fn,
 }));
 
+import crypto from "crypto";
+import { POST as authPost } from "@/app/api/admin/auth/route";
 import {
   ADMIN_COOKIE_NAME,
   createAdminToken,
+  createDeviceChallengeToken,
   getSessionAndDeviceContext,
   hashAdminPassword,
   isAdminAuthenticated,
@@ -33,6 +36,8 @@ import {
   isSessionSecretConfigured,
   REGISTERED_DEVICE_COOKIE,
   requireSessionSecret,
+  verifyDeviceChallengeToken,
+  verifyEcdsaDeviceSignature,
   verifyPasswordMatch,
   verifyScryptPasswordHash,
 } from "@/lib/auth";
@@ -147,5 +152,93 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
     cookieMap.set(ADMIN_COOKIE_NAME, { name: ADMIN_COOKIE_NAME, value: validToken });
     const ctx = await getSessionAndDeviceContext();
     expect(ctx.authenticated).toBe(false);
+  });
+
+  it("recovers device registration cookie via WebCrypto ECDSA P-256 hardware key challenge", async () => {
+    const subtle = crypto.webcrypto.subtle;
+    const keyPair = await subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign", "verify"]
+    );
+    const spkiBuf = await subtle.exportKey("spki", keyPair.publicKey);
+    const digestBuf = await subtle.digest("SHA-256", spkiBuf);
+    const hex = Array.from(new Uint8Array(digestBuf).slice(0, 6))
+      .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
+      .join("");
+    const thumbprint = `DEV-${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`;
+    const publicKeySpki = Buffer.from(spkiBuf).toString("base64");
+
+    const device = buildDeviceFromTelemetry({
+      ipMasked: "127.0.0.x",
+      userAgent: "Vitest/1.0",
+      localHostname: "test-ecdsa",
+      trustSource: "login",
+      telemetry: {
+        keyThumbprint: thumbprint,
+        publicKeySpki,
+        secureContext: true,
+      },
+    });
+
+    await mutateAdminSecurityStore((store) => ({
+      ...store,
+      sessionEpoch: 1,
+      devices: [device],
+    }));
+
+    const challenge = createDeviceChallengeToken();
+    expect(challenge).toBeTruthy();
+    expect(verifyDeviceChallengeToken(challenge)).toBe(true);
+
+    const sigBuf = await subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      keyPair.privateKey,
+      new TextEncoder().encode(challenge!)
+    );
+    const signature = Buffer.from(sigBuf).toString("base64url");
+
+    expect(
+      verifyEcdsaDeviceSignature({
+        publicKeySpkiBase64: publicKeySpki,
+        challenge: challenge!,
+        signatureBase64Url: signature,
+      })
+    ).toBe(true);
+
+    // No cookies present before recovery
+    cookieMap.clear();
+    const res = await authPost(
+      new Request("http://127.0.0.1:3000/api/admin/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-forwarded-for": "198.51.100.88",
+        },
+        body: JSON.stringify({
+          action: "recover-device-trust",
+          challenge,
+          keyThumbprint: thumbprint,
+          signature,
+        }),
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      success: boolean;
+      deviceRegistered: boolean;
+      currentDeviceId: string;
+    };
+    expect(data.success).toBe(true);
+    expect(data.deviceRegistered).toBe(true);
+    expect(data.currentDeviceId).toBe(device.id);
+    expect(cookieMap.get(REGISTERED_DEVICE_COOKIE)?.value).toBeTruthy();
+
+    // Context now recognizes registered device cleanly without granting admin auth
+    const recoveredCtx = await getSessionAndDeviceContext();
+    expect(recoveredCtx.deviceRegistered).toBe(true);
+    expect(recoveredCtx.authenticated).toBe(false);
+    expect(recoveredCtx.currentDeviceId).toBe(device.id);
   });
 });

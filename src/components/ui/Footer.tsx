@@ -7,11 +7,12 @@ import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
 import { MonogramBadge } from "@/components/common/MonogramBadge";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { DisplayHeading, MonoLabel } from "@/components/ui/Typography";
-import { ArrowUpRight, Download, Github, Linkedin, Mail } from "lucide-react";
+import { dispatchJumpscareTrigger } from "@/lib/jumpscare";
+import { ArrowUpRight, Download, Ghost, Github, Linkedin, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Footer() {
-  const { profile, sectionHeaders, trackEvent } = usePortfolio();
+  const { profile, appearance, sectionHeaders, trackEvent } = usePortfolio();
   const { isOnline, canInstall, promptInstall } = useOfflineStatus();
   const pathname = usePathname();
   const currentYear = new Date().getFullYear();
@@ -33,7 +34,7 @@ export function Footer() {
   };
 
   return (
-    <footer className="lou-public-footer w-full border-t border-(--border-subtle) bg-(--bg-canvas) pt-8 sm:pt-14 pb-5 sm:pb-10 px-(--gutter)">
+    <footer className="lou-public-footer relative z-10 w-full border-t border-(--border-subtle) bg-(--bg-canvas)/88 pt-8 sm:pt-14 pb-5 sm:pb-10 px-(--gutter)">
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 sm:gap-10">
         {/* Top Footer Row: Identity Signature & Uniform Action Grid */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 sm:gap-8">
@@ -142,9 +143,22 @@ export function Footer() {
           <p className="truncate max-w-full">
             © {currentYear} {profile.fullName}.
           </p>
-          <MonoLabel tone="muted" className="text-[0.5625rem] sm:text-[0.625rem]">
-            All Rights Reserved · Class of {profile.education.graduationYear}
-          </MonoLabel>
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2.5">
+            {appearance.jumpscareEnabled &&
+              (appearance.jumpscareTrigger || "secret-taps") === "secret-taps" && (
+                <button
+                  type="button"
+                  onClick={() => dispatchJumpscareTrigger("secret-taps", true)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-brand/35 bg-(--bg-badge-highlight) text-[0.5625rem] font-mono uppercase tracking-wider text-(--text-accent) hover:border-brand cursor-pointer transition-colors"
+                >
+                  <Ghost className="w-2.5 h-2.5" aria-hidden="true" />
+                  <span>Do Not Click</span>
+                </button>
+              )}
+            <MonoLabel tone="muted" className="text-[0.5625rem] sm:text-[0.625rem]">
+              All Rights Reserved · Class of {profile.education.graduationYear}
+            </MonoLabel>
+          </div>
         </div>
       </div>
     </footer>

@@ -11,6 +11,7 @@ import {
 import { usePortfolio } from "@/context/PortfolioContext";
 import { resolveEffectiveReducedMotion } from "@/lib/appearance";
 import { Magnetic } from "@/components/motion/Magnetic";
+import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { ProjectCard } from "@/components/ui/ProjectCard";
 import { Tabs, TabItem } from "@/components/ui/Tabs";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -165,11 +166,14 @@ export function Projects() {
       id="projects"
       aria-label="Selected Projects and Systems"
       onPointerDownCapture={markUserPresent}
-      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
     >
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-5 sm:gap-8">
         {/* Header Row */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-6">
+        <ScrollReveal
+          variant="fade-up"
+          className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-6"
+        >
           <div>
             <Eyebrow withDot className="mb-2">
               {sectionHeaders.projectsEyebrow}
@@ -234,7 +238,7 @@ export function Projects() {
               </Magnetic>
             )}
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Projects Showcase: Master-Detail Spotlight or 2-Column Grid */}
         {totalProjects === 0 ? (

@@ -27,6 +27,9 @@ export function Magnetic({
   const { appearance } = usePortfolio();
   const magneticRef = useRef<HTMLDivElement>(null);
 
+  const magneticEnabled = Boolean(appearance.magneticCursor);
+  const reducedMotion = resolveEffectiveReducedMotion(appearance);
+
   useEffect(() => {
     const el = magneticRef.current;
     if (!el) return;
@@ -36,8 +39,7 @@ export function Magnetic({
     ).matches;
     if (isTouch) return;
 
-    const isDisabled = () =>
-      !appearance.magneticCursor || resolveEffectiveReducedMotion(appearance);
+    const isDisabled = () => !magneticEnabled || reducedMotion;
 
     let cachedRect: DOMRect | null = null;
     let rafId = 0;
@@ -102,7 +104,7 @@ export function Magnetic({
       el.removeEventListener("mouseleave", handleMouseLeave);
       window.removeEventListener(APPEARANCE_SYNC_EVENT, handleSync);
     };
-  }, [strength, appearance]);
+  }, [strength, magneticEnabled, reducedMotion]);
 
   return (
     <div

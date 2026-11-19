@@ -185,6 +185,14 @@ export type ImageColorMode = "grayscale-hover" | "always-color";
 
 export type ProjectsLayoutMode = "staggered" | "aligned";
 
+export type CursorSizeMode = 32 | 48 | 64 | 96;
+
+export type JumpscareTriggerMode =
+  | "secret-taps"
+  | "get-in-touch"
+  | "prank-link"
+  | "first-click";
+
 export interface AppearanceConfig {
   defaultTheme: PortfolioThemeMode;
   accentPreset: AccentPresetId;
@@ -202,7 +210,25 @@ export interface AppearanceConfig {
   liquidDistortion: boolean;
   imageColorMode: ImageColorMode;
   heroRimGlow: boolean;
+  ambientStarfield?: boolean;
   projectsLayout: ProjectsLayoutMode;
+  customCursorEnabled?: boolean;
+  customCursorDefaultUrl?: string;
+  customCursorDefaultTransform?: ImageTransform;
+  customCursorDefaultSourceSize?: number;
+  customCursorPointerUrl?: string;
+  customCursorPointerTransform?: ImageTransform;
+  customCursorPointerSourceSize?: number;
+  customCursorSize?: CursorSizeMode;
+  customCursorHotspotX?: number;
+  customCursorHotspotY?: number;
+  jumpscareEnabled?: boolean;
+  jumpscareTrigger?: JumpscareTriggerMode;
+  jumpscareImageUrl?: string;
+  jumpscareImageTransform?: ImageTransform;
+  jumpscareAudioUrl?: string;
+  jumpscareVolume?: number;
+  jumpscareCaption?: string;
 }
 
 export interface PortfolioDatabase {

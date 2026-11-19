@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { MonogramBadge } from "@/components/common/MonogramBadge";
 import { useSmoothScroll } from "@/components/motion/SmoothScroll";
+import { dispatchJumpscareTrigger } from "@/lib/jumpscare";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 
 interface NavItem {
@@ -28,7 +29,7 @@ const navLinks: NavItem[] = [
 ];
 
 export function Navbar() {
-  const { profile, trackEvent } = usePortfolio();
+  const { profile, appearance, trackEvent } = usePortfolio();
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("top");
@@ -40,6 +41,23 @@ export function Navbar() {
   const isHomeRoute = pathname === "/";
   const isOfflineRoute = pathname === "/offline";
   const isProjectRoute = Boolean(pathname?.startsWith("/projects/"));
+
+  const interceptContactScare = useCallback(
+    (e: React.MouseEvent<HTMLElement>) => {
+      if (
+        !isOfflineRoute &&
+        appearance.jumpscareEnabled &&
+        appearance.jumpscareTrigger === "get-in-touch"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        dispatchJumpscareTrigger("get-in-touch", true);
+        return true;
+      }
+      return false;
+    },
+    [isOfflineRoute, appearance.jumpscareEnabled, appearance.jumpscareTrigger]
+  );
 
   const updateScrollState = useCallback(() => {
     if (isAdminRoute) return;
@@ -169,6 +187,7 @@ export function Navbar() {
                 imageUrl={profile.monogramImageUrl}
                 transform={profile.monogramTransform}
                 alt={`${profile.name} monogram logo`}
+                loading="eager"
                 className={`w-[2rem] h-[2rem] sm:w-[2.5rem] sm:h-[2.5rem] rounded-full border font-bold text-[0.75rem] tracking-wider transition-all duration-300 shrink-0 ${
                   currentSection === "top"
                     ? "border-brand text-(--text-accent) bg-(--bg-badge-highlight) shadow-[0_0_15px_var(--accent-glow)]"
@@ -253,6 +272,7 @@ export function Navbar() {
                 href={isOfflineRoute ? "/" : contactHref}
                 variant="outline"
                 size="sm"
+                onClick={interceptContactScare}
                 className="gap-1.5"
               >
                 <span>
@@ -341,7 +361,10 @@ export function Navbar() {
               variant="primary"
               size="lg"
               fullWidth
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={(e) => {
+                setMobileMenuOpen(false);
+                interceptContactScare(e);
+              }}
               className="text-center"
             >
               Contact {profile.name}

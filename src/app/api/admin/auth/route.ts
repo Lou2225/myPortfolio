@@ -4,6 +4,7 @@ import {
   ADMIN_COOKIE_NAME,
   REGISTERED_DEVICE_COOKIE,
   checkStealthGateAccess,
+  createDeviceChallengeToken,
   getAdminAuthMeta,
   getSessionAndDeviceContext,
   hashAdminPassword,
@@ -14,6 +15,8 @@ import {
   setDeviceCookie,
   setSessionCookie,
   verifyAdminCredential,
+  verifyDeviceChallengeToken,
+  verifyEcdsaDeviceSignature,
 } from "@/lib/auth";
 import {
   clearAdminCredentialOverride,
@@ -66,6 +69,9 @@ export async function GET(request: Request) {
         authenticated: false,
         deviceRegistered: ctx.deviceRegistered,
         storageMode: getStorageMode(),
+        ...(!ctx.deviceRegistered
+          ? { deviceChallenge: createDeviceChallengeToken() }
+          : {}),
       });
     }
 
@@ -118,6 +124,10 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as {
+      action?: "recover-device-trust";
+      challenge?: string;
+      keyThumbprint?: string;
+      signature?: string;
       password?: string;
       totpCode?: string;
       registerDevice?: boolean;
@@ -126,6 +136,100 @@ export async function POST(request: Request) {
       portalKey?: string;
       stealthUnlockToken?: string;
     };
+
+    // Cryptographic WebCrypto ECDSA P-256 hardware-key device re-recognition
+    if (body.action === "recover-device-trust") {
+      const challenge = typeof body.challenge === "string" ? body.challenge : "";
+      const keyThumbprint =
+        typeof body.keyThumbprint === "string" ? body.keyThumbprint.trim() : "";
+      const signature = typeof body.signature === "string" ? body.signature.trim() : "";
+
+      if (!challenge || !keyThumbprint || !signature) {
+        return NextResponse.json(
+          { success: false, deviceRegistered: false, error: "Missing device assertion." },
+          { status: 400 }
+        );
+      }
+
+      const recoverRateKey = `recover-dev:${reqInfo.ipRateKey}`;
+      const preStore = await readAdminSecurityStore();
+      const recoverRate = checkSecurityRateLimit(preStore, recoverRateKey);
+      if (!recoverRate.allowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            deviceRegistered: false,
+            error: "Too many device recovery attempts.",
+          },
+          { status: 429, headers: { "Retry-After": String(recoverRate.retryAfterSec) } }
+        );
+      }
+
+      if (!verifyDeviceChallengeToken(challenge)) {
+        await mutateAdminSecurityStore((store) =>
+          recordSecurityRateFailure(store, recoverRateKey, { maxFailures: 8 })
+        );
+        return NextResponse.json(
+          { success: false, deviceRegistered: false, error: "Expired or invalid challenge." },
+          { status: 401 }
+        );
+      }
+
+      const matched = preStore.devices.find(
+        (d) =>
+          d.status === "active" &&
+          d.keyThumbprint === keyThumbprint &&
+          Boolean(d.publicKeySpki)
+      );
+
+      const signatureValid =
+        Boolean(matched?.publicKeySpki) &&
+        verifyEcdsaDeviceSignature({
+          publicKeySpkiBase64: matched!.publicKeySpki!,
+          challenge,
+          signatureBase64Url: signature,
+        });
+
+      if (!matched || !signatureValid) {
+        await mutateAdminSecurityStore((store) =>
+          recordSecurityRateFailure(store, recoverRateKey, { maxFailures: 8 })
+        );
+        return NextResponse.json(
+          { success: false, deviceRegistered: false, error: "Unrecognized device key." },
+          { status: 401 }
+        );
+      }
+
+      const updated = await mutateAdminSecurityStore((store) => {
+        const cleaned = clearSecurityRateBucket(store, recoverRateKey);
+        return {
+          ...cleaned,
+          devices: cleaned.devices.map((d) =>
+            d.id === matched.id
+              ? {
+                  ...d,
+                  lastSeenAt: new Date().toISOString(),
+                  ipMasked: reqInfo.ipMasked,
+                }
+              : d
+          ),
+        };
+      });
+
+      const cookieStore = await cookies();
+      setDeviceCookie(cookieStore, {
+        deviceId: matched.id,
+        keyThumbprint: matched.keyThumbprint,
+        epoch: updated.sessionEpoch,
+        secure: isSecureRequest(request),
+      });
+
+      return NextResponse.json({
+        success: true,
+        deviceRegistered: true,
+        currentDeviceId: matched.id,
+      });
+    }
 
     // Enforce Stealth Gate consistently on auth endpoint too
     const stealthCheck = await checkStealthGateAccess({

@@ -13,6 +13,8 @@ export interface MonogramBadgeProps {
   alt?: string;
   className?: string;
   textClassName?: string;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
 }
 
 /**
@@ -27,6 +29,8 @@ export function MonogramBadge({
   alt,
   className,
   textClassName,
+  loading,
+  fetchPriority,
 }: MonogramBadgeProps) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const resolvedUrl = useInstantImageUrl(imageUrl);
@@ -47,6 +51,8 @@ export function MonogramBadge({
           defaultFit="cover"
           defaultPosition="center"
           sizes="80px"
+          loading={loading}
+          fetchPriority={fetchPriority}
           onError={() => setFailedUrl(resolvedUrl)}
         />
       </span>

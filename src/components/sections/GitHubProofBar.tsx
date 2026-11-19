@@ -60,7 +60,13 @@ export function GitHubProofBar() {
   }, []);
 
   if (!snapshot || !snapshot.configured || !snapshot.username) {
-    return <div ref={sentinelRef} aria-hidden="true" className="hidden" />;
+    return (
+      <div
+        ref={sentinelRef}
+        aria-hidden="true"
+        className="h-px w-full pointer-events-none opacity-0"
+      />
+    );
   }
 
   return (

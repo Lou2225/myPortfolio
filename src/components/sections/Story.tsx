@@ -1,5 +1,6 @@
 import { Pillar, Profile, SectionHeaders } from "@/types/portfolio";
 import { calculateAge } from "@/lib/date";
+import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import {
   Eyebrow,
   DisplayHeading,
@@ -20,11 +21,14 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
     <section
       id="story"
       aria-label="About and Origin Story"
-      className="scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)"
+      className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
     >
       <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-12 lg:gap-16">
         {/* Left Column: Origin Narrative */}
-        <div className="lg:col-span-5 flex flex-col justify-start">
+        <ScrollReveal
+          variant="fade-up"
+          className="lg:col-span-5 flex flex-col justify-start"
+        >
           <Eyebrow withDot className="mb-2.5 sm:mb-3">
             {sectionHeaders.storyEyebrow}
           </Eyebrow>
@@ -72,14 +76,17 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
               </MonoLabel>
             </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Right Column: Core Pillars */}
         <div className="lg:col-span-7 flex flex-col justify-center">
           <ul className="divide-y divide-(--border-subtle) border-y border-(--border-subtle) w-full">
-            {pillars.map((pillar) => (
-              <li
+            {pillars.map((pillar, i) => (
+              <ScrollReveal
                 key={pillar.number}
+                as="li"
+                variant="fade-up"
+                delayMs={i * 65}
                 className="story-pillar-item py-4 sm:py-7 flex flex-row items-baseline gap-3.5 sm:gap-7 group px-1 sm:px-4 transition-colors duration-300 rounded-sm"
               >
                 <DisplayHeading
@@ -102,7 +109,7 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
                     {pillar.description}
                   </BodyText>
                 </div>
-              </li>
+              </ScrollReveal>
             ))}
           </ul>
         </div>

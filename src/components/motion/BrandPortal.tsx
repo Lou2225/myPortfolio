@@ -12,6 +12,7 @@ import React, {
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { BrandPortalOrb } from "@/components/motion/BrandPortalOrb";
+import { signExistingDeviceChallenge } from "@/lib/deviceTelemetry";
 import {
   announceBrandPortalStatus,
   BrandPortalTone,
@@ -152,7 +153,7 @@ export function BrandPortalProvider({
 
     containNextJsPortalPill();
     const observer = new MutationObserver(containNextJsPortalPill);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true });
 
     return () => observer.disconnect();
   }, []);
@@ -172,61 +173,106 @@ export function BrandPortalProvider({
     let idleCallbackId: number | null = null;
     let cancelled = false;
 
-    const verifyAdminDeviceStatus = () => {
+    const verifyAdminDeviceStatus = async () => {
       if (cancelled) return;
-      fetch("/api/admin/auth", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((data) => {
-          if (cancelled) return;
-          const verified = Boolean(data.deviceRegistered || data.authenticated);
-          setIsRegisteredDevice(verified);
-          if (verified) {
-            localStorage.setItem(DEVICE_STORAGE_KEY, "true");
-          } else {
-            localStorage.removeItem(DEVICE_STORAGE_KEY);
-          }
+      try {
+        const res = await fetch("/api/admin/auth", { cache: "no-store" });
+        if (!res.ok) {
+          // Never wipe persisted device trust on transient network/503 responses
+          return;
+        }
+        const data = await res.json();
+        if (cancelled) return;
 
-          // Seed TanStack Query cache so /admin knows auth status in 0ms
-          queryClient.setQueryData(queryKeys.adminAuth, {
-            authenticated: Boolean(data.authenticated),
-            deviceRegistered: Boolean(data.deviceRegistered),
-            storageMode: data.storageMode || "local-json",
-            ...(data.authenticated
-              ? {
-                  passwordSource: data.passwordSource,
-                  envConfigured: data.envConfigured,
-                  overrideUpdatedAt: data.overrideUpdatedAt ?? null,
-                }
-              : {}),
-          });
+        let verified = Boolean(data.deviceRegistered || data.authenticated);
+        let recoveredFromHardwareKey = false;
 
-          // If already authenticated on this device, warm the admin DB cache in the background
-          if (data.authenticated) {
-            void queryClient.prefetchQuery({
-              queryKey: queryKeys.adminPortfolio,
-              queryFn: async () => {
-                const res = await fetch("/api/admin/portfolio", {
-                  cache: "no-store",
-                });
-                if (!res.ok) throw new Error("Failed to prefetch admin DB");
-                const payload = await res.json();
-                writePersistedAdminCache(payload);
-                return payload;
-              },
+        // If the httpOnly device cookie dropped but IndexedDB still holds a trusted ECDSA keypair,
+        // cryptographically prove ownership to restore `lou_registered_device` seamlessly.
+        if (!verified && typeof data.deviceChallenge === "string" && data.deviceChallenge) {
+          const assertion = await signExistingDeviceChallenge(data.deviceChallenge);
+          if (!cancelled && assertion) {
+            const recRes = await fetch("/api/admin/auth", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "recover-device-trust",
+                challenge: data.deviceChallenge,
+                keyThumbprint: assertion.keyThumbprint,
+                signature: assertion.signature,
+              }),
             });
+            if (recRes.ok) {
+              const recData = await recRes.json().catch(() => ({}));
+              if (recData?.deviceRegistered) {
+                verified = true;
+                recoveredFromHardwareKey = true;
+              }
+            }
           }
-        })
-        .catch(() => {});
+        }
+
+        if (cancelled) return;
+        setIsRegisteredDevice(verified);
+        if (verified) {
+          localStorage.setItem(DEVICE_STORAGE_KEY, "true");
+        } else {
+          localStorage.removeItem(DEVICE_STORAGE_KEY);
+        }
+
+        // Seed TanStack Query cache ONLY when authenticated (or sync updated deviceRegistered flag
+        // when cache already exists), so SSR `initialAuth` remains authoritative on /admin entry.
+        if (data.authenticated) {
+          queryClient.setQueryData(queryKeys.adminAuth, {
+            authenticated: true,
+            deviceRegistered: verified,
+            storageMode: data.storageMode || "local-json",
+            passwordSource: data.passwordSource,
+            envConfigured: data.envConfigured,
+            overrideUpdatedAt: data.overrideUpdatedAt ?? null,
+          });
+        } else {
+          queryClient.setQueryData(
+            queryKeys.adminAuth,
+            (prev: Record<string, unknown> | undefined) =>
+              prev
+                ? { ...prev, authenticated: false, deviceRegistered: verified }
+                : prev
+          );
+        }
+
+        if (recoveredFromHardwareKey) {
+          router.refresh();
+        }
+
+        // If already authenticated on this device, warm the admin DB cache in the background
+        if (data.authenticated) {
+          void queryClient.prefetchQuery({
+            queryKey: queryKeys.adminPortfolio,
+            queryFn: async () => {
+              const portfolioRes = await fetch("/api/admin/portfolio", {
+                cache: "no-store",
+              });
+              if (!portfolioRes.ok) throw new Error("Failed to prefetch admin DB");
+              const payload = await portfolioRes.json();
+              writePersistedAdminCache(payload);
+              return payload;
+            },
+          });
+        }
+      } catch {
+        // Keep last known local device state across transient connectivity drops
+      }
     };
 
     if (isAdminRoute || cached) {
       verifyAdminDeviceStatus();
     } else if (typeof window !== "undefined" && "requestIdleCallback" in window) {
       idleCallbackId = window.requestIdleCallback(verifyAdminDeviceStatus, {
-        timeout: 2200,
+        timeout: 450,
       });
     } else {
-      authTimerId = setTimeout(verifyAdminDeviceStatus, 1400);
+      authTimerId = setTimeout(verifyAdminDeviceStatus, 250);
     }
 
     const handleDeviceSync = (e: Event) => {
@@ -542,10 +588,11 @@ export function BrandPortalProvider({
 
   const triggerSlideNavigate = useCallback(
     (href: string, direction: "left" | "right" = "right") => {
-      if (isAnimatingRef.current || isAnimating) return;
-
       const targetPath = href.split("?")[0].split("#")[0] || "/";
-      if (pathname === targetPath) return;
+      if (isAnimatingRef.current || isAnimating || pathname === targetPath) {
+        router.push(href);
+        return;
+      }
 
       // Warm Next.js Router & RSC payload immediately while curtain starts closing
       router.prefetch(href);
