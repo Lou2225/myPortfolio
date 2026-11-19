@@ -589,7 +589,12 @@ export function SecurityAccessSettings({
                 </p>
                 <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
                   {currentDeviceRecord
-                    ? `${currentDeviceRecord.model} · ${currentDeviceRecord.platform} ${currentDeviceRecord.osVersion} · ${currentDeviceRecord.browser}`
+                    ? `${currentDeviceRecord.model} · ${currentDeviceRecord.platform} ${currentDeviceRecord.osVersion} · ${
+                        currentDeviceRecord.browsers &&
+                        currentDeviceRecord.browsers.length > 1
+                          ? currentDeviceRecord.browsers.join(" + ")
+                          : currentDeviceRecord.browser
+                      }`
                     : telemetry
                       ? `${telemetry.model} · ${telemetry.platform} ${telemetry.osVersion} · ${telemetry.browser}`
                       : "Inspecting browser capabilities..."}
@@ -810,7 +815,9 @@ export function SecurityAccessSettings({
                           </p>
                           <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
                             {device.model} · {device.platform} {device.osVersion} ·{" "}
-                            {device.browser}
+                            {device.browsers && device.browsers.length > 1
+                              ? device.browsers.join(" + ")
+                              : device.browser}
                           </p>
                         </div>
                       </div>

@@ -30,10 +30,13 @@ import {
   buildDeviceFromTelemetry,
   checkSecurityRateLimit,
   clearSecurityRateBucket,
+  deviceHasThumbprint,
   extractRequestNetworkInfo,
+  isSamePhysicalDeviceHardware,
   mutateAdminSecurityStore,
   readAdminSecurityStore,
   recordSecurityRateFailure,
+  resolveDevicePublicKeyForThumbprint,
   toSafeSecuritySummary,
   touchDeviceActivity,
   upsertTrustedDevice,
@@ -159,7 +162,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as {
-      action?: "recover-device-trust";
+      action?: "recover-device-trust" | "recognize-physical-device";
       challenge?: string;
       keyThumbprint?: string;
       signature?: string;
@@ -213,14 +216,18 @@ export async function POST(request: Request) {
       const matched = preStore.devices.find(
         (d) =>
           d.status === "active" &&
-          d.keyThumbprint === keyThumbprint &&
-          Boolean(d.publicKeySpki)
+          deviceHasThumbprint(d, keyThumbprint) &&
+          Boolean(resolveDevicePublicKeyForThumbprint(d, keyThumbprint))
       );
 
+      const matchedSpki = matched
+        ? resolveDevicePublicKeyForThumbprint(matched, keyThumbprint)
+        : null;
+
       const signatureValid =
-        Boolean(matched?.publicKeySpki) &&
+        Boolean(matchedSpki) &&
         verifyEcdsaDeviceSignature({
-          publicKeySpkiBase64: matched!.publicKeySpki!,
+          publicKeySpkiBase64: matchedSpki!,
           challenge,
           signatureBase64Url: signature,
         });
@@ -254,7 +261,7 @@ export async function POST(request: Request) {
       const cookieStore = await cookies();
       setDeviceCookie(cookieStore, {
         deviceId: matched.id,
-        keyThumbprint: matched.keyThumbprint,
+        keyThumbprint,
         epoch: updated.sessionEpoch,
         secure: isSecureRequest(request),
       });
@@ -266,7 +273,124 @@ export async function POST(request: Request) {
       });
     }
 
-    // Enforce Stealth Gate consistently on auth endpoint too
+    // Cross-browser physical device recognition on the same registered machine & network
+    if (body.action === "recognize-physical-device") {
+      const challenge = typeof body.challenge === "string" ? body.challenge : "";
+      const signature =
+        typeof body.signature === "string" ? body.signature.trim() : "";
+
+      if (!challenge || !verifyDeviceChallengeToken(challenge)) {
+        return NextResponse.json(
+          {
+            success: false,
+            deviceRegistered: false,
+            error: "Expired or invalid challenge.",
+          },
+          { status: 401 }
+        );
+      }
+
+      const parsedTelemetry = clientTelemetrySchema.safeParse(
+        body.telemetry ?? {}
+      );
+      if (!parsedTelemetry.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            deviceRegistered: false,
+            error: "Invalid device telemetry.",
+          },
+          { status: 400 }
+        );
+      }
+      const t = parsedTelemetry.data;
+
+      // If the browser sent a WebCrypto public key, verify its challenge signature
+      if (t.publicKeySpki && signature) {
+        const validNewKeySig = verifyEcdsaDeviceSignature({
+          publicKeySpkiBase64: t.publicKeySpki,
+          challenge,
+          signatureBase64Url: signature,
+        });
+        if (!validNewKeySig) {
+          return NextResponse.json(
+            {
+              success: false,
+              deviceRegistered: false,
+              error: "Invalid browser key signature.",
+            },
+            { status: 401 }
+          );
+        }
+      }
+
+      const preStore = await readAdminSecurityStore();
+      const matchedPhysical = preStore.devices.find((d) =>
+        isSamePhysicalDeviceHardware(d, {
+          platform: t.platform,
+          deviceType: t.deviceType,
+          screenMetrics: t.screenMetrics ?? null,
+          cpuCores: typeof t.cpuCores === "number" ? t.cpuCores : null,
+          timezone: t.timezone ?? null,
+          ipMasked: reqInfo.ipMasked,
+        })
+      );
+
+      if (!matchedPhysical) {
+        return NextResponse.json({
+          success: false,
+          deviceRegistered: false,
+        });
+      }
+
+      const updated = await mutateAdminSecurityStore((store) => ({
+        ...store,
+        devices: store.devices.map((d) => {
+          if (d.id !== matchedPhysical.id) return d;
+          const nextBrowserKeys: Record<string, string> = {
+            ...(d.browserKeys || {}),
+            ...(d.keyThumbprint && d.publicKeySpki
+              ? { [d.keyThumbprint]: d.publicKeySpki }
+              : {}),
+            ...(t.keyThumbprint && t.publicKeySpki
+              ? { [t.keyThumbprint]: t.publicKeySpki }
+              : {}),
+          };
+          const nextBrowsers = Array.from(
+            new Set([
+              ...(d.browsers || [d.browser]),
+              t.browser,
+            ].filter(Boolean))
+          );
+          return {
+            ...d,
+            browser: t.browser || d.browser,
+            browsers: nextBrowsers,
+            browserKeys: nextBrowserKeys,
+            keyThumbprint: t.keyThumbprint || d.keyThumbprint,
+            publicKeySpki: t.publicKeySpki || d.publicKeySpki,
+            lastSeenAt: new Date().toISOString(),
+          };
+        }),
+      }));
+
+      const cookieStore = await cookies();
+      setDeviceCookie(cookieStore, {
+        deviceId: matchedPhysical.id,
+        keyThumbprint: t.keyThumbprint || matchedPhysical.keyThumbprint,
+        epoch: updated.sessionEpoch,
+        secure: isSecureRequest(request),
+      });
+
+      return NextResponse.json({
+        success: true,
+        deviceRegistered: true,
+        currentDeviceId: matchedPhysical.id,
+      });
+    }
+
+    // Check Stealth Gate status for audit attribution (while allowing valid rate-limited
+    // administrator password + TOTP authentication so the owner can never be locked out).
     const stealthCheck = await checkStealthGateAccess({
       portalKey: body.portalKey,
       stealthUnlockToken: body.stealthUnlockToken,
@@ -276,9 +400,6 @@ export async function POST(request: Request) {
         { success: false, error: "Security storage temporarily unavailable." },
         { status: 503 }
       );
-    }
-    if (!stealthCheck.allowed) {
-      return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
 
     if (!body.password) {

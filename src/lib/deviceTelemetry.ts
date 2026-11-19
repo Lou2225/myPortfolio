@@ -475,6 +475,65 @@ export async function signExistingDeviceChallenge(challenge: string): Promise<{
 }
 
 /**
+ * Attempts silent device re-recognition:
+ * 1. First checks if an ECDSA P-256 keypair already exists in IndexedDB (`recover-device-trust`).
+ * 2. If not (e.g. a second browser like Chrome/Edge opened on the same registered laptop),
+ *    collects hardware & network telemetry, generates/signs with this browser's keypair,
+ *    and asks the server (`recognize-physical-device`) whether an active TrustedDevice
+ *    matches this physical machine on the same network.
+ */
+export async function recoverOrRecognizeDeviceChallenge(
+  challenge: string
+): Promise<boolean> {
+  if (typeof window === "undefined" || !challenge) return false;
+
+  try {
+    const existingAssertion = await signExistingDeviceChallenge(challenge);
+    if (existingAssertion) {
+      const recRes = await fetch("/api/admin/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "recover-device-trust",
+          challenge,
+          keyThumbprint: existingAssertion.keyThumbprint,
+          signature: existingAssertion.signature,
+        }),
+      });
+      if (recRes.ok) {
+        const recData = await recRes.json().catch(() => ({}));
+        if (recData?.deviceRegistered) {
+          return true;
+        }
+      }
+    }
+
+    const telemetry = await collectClientDeviceTelemetry();
+    const newAssertion = await signExistingDeviceChallenge(challenge);
+    const physRes = await fetch("/api/admin/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "recognize-physical-device",
+        challenge,
+        signature: newAssertion?.signature || "",
+        telemetry,
+      }),
+    });
+    if (physRes.ok) {
+      const physData = await physRes.json().catch(() => ({}));
+      if (physData?.deviceRegistered) {
+        return true;
+      }
+    }
+  } catch {
+    // Ignore transient network errors
+  }
+
+  return false;
+}
+
+/**
  * Safely reads the browser's unmasked WebGL GPU renderer string (when permitted)
  * and trims ANGLE wrappers for clean human-readable hardware summaries.
  */

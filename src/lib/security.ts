@@ -574,6 +574,10 @@ export function buildDeviceFromTelemetry(params: {
       : t.suggestedName?.trim() || `${platform} · ${browser}`;
 
   const resolvedName = (params.customName?.trim() || fallbackName).slice(0, 60);
+  const keyThumbprint = t.keyThumbprint || null;
+  const publicKeySpki = t.publicKeySpki || null;
+  const browserKeys: Record<string, string> =
+    keyThumbprint && publicKeySpki ? { [keyThumbprint]: publicKeySpki } : {};
 
   return {
     id:
@@ -584,14 +588,16 @@ export function buildDeviceFromTelemetry(params: {
     platform,
     osVersion,
     browser,
+    browsers: [browser],
     architecture: t.architecture || null,
     cpuCores: typeof t.cpuCores === "number" ? t.cpuCores : null,
     gpuRenderer: t.gpuRenderer || null,
     screenMetrics: t.screenMetrics || null,
     timezone: t.timezone || null,
     deviceType,
-    keyThumbprint: t.keyThumbprint || null,
-    publicKeySpki: t.publicKeySpki || null,
+    keyThumbprint,
+    publicKeySpki,
+    browserKeys,
     ipMasked: params.ipMasked,
     userAgent: params.userAgent,
     trustSource: params.trustSource,
@@ -602,6 +608,80 @@ export function buildDeviceFromTelemetry(params: {
   };
 }
 
+/**
+ * Determines whether a new browser session belongs to the same active physical device
+ * (same network IP + OS platform + device class + display screen resolution + CPU core count & timezone).
+ */
+export function isSamePhysicalDeviceHardware(
+  existing: TrustedDevice,
+  candidate: {
+    platform: string;
+    deviceType: string;
+    screenMetrics: string | null;
+    cpuCores: number | null;
+    timezone: string | null;
+    ipMasked: string;
+  }
+): boolean {
+  if (existing.status !== "active") return false;
+  if (!existing.ipMasked || existing.ipMasked !== candidate.ipMasked) {
+    return false;
+  }
+  if (
+    existing.platform.trim().toLowerCase() !==
+    candidate.platform.trim().toLowerCase()
+  ) {
+    return false;
+  }
+  if (existing.deviceType !== candidate.deviceType) {
+    return false;
+  }
+  if (
+    !existing.screenMetrics ||
+    !candidate.screenMetrics ||
+    existing.screenMetrics !== candidate.screenMetrics
+  ) {
+    return false;
+  }
+  if (
+    typeof existing.cpuCores === "number" &&
+    typeof candidate.cpuCores === "number" &&
+    existing.cpuCores !== candidate.cpuCores
+  ) {
+    return false;
+  }
+  if (
+    existing.timezone &&
+    candidate.timezone &&
+    existing.timezone !== candidate.timezone
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function resolveDevicePublicKeyForThumbprint(
+  device: TrustedDevice,
+  keyThumbprint: string
+): string | null {
+  if (device.browserKeys && device.browserKeys[keyThumbprint]) {
+    return device.browserKeys[keyThumbprint];
+  }
+  if (device.keyThumbprint === keyThumbprint && device.publicKeySpki) {
+    return device.publicKeySpki;
+  }
+  return null;
+}
+
+export function deviceHasThumbprint(
+  device: TrustedDevice,
+  keyThumbprint: string | null | undefined
+): boolean {
+  if (!keyThumbprint) return false;
+  if (device.keyThumbprint === keyThumbprint) return true;
+  return Boolean(device.browserKeys && device.browserKeys[keyThumbprint]);
+}
+
 export function upsertTrustedDevice(
   store: InternalAdminSecurityStore,
   device: TrustedDevice,
@@ -610,9 +690,10 @@ export function upsertTrustedDevice(
   const existingIdx = store.devices.findIndex(
     (d) =>
       d.id === device.id ||
-      (Boolean(device.keyThumbprint) &&
-        d.keyThumbprint === device.keyThumbprint &&
-        d.status === "active") ||
+      (d.status === "active" &&
+        Boolean(device.keyThumbprint) &&
+        deviceHasThumbprint(d, device.keyThumbprint)) ||
+      isSamePhysicalDeviceHardware(d, device) ||
       (!device.keyThumbprint &&
         !d.keyThumbprint &&
         d.status === "active" &&
@@ -628,11 +709,31 @@ export function upsertTrustedDevice(
       options?.preserveExistingName && existing.name.trim()
         ? existing.name
         : device.name;
+    const mergedBrowserKeys: Record<string, string> = {
+      ...(existing.browserKeys || {}),
+      ...(existing.keyThumbprint && existing.publicKeySpki
+        ? { [existing.keyThumbprint]: existing.publicKeySpki }
+        : {}),
+      ...(device.browserKeys || {}),
+      ...(device.keyThumbprint && device.publicKeySpki
+        ? { [device.keyThumbprint]: device.publicKeySpki }
+        : {}),
+    };
+    const mergedBrowsers = Array.from(
+      new Set([
+        ...(existing.browsers || [existing.browser]),
+        ...(device.browsers || [device.browser]),
+      ].filter(Boolean))
+    );
     const merged: TrustedDevice = {
       ...existing,
       ...device,
       name: resolvedName,
       id: existing.id,
+      browsers: mergedBrowsers,
+      browserKeys: mergedBrowserKeys,
+      keyThumbprint: device.keyThumbprint || existing.keyThumbprint,
+      publicKeySpki: device.publicKeySpki || existing.publicKeySpki,
       createdAt: existing.createdAt,
       status: "active",
       revokedAt: null,

@@ -103,15 +103,14 @@ export function RecognitionHealthCard({
     deviceRegistered &&
       health.hasIndexedDbKey &&
       health.keyThumbprint &&
-      serverThumbprint === health.keyThumbprint
+      (serverThumbprint === health.keyThumbprint ||
+        Boolean(currentDeviceRecord?.browserKeys?.[health.keyThumbprint]))
   );
 
   const needsKeyRepair =
     deviceRegistered &&
     health.secureContext &&
-    (!health.hasIndexedDbKey ||
-      !serverThumbprint ||
-      serverThumbprint !== health.keyThumbprint);
+    !keySyncedWithServer;
 
   const currentDevicePasskeys = currentDeviceRecord
     ? passkeys.filter(

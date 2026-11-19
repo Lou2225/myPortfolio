@@ -56,7 +56,7 @@ import { SettingsManager } from "@/components/admin/SettingsManager";
 import {
   clearStoredClientDeviceKey,
   collectClientDeviceTelemetry,
-  signExistingDeviceChallenge,
+  recoverOrRecognizeDeviceChallenge,
 } from "@/lib/deviceTelemetry";
 import { applyAppearanceToDocument } from "@/lib/appearance";
 import { ALL_FONT_PAIRING_CLASSES } from "@/lib/fonts";
@@ -215,32 +215,18 @@ export function AdminDashboardClient({
       const data = await res.json();
       let isReg = Boolean(data.deviceRegistered || data.authenticated);
 
-      // If cookie was missing/expired, attempt silent WebCrypto ECDSA P-256 recovery before clearing trust
+      // If cookie was missing/expired or a second browser opened on the same registered machine,
+      // attempt silent WebCrypto ECDSA / physical hardware recognition before clearing trust
       if (
         !isReg &&
         typeof data.deviceChallenge === "string" &&
         data.deviceChallenge
       ) {
-        const assertion = await signExistingDeviceChallenge(
+        const recovered = await recoverOrRecognizeDeviceChallenge(
           data.deviceChallenge
         );
-        if (assertion) {
-          const recRes = await fetch("/api/admin/auth", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "recover-device-trust",
-              challenge: data.deviceChallenge,
-              keyThumbprint: assertion.keyThumbprint,
-              signature: assertion.signature,
-            }),
-          });
-          if (recRes.ok) {
-            const recData = await recRes.json().catch(() => ({}));
-            if (recData?.deviceRegistered) {
-              isReg = true;
-            }
-          }
+        if (recovered) {
+          isReg = true;
         }
       }
 

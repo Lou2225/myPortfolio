@@ -12,7 +12,7 @@ import React, {
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { BrandPortalOrb } from "@/components/motion/BrandPortalOrb";
-import { signExistingDeviceChallenge } from "@/lib/deviceTelemetry";
+import { recoverOrRecognizeDeviceChallenge } from "@/lib/deviceTelemetry";
 import { authenticateWithPasskey } from "@/lib/passkeyClient";
 import {
   announceBrandPortalStatus,
@@ -206,28 +206,15 @@ export function BrandPortalProvider({
         let verified = Boolean(data.deviceRegistered || data.authenticated);
         let recoveredFromHardwareKey = false;
 
-        // If the httpOnly device cookie dropped but IndexedDB still holds a trusted ECDSA keypair,
-        // cryptographically prove ownership to restore `lou_registered_device` seamlessly.
+        // If the httpOnly device cookie dropped or a new browser opened on the same registered
+        // physical device, prove ownership / match physical hardware to restore `lou_registered_device`.
         if (!verified && typeof data.deviceChallenge === "string" && data.deviceChallenge) {
-          const assertion = await signExistingDeviceChallenge(data.deviceChallenge);
-          if (!cancelled && assertion) {
-            const recRes = await fetch("/api/admin/auth", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "recover-device-trust",
-                challenge: data.deviceChallenge,
-                keyThumbprint: assertion.keyThumbprint,
-                signature: assertion.signature,
-              }),
-            });
-            if (recRes.ok) {
-              const recData = await recRes.json().catch(() => ({}));
-              if (recData?.deviceRegistered) {
-                verified = true;
-                recoveredFromHardwareKey = true;
-              }
-            }
+          const recovered = await recoverOrRecognizeDeviceChallenge(
+            data.deviceChallenge
+          );
+          if (!cancelled && recovered) {
+            verified = true;
+            recoveredFromHardwareKey = true;
           }
         }
 
@@ -824,7 +811,7 @@ export function BrandPortalProvider({
   }, [handlePasskeyUnlock]);
 
   const handleOrbLongPress = useCallback(() => {
-    void handlePasskeyUnlock(false);
+    void handlePasskeyUnlock(true);
   }, [handlePasskeyUnlock]);
 
   const contextValue = useMemo<BrandPortalContextValue>(

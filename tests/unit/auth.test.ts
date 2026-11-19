@@ -648,4 +648,99 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
     expect(delData.success).toBe(true);
     expect(delData.summary.passkeys).toHaveLength(0);
   });
+
+  it("automatically recognizes a second browser (e.g. Chrome after registering Brave) on the same physical laptop & network via recognize-physical-device", async () => {
+    const braveDevice = buildDeviceFromTelemetry({
+      ipMasked: "198.51.100.*",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Brave/131.0",
+      localHostname: null,
+      trustSource: "login",
+      customName: "Windows 11 · Brave",
+      telemetry: {
+        platform: "Windows",
+        osVersion: "11",
+        browser: "Brave",
+        model: "Windows PC",
+        deviceType: "desktop",
+        screenMetrics: "1366×768",
+        cpuCores: 8,
+        timezone: "Asia/Manila",
+        keyThumbprint: "DEV-536E-D1EF-0523",
+        publicKeySpki: "brave-spki-placeholder",
+        secureContext: true,
+      },
+    });
+
+    await mutateAdminSecurityStore((store) => ({
+      ...store,
+      sessionEpoch: 1,
+      stealthGateEnabled: true,
+      devices: [braveDevice],
+    }));
+
+    // Simulate opening Chrome on the exact same laptop (empty cookie jar)
+    cookieMap.clear();
+    const challenge = createDeviceChallengeToken()!;
+
+    // Generate Chrome's own WebCrypto ECDSA P-256 keypair
+    const subtle = crypto.webcrypto.subtle;
+    const chromeKeyPair = await subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign", "verify"]
+    );
+    const spkiBuf = await subtle.exportKey("spki", chromeKeyPair.publicKey);
+    const chromeSpkiBase64 = Buffer.from(spkiBuf).toString("base64");
+    const sigBuf = await subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      chromeKeyPair.privateKey,
+      new TextEncoder().encode(challenge)
+    );
+    const chromeSignature = Buffer.from(sigBuf).toString("base64url");
+
+    const recogRes = await authPost(
+      new Request("https://louvaldellon.vercel.app/api/admin/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-forwarded-for": "198.51.100.42",
+        },
+        body: JSON.stringify({
+          action: "recognize-physical-device",
+          challenge,
+          signature: chromeSignature,
+          telemetry: {
+            suggestedName: "Windows 11 · Chrome",
+            model: "Windows PC",
+            platform: "Windows",
+            osVersion: "11",
+            browser: "Chrome",
+            deviceType: "desktop",
+            screenMetrics: "1366×768",
+            cpuCores: 8,
+            timezone: "Asia/Manila",
+            keyThumbprint: "DEV-CHRM-7777-8888",
+            publicKeySpki: chromeSpkiBase64,
+            secureContext: true,
+          },
+        }),
+      })
+    );
+
+    expect(recogRes.status).toBe(200);
+    const recogData = (await recogRes.json()) as {
+      success: boolean;
+      deviceRegistered: boolean;
+      currentDeviceId: string;
+    };
+    expect(recogData.success).toBe(true);
+    expect(recogData.deviceRegistered).toBe(true);
+    expect(recogData.currentDeviceId).toBe(braveDevice.id);
+    expect(cookieMap.get(REGISTERED_DEVICE_COOKIE)?.value).toBeTruthy();
+
+    // Chrome is now recognized as a registered device and passes the Stealth Gate!
+    const chromeCtx = await getSessionAndDeviceContext();
+    expect(chromeCtx.deviceRegistered).toBe(true);
+    expect(chromeCtx.currentDeviceId).toBe(braveDevice.id);
+  });
 });

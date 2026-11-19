@@ -42,6 +42,10 @@ export interface TrustedDevice {
   deviceType: DeviceType;
   keyThumbprint: string | null;
   publicKeySpki: string | null;
+  /** All WebCrypto ECDSA keypairs (keyThumbprint -> publicKeySpki) across browsers on this physical device */
+  browserKeys?: Record<string, string>;
+  /** All browsers recognized on this physical device (e.g. ["Brave", "Chrome", "Microsoft Edge"]) */
+  browsers?: string[];
   ipMasked: string;
   userAgent: string;
   trustSource: DeviceTrustSource;
@@ -74,6 +78,10 @@ export interface PairedDevicePreview {
   deviceType: DeviceType;
   keyThumbprint: string | null;
   publicKeySpki: string | null;
+  /** All WebCrypto ECDSA keypairs (keyThumbprint -> publicKeySpki) across browsers on this physical device */
+  browserKeys?: Record<string, string>;
+  /** All browsers recognized on this physical device (e.g. ["Brave", "Chrome", "Microsoft Edge"]) */
+  browsers?: string[];
   ipMasked: string;
   userAgent: string;
   verifiedAt: string;
