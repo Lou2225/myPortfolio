@@ -38,7 +38,7 @@ export const SETTINGS_SECTIONS_META: readonly SettingsSectionMeta[] = [
     eyebrow: "Access Control",
     title: "Security & Access Control",
     subtitle:
-      "Trusted device registry, QR mobile pairing, 404 stealth gate, session epochs & audit log",
+      "Trusted devices, hardware passkeys, Authenticator 2FA, QR pairing, stealth gate & audit log",
     keywords: [
       "security",
       "device",
@@ -59,6 +59,16 @@ export const SETTINGS_SECTIONS_META: readonly SettingsSectionMeta[] = [
       "hardware",
       "gpu",
       "fingerprint",
+      "passkey",
+      "webauthn",
+      "biometrics",
+      "windows hello",
+      "touch id",
+      "face id",
+      "2fa",
+      "totp",
+      "authenticator",
+      "otp",
     ],
   },
   {
@@ -67,7 +77,7 @@ export const SETTINGS_SECTIONS_META: readonly SettingsSectionMeta[] = [
     eyebrow: "Personalization",
     title: "Appearance & Theme",
     subtitle:
-      "Site theme, brand accent palette, typography pairing, corners, texture & motion studio",
+      "Site theme, brand accent palette, typography, motion, custom cursors, starfield & Easter eggs",
     keywords: [
       "appearance",
       "theme",
@@ -95,6 +105,17 @@ export const SETTINGS_SECTIONS_META: readonly SettingsSectionMeta[] = [
       "reduced motion",
       "wcag",
       "contrast",
+      "cursor",
+      "pointer",
+      "hotspot",
+      "starfield",
+      "stars",
+      "ambient",
+      "jumpscare",
+      "prank",
+      "easter egg",
+      "audio",
+      "sound",
     ],
   },
   {
@@ -188,8 +209,8 @@ export const SETTINGS_RECOMMENDATIONS: readonly SettingsRecommendationItem[] = [
     id: "rec-change-password",
     section: "password",
     title: "Change Administrator Password",
-    description: "Set a custom salted scrypt login passkey",
-    keywords: ["password", "passkey", "change", "credentials", "login", "scrypt"],
+    description: "Set a custom salted scrypt administrator password",
+    keywords: ["password", "change", "credentials", "login", "scrypt"],
     popular: true,
   },
   {
@@ -217,9 +238,16 @@ export const SETTINGS_RECOMMENDATIONS: readonly SettingsRecommendationItem[] = [
   {
     id: "rec-motion-posture",
     section: "appearance",
-    title: "Motion, Lenis Scroll, Preloader & Marquee Speed",
-    description: "Configure GSAP animations, magnetic cursor, liquid FX & local reduced motion",
-    keywords: ["motion", "animation", "reduced", "transitions", "gsap", "lenis", "preloader", "marquee", "magnetic", "liquid", "fps"],
+    title: "Motion, Lenis Scroll, Preloader & Ambient Starfield",
+    description: "Configure GSAP animations, ambient starfield, magnetic pull, liquid FX & reduced motion",
+    keywords: ["motion", "animation", "reduced", "transitions", "gsap", "lenis", "preloader", "marquee", "magnetic", "liquid", "fps", "starfield", "stars", "ambient"],
+  },
+  {
+    id: "rec-custom-cursor-fx",
+    section: "appearance",
+    title: "Uploaded Custom Cursor Pack & Jumpscare Prank Mode",
+    description: "Upload .png/.cur cursors with hotspot calibration or configure full-screen Easter egg triggers & audio",
+    keywords: ["cursor", "pointer", "hotspot", "cur", "jumpscare", "prank", "easter egg", "audio", "sound", "fx"],
   },
   {
     id: "rec-brand-portal",
@@ -227,6 +255,14 @@ export const SETTINGS_RECOMMENDATIONS: readonly SettingsRecommendationItem[] = [
     title: "Trusted Devices & Hardware Identity",
     description: "Manage registered browsers, hardware telemetry & ECDSA key fingerprints",
     keywords: ["portal", "device", "trust", "register", "orb", "ldv", "secret", "hardware", "gpu", "fingerprint", "revoke"],
+    popular: true,
+  },
+  {
+    id: "rec-passkeys-2fa",
+    section: "security",
+    title: "Hardware Passkeys (WebAuthn) & Authenticator 2FA",
+    description: "Link Windows Hello/Touch ID biometric passkeys or activate offline TOTP 6-digit codes",
+    keywords: ["passkey", "webauthn", "biometrics", "windows hello", "touch id", "face id", "2fa", "totp", "authenticator", "otp"],
     popular: true,
   },
   {

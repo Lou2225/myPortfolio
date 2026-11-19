@@ -724,11 +724,20 @@ export async function PUT(request: Request) {
       });
 
       const cookieStore = await cookies();
+      const secureCookie = isSecureRequest(request);
       setSessionCookie(cookieStore, {
         epoch: updatedStore.sessionEpoch,
         deviceId: ctx.currentDeviceId ?? undefined,
-        secure: isSecureRequest(request),
+        secure: secureCookie,
       });
+      if (ctx.currentDeviceId) {
+        setDeviceCookie(cookieStore, {
+          deviceId: ctx.currentDeviceId,
+          keyThumbprint: ctx.currentDeviceThumbprint ?? null,
+          epoch: updatedStore.sessionEpoch,
+          secure: secureCookie,
+        });
+      }
 
       const authMeta = await getAdminAuthMeta();
       return NextResponse.json({
@@ -818,11 +827,20 @@ export async function PUT(request: Request) {
     });
 
     const cookieStore = await cookies();
+    const secureCookie = isSecureRequest(request);
     setSessionCookie(cookieStore, {
       epoch: updatedStore.sessionEpoch,
       deviceId: ctx.currentDeviceId ?? undefined,
-      secure: isSecureRequest(request),
+      secure: secureCookie,
     });
+    if (ctx.currentDeviceId) {
+      setDeviceCookie(cookieStore, {
+        deviceId: ctx.currentDeviceId,
+        keyThumbprint: ctx.currentDeviceThumbprint ?? null,
+        epoch: updatedStore.sessionEpoch,
+        secure: secureCookie,
+      });
+    }
 
     const authMeta = await getAdminAuthMeta();
     return NextResponse.json({

@@ -127,9 +127,14 @@ export function DatabaseBackupSettings({
     staleTime: 20_000,
   });
 
+  const totalLiveSkills = db.skills.reduce(
+    (sum, group) => sum + (Array.isArray(group.skills) ? group.skills.length : 0),
+    0
+  );
+
   const currentCounts: BackupSectionCounts = {
     projects: db.projects.length,
-    skills: db.skills.length,
+    skills: totalLiveSkills,
     pillars: db.pillars.length,
     messages: db.messages.length,
     analytics: db.analytics.length,
@@ -254,6 +259,12 @@ export function DatabaseBackupSettings({
         }
       }
 
+      const incomingSkillCount = candidate.skills.reduce(
+        (sum, group) =>
+          sum + (Array.isArray(group?.skills) ? group.skills.length : 0),
+        0
+      );
+
       setPendingRestore({
         kind: "json",
         sourceLabel: file.name,
@@ -261,7 +272,7 @@ export function DatabaseBackupSettings({
         rawBackup: parsed,
         incomingCounts: {
           projects: candidate.projects.length,
-          skills: candidate.skills.length,
+          skills: incomingSkillCount,
           pillars: Array.isArray(candidate.pillars)
             ? candidate.pillars.length
             : 0,
@@ -499,6 +510,18 @@ export function DatabaseBackupSettings({
         }
       />
 
+      {systemQuery.isError && (
+        <div className="p-3.5 rounded-(--radius-control) bg-rose-500/10 border border-rose-500/30 flex items-start justify-between gap-3 text-xs text-rose-300 leading-relaxed">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            <span>
+              Could not reach database telemetry endpoint. Click Probe Health to
+              retry once connected.
+            </span>
+          </div>
+        </div>
+      )}
+
       {health?.warning && (
         <div className="p-3.5 rounded-(--radius-control) bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 leading-relaxed">
           <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
@@ -519,20 +542,28 @@ export function DatabaseBackupSettings({
             </span>
             <StatusPill
               label={
-                health?.status === "healthy"
-                  ? "Healthy"
-                  : health?.status === "degraded"
-                    ? "Degraded"
-                    : health?.status === "offline"
-                      ? "Offline"
-                      : "Ready"
+                systemQuery.isError
+                  ? "Unreachable"
+                  : systemQuery.isPending
+                    ? "Checking"
+                    : health?.status === "healthy"
+                      ? "Healthy"
+                      : health?.status === "degraded"
+                        ? "Degraded"
+                        : health?.status === "offline"
+                          ? "Offline"
+                          : "Unknown"
               }
               variant={
-                health?.status === "degraded"
-                  ? "warning"
-                  : health?.status === "offline"
-                    ? "danger"
-                    : "success"
+                systemQuery.isError || health?.status === "offline"
+                  ? "danger"
+                  : systemQuery.isPending
+                    ? "neutral"
+                    : health?.status === "degraded"
+                      ? "warning"
+                      : health?.status === "healthy"
+                        ? "success"
+                        : "neutral"
               }
               size="xs"
             />
@@ -747,19 +778,14 @@ export function DatabaseBackupSettings({
                     variant={snap.trigger === "manual" ? "accent" : "warning"}
                     size="xs"
                   />
-                  <StatusPill
-                    label={formatByteSize(snap.sizeBytes)}
-                    variant="neutral"
-                    size="xs"
-                  />
                 </div>
                 <p className="text-[11px] font-mono text-(--text-muted) leading-relaxed">
                   <span suppressHydrationWarning>
                     {new Date(snap.createdAt).toLocaleString()}
                   </span>{" "}
-                  · {snap.counts.projects} projects · {snap.counts.skills}{" "}
-                  skills · {snap.counts.messages} msgs · SHA{" "}
-                  {snap.sha256.slice(0, 8)}
+                  · {formatByteSize(snap.sizeBytes)} · {snap.counts.projects}{" "}
+                  projects · {snap.counts.skills} skills ·{" "}
+                  {snap.counts.messages} msgs · SHA {snap.sha256.slice(0, 8)}
                 </p>
               </div>
 

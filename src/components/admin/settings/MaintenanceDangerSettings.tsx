@@ -458,8 +458,9 @@ export function MaintenanceDangerSettings({
                 Orphaned Upload Asset Scanner
               </p>
               <p className="text-xs text-(--text-muted) mt-1 leading-relaxed">
-                Scans uploaded avatars, monograms, project covers, and PDFs not
-                currently linked by any active portfolio record.
+                Scans uploaded avatars, monograms, project covers, PDFs, custom
+                cursors, and jumpscare visuals/audio not currently linked by any
+                active portfolio record.
               </p>
             </div>
 
@@ -584,7 +585,7 @@ export function MaintenanceDangerSettings({
           <p className="text-xs text-(--text-muted) leading-relaxed">
             Overwrites{" "}
             <strong className="text-(--text-primary)">
-              Profile, Story, Skills, Impact &amp; Projects
+              Profile, Story, Skills, Impact, Projects &amp; Appearance
             </strong>
             . Preserves{" "}
             <strong className="text-(--text-primary)">

@@ -46,7 +46,11 @@ import {
   verifyPasswordMatch,
   verifyScryptPasswordHash,
 } from "@/lib/auth";
-import { buildDeviceFromTelemetry, mutateAdminSecurityStore } from "@/lib/security";
+import {
+  buildDeviceFromTelemetry,
+  mutateAdminSecurityStore,
+  readAdminSecurityStore,
+} from "@/lib/security";
 import { resolveCanonicalRedirectUrl } from "@/lib/siteUrl";
 
 let tempDataDir = "";
@@ -379,6 +383,8 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
         browser: "Chrome",
         model: "Windows PC",
         deviceType: "desktop",
+        keyThumbprint: "DEV-CHRM-1111-2222",
+        publicKeySpki: "chrome-spki-base64-key",
         secureContext: true,
       },
     });
@@ -565,6 +571,7 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
             browser: "Microsoft Edge",
             deviceType: "desktop",
             keyThumbprint: "DEV-EDGE-9999-0001",
+            publicKeySpki: "edge-spki-base64-key",
             secureContext: true,
           },
         }),
@@ -590,6 +597,17 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
     expect(edgeCtx.authenticated).toBe(true);
     expect(edgeCtx.deviceRegistered).toBe(true);
     expect(edgeCtx.currentDeviceId).toBe(device.id);
+
+    // Verify Chrome's original ECDSA recovery key & browser tag were preserved alongside Edge's
+    const mergedStore = await readAdminSecurityStore();
+    const mergedDevice = mergedStore.devices.find((d) => d.id === device.id);
+    expect(mergedDevice?.browsers).toEqual(
+      expect.arrayContaining(["Chrome", "Microsoft Edge"])
+    );
+    expect(mergedDevice?.browserKeys).toMatchObject({
+      "DEV-CHRM-1111-2222": "chrome-spki-base64-key",
+      "DEV-EDGE-9999-0001": "edge-spki-base64-key",
+    });
 
     // 6. Replaying the same or lower signature counter (counter = 2) must be rejected
     const replayOptRes = await passkeyPost(

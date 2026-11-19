@@ -399,6 +399,22 @@ export async function POST(request: Request) {
 
         const nextDevices = nextStore.devices.map((d) => {
           if (d.id !== linkedDevice.id) return d;
+          const nextBrowserKeys: Record<string, string> = {
+            ...(d.browserKeys || {}),
+            ...(d.keyThumbprint && d.publicKeySpki
+              ? { [d.keyThumbprint]: d.publicKeySpki }
+              : {}),
+            ...(telemetry?.keyThumbprint && telemetry?.publicKeySpki
+              ? { [telemetry.keyThumbprint]: telemetry.publicKeySpki }
+              : {}),
+          };
+          const nextBrowsers = Array.from(
+            new Set(
+              [...(d.browsers || [d.browser]), telemetry?.browser].filter(
+                (entry): entry is string => Boolean(entry)
+              )
+            )
+          );
           const nextKeyThumbprint =
             telemetry?.keyThumbprint || d.keyThumbprint || null;
           const nextPublicKeySpki =
@@ -407,6 +423,8 @@ export async function POST(request: Request) {
           return {
             ...d,
             browser: telemetry?.browser || d.browser,
+            browsers: nextBrowsers,
+            browserKeys: nextBrowserKeys,
             osVersion: telemetry?.osVersion || d.osVersion,
             keyThumbprint: nextKeyThumbprint,
             publicKeySpki: nextPublicKeySpki,

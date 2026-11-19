@@ -18,7 +18,16 @@ function getLocalSnapshotsFile(): string {
 const SUPABASE_SNAPSHOTS_ROW_ID = "portfolio_snapshots";
 const MAX_SNAPSHOTS = 10;
 
-const UPLOAD_SUBFOLDERS = ["hero", "monogram", "projects", "resume", "general"] as const;
+export const UPLOAD_SUBFOLDERS = [
+  "hero",
+  "monogram",
+  "projects",
+  "resume",
+  "cursors",
+  "scares",
+  "audio",
+  "general",
+] as const;
 
 export type SnapshotTrigger = "manual" | "pre-restore" | "pre-reset";
 
@@ -427,7 +436,7 @@ function normalizeAssetReference(rawUrl?: string | null): string | null {
 /**
  * Extracts every normalized upload path/URL currently referenced by the portfolio database.
  */
-function extractReferencedAssetPaths(db: PortfolioDatabase): Set<string> {
+export function extractReferencedAssetPaths(db: PortfolioDatabase): Set<string> {
   const refs = new Set<string>();
   const addRef = (url?: string | null) => {
     const norm = normalizeAssetReference(url);
@@ -455,6 +464,10 @@ function extractReferencedAssetPaths(db: PortfolioDatabase): Set<string> {
   for (const project of db.projects) {
     addRef(project.image);
   }
+  addRef(db.appearance?.customCursorDefaultUrl);
+  addRef(db.appearance?.customCursorPointerUrl);
+  addRef(db.appearance?.jumpscareImageUrl);
+  addRef(db.appearance?.jumpscareAudioUrl);
   return refs;
 }
 

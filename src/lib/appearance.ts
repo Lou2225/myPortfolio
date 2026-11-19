@@ -573,26 +573,38 @@ export function applyAppearanceToDocument(
 export function sanitizeAppearanceConfig(
   raw?: Partial<AppearanceConfig> | null
 ): AppearanceConfig {
+  const customCursorDefaultUrl = sanitizeCursorAssetUrl(
+    raw?.customCursorDefaultUrl
+  );
+  const customCursorPointerUrl = sanitizeCursorAssetUrl(
+    raw?.customCursorPointerUrl
+  );
+  const jumpscareImageUrl = sanitizeCursorAssetUrl(raw?.jumpscareImageUrl);
+
   const cleaned = {
     ...DEFAULT_APPEARANCE,
     ...(raw || {}),
     ambientStarfield:
       raw?.ambientStarfield ?? DEFAULT_APPEARANCE.ambientStarfield ?? true,
     customCursorEnabled: Boolean(raw?.customCursorEnabled),
-    customCursorDefaultUrl: sanitizeCursorAssetUrl(raw?.customCursorDefaultUrl),
-    customCursorPointerUrl: sanitizeCursorAssetUrl(raw?.customCursorPointerUrl),
-    customCursorDefaultTransform: raw?.customCursorDefaultTransform
-      ? sanitizeImageTransform(raw.customCursorDefaultTransform, "squircle")
-      : undefined,
-    customCursorPointerTransform: raw?.customCursorPointerTransform
-      ? sanitizeImageTransform(raw.customCursorPointerTransform, "squircle")
-      : undefined,
+    customCursorDefaultUrl,
+    customCursorPointerUrl,
+    customCursorDefaultTransform:
+      customCursorDefaultUrl && raw?.customCursorDefaultTransform
+        ? sanitizeImageTransform(raw.customCursorDefaultTransform, "squircle")
+        : undefined,
+    customCursorPointerTransform:
+      customCursorPointerUrl && raw?.customCursorPointerTransform
+        ? sanitizeImageTransform(raw.customCursorPointerTransform, "squircle")
+        : undefined,
     customCursorDefaultSourceSize:
+      customCursorDefaultUrl &&
       typeof raw?.customCursorDefaultSourceSize === "number" &&
       Number.isFinite(raw.customCursorDefaultSourceSize)
         ? Math.max(16, Math.min(512, Math.round(raw.customCursorDefaultSourceSize)))
         : undefined,
     customCursorPointerSourceSize:
+      customCursorPointerUrl &&
       typeof raw?.customCursorPointerSourceSize === "number" &&
       Number.isFinite(raw.customCursorPointerSourceSize)
         ? Math.max(16, Math.min(512, Math.round(raw.customCursorPointerSourceSize)))
@@ -617,10 +629,11 @@ export function sanitizeAppearanceConfig(
         ? raw.jumpscareTrigger
         : "secret-taps"
     ) as JumpscareTriggerMode,
-    jumpscareImageUrl: sanitizeCursorAssetUrl(raw?.jumpscareImageUrl),
-    jumpscareImageTransform: raw?.jumpscareImageTransform
-      ? sanitizeImageTransform(raw.jumpscareImageTransform, "squircle")
-      : undefined,
+    jumpscareImageUrl,
+    jumpscareImageTransform:
+      jumpscareImageUrl && raw?.jumpscareImageTransform
+        ? sanitizeImageTransform(raw.jumpscareImageTransform, "squircle")
+        : undefined,
     jumpscareAudioUrl: sanitizeCursorAssetUrl(raw?.jumpscareAudioUrl),
     jumpscareVolume:
       typeof raw?.jumpscareVolume === "number" && Number.isFinite(raw.jumpscareVolume)

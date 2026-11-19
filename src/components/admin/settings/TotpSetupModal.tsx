@@ -6,10 +6,15 @@ import {
   Copy,
   KeyRound,
   Loader2,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   X,
 } from "lucide-react";
+import {
+  isNetworkOffline,
+  useOfflineStatus,
+} from "@/components/pwa/OfflineManager";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Button } from "@/components/ui/Button";
 import { OtpCodeField, PasswordField } from "@/components/ui/fields";
@@ -36,6 +41,7 @@ export function TotpSetupModal({
   onClose,
   onUpdated,
 }: TotpSetupModalProps) {
+  const { isOnline } = useOfflineStatus();
   const [loadingSetup, setLoadingSetup] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [setupData, setSetupData] = useState<SetupPayload | null>(null);
@@ -48,6 +54,12 @@ export function TotpSetupModal({
   const initializedRef = useRef(false);
 
   const beginSetup = useCallback(async () => {
+    if (isNetworkOffline(isOnline)) {
+      setLoadingSetup(false);
+      setError("Offline — Reconnect to initialize Authenticator 2FA setup.");
+      return;
+    }
+
     setLoadingSetup(true);
     setError(null);
     try {
@@ -56,7 +68,7 @@ export function TotpSetupModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "begin-setup" }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         setError(data.error || "Unable to initialize Authenticator setup.");
         return;
@@ -71,7 +83,7 @@ export function TotpSetupModal({
     } finally {
       setLoadingSetup(false);
     }
-  }, []);
+  }, [isOnline]);
 
   const resetModalState = useCallback(() => {
     initializedRef.current = false;
@@ -266,10 +278,43 @@ export function TotpSetupModal({
                 </Button>
               </div>
             </form>
-          ) : loadingSetup || !setupData ? (
+          ) : loadingSetup ? (
             <div className="py-10 flex items-center justify-center gap-2.5 text-xs font-mono text-(--text-muted)">
               <Loader2 className="w-4 h-4 animate-spin text-(--text-accent)" />
               <span>Generating encrypted TOTP key...</span>
+            </div>
+          ) : !setupData ? (
+            <div className="py-8 text-center space-y-3">
+              <ShieldAlert className="w-8 h-8 text-rose-400 mx-auto" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-(--text-primary)">
+                  Authenticator Setup Unavailable
+                </p>
+                <p className="text-xs text-(--text-muted) max-w-sm mx-auto">
+                  Could not generate a TOTP QR code right now. Verify your
+                  connection and try again.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleClose}
+                >
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  disabled={!isOnline}
+                  onClick={() => void beginSetup()}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry Setup</span>
+                </Button>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleConfirmSetup} className="space-y-4">

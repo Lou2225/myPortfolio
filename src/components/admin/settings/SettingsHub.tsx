@@ -16,6 +16,7 @@ import type { SettingsSectionId } from "@/components/admin/layout/types";
 import { ACCENT_PRESETS, FONT_PAIRINGS } from "@/data/appearance";
 import { useThemePreference } from "@/components/ui/ThemeToggle";
 import { useOfflineStatus } from "@/components/pwa/OfflineManager";
+import { MonogramBadge } from "@/components/common/MonogramBadge";
 import { Collapsible } from "@/components/motion/Collapsible";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
@@ -244,9 +245,14 @@ export function SettingsHub({
         className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4"
       >
         <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
-          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-(--bg-surface-2) border border-brand/40 flex items-center justify-center shrink-0 font-display text-lg sm:text-xl text-(--text-accent)">
-            {db.profile.monogram || "LV"}
-          </div>
+          <MonogramBadge
+            monogram={db.profile.monogram || "LV"}
+            imageUrl={db.profile.monogramImageUrl}
+            transform={db.profile.monogramTransform}
+            alt={`${db.profile.fullName} brand emblem`}
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-(--bg-surface-2) border border-brand/40"
+            textClassName="font-display text-lg sm:text-xl text-(--text-accent)"
+          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-semibold text-sm sm:text-base text-(--text-primary)">

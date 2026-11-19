@@ -57,7 +57,7 @@ const SECTION_OPTIONS: readonly SectionOptionMeta[] = [
   {
     key: "skills",
     label: "Skills Architecture & Impact KPIs",
-    detail: (inc, cur) => `${inc.skills} skill groups (live: ${cur.skills})`,
+    detail: (inc, cur) => `${inc.skills} skills (live: ${cur.skills})`,
     isAvailable: () => true,
   },
   {

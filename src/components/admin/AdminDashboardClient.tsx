@@ -679,7 +679,7 @@ export function AdminDashboardClient({
         label: nextState ? "Portal Registered" : "Portal Unregistered",
         detail: nextState
           ? "Orb click opens /admin CMS"
-          : "Orb click scrolls to top",
+          : "Stealth portal shortcut disabled",
       });
     },
   });

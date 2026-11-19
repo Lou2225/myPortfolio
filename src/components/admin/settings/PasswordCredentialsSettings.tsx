@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   KeyRound,
   ShieldAlert,
@@ -10,6 +11,7 @@ import {
   Lock,
 } from "lucide-react";
 import type { AdminPasswordSource } from "@/lib/auth";
+import { queryKeys } from "@/lib/queryClient";
 import {
   evaluatePasswordStrength,
   passwordChangeSchema,
@@ -47,6 +49,7 @@ export function PasswordCredentialsSettings({
   onPasswordMetaChange,
   onFeedback,
 }: PasswordCredentialsSettingsProps) {
+  const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -133,6 +136,7 @@ export function PasswordCredentialsSettings({
         envConfigured: Boolean(json.envConfigured),
         overrideUpdatedAt: json.overrideUpdatedAt || new Date().toISOString(),
       });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSecurity });
 
       setCurrentPassword("");
       setNewPassword("");
@@ -195,6 +199,7 @@ export function PasswordCredentialsSettings({
         envConfigured: Boolean(json.envConfigured),
         overrideUpdatedAt: null,
       });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSecurity });
       setConfirmRevertOpen(false);
       onFeedback(null);
       announceBrandPortalStatus({
@@ -311,7 +316,7 @@ export function PasswordCredentialsSettings({
         <SectionHeader
           eyebrow="Credential Update"
           title="Change Administrator Password"
-          description="Verify your current password and configure a strong new passkey (8+ characters with at least one number or symbol)."
+          description="Verify your current password and configure a strong new password (8+ characters with at least one number or symbol)."
           size="sm"
           tooltip={
             <InfoTooltip

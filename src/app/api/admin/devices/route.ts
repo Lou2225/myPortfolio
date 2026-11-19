@@ -371,7 +371,7 @@ export async function PATCH(request: Request) {
         const nowIso = new Date().toISOString();
         const revokedOtherIds = new Set<string>();
         const nextDevices = store.devices.map((d) => {
-          if (ctx.currentDeviceId && d.id !== ctx.currentDeviceId && d.status === "active") {
+          if (d.id !== ctx.currentDeviceId && d.status === "active") {
             revokedOtherIds.add(d.id);
             return {
               ...d,

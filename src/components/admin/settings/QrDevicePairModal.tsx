@@ -16,6 +16,10 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import {
+  isNetworkOffline,
+  useOfflineStatus,
+} from "@/components/pwa/OfflineManager";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -62,6 +66,7 @@ export function QrDevicePairModal({
   onClose,
   onPairedSuccess,
 }: QrDevicePairModalProps) {
+  const { isOnline } = useOfflineStatus();
   const [generating, setGenerating] = useState(false);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +84,12 @@ export function QrDevicePairModal({
       withSession?: boolean;
       withApproval?: boolean;
     }) => {
+      if (isNetworkOffline(isOnline)) {
+        setGenerating(false);
+        setError("Offline — Reconnect to generate a mobile QR pairing code.");
+        return;
+      }
+
       setGenerating(true);
       setError(null);
       setLiveStatus(null);
@@ -93,7 +104,7 @@ export function QrDevicePairModal({
               opts?.withApproval ?? requireDesktopApproval,
           }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           setError(data.error || "Failed to generate QR pairing code.");
           return;
@@ -111,7 +122,7 @@ export function QrDevicePairModal({
         setGenerating(false);
       }
     },
-    [grantSession, requireDesktopApproval]
+    [grantSession, isOnline, requireDesktopApproval]
   );
 
   const initializedOpenRef = React.useRef(false);
@@ -425,8 +436,25 @@ export function QrDevicePairModal({
               {/* Left Column: QR Frame, TTL & 1-Time Link */}
               <div className="flex flex-col gap-2.5 w-48 sm:w-52 md:w-56 mx-auto sm:mx-0 shrink-0">
                 <div className="w-48 h-48 sm:w-52 sm:h-52 md:w-56 md:h-56 p-3 rounded-(--radius-card) bg-white border border-(--border-strong) flex items-center justify-center relative overflow-hidden">
-                  {generating || !pairData ? (
+                  {generating ? (
                     <Loader2 className="w-6 h-6 animate-spin text-[#111114]" />
+                  ) : !pairData ? (
+                    <div className="text-center space-y-2 px-3">
+                      <ShieldAlert className="w-7 h-7 text-brand-deep mx-auto" />
+                      <p className="text-xs font-mono font-semibold text-[#111114] uppercase">
+                        QR Unavailable
+                      </p>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        disabled={!isOnline}
+                        onClick={() => void startPairingSession()}
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Retry</span>
+                      </Button>
+                    </div>
                   ) : currentStatus === "expired" ||
                     currentStatus === "burned" ||
                     currentStatus === "cancelled" ? (
