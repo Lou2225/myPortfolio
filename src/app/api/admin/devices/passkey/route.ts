@@ -196,8 +196,11 @@ export async function POST(request: Request) {
         };
         savedPasskey = passkeyRecord;
 
+        // Enforce 1 active passkey per physical device per domain (rpId)
         const filteredPasskeys = upserted.store.passkeys.filter(
-          (pk) => pk.credentialId !== passkeyRecord.credentialId
+          (pk) =>
+            pk.credentialId !== passkeyRecord.credentialId &&
+            !(pk.deviceId === boundDeviceId && pk.rpId === passkeyRecord.rpId)
         );
 
         return appendSecurityAudit(

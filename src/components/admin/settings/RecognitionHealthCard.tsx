@@ -135,28 +135,36 @@ export function RecognitionHealthCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {passkeySupported && onLinkPasskey && (
-            <Button
-              type="button"
-              variant={currentDevicePasskeys.length === 0 ? "primary" : "secondary"}
-              size="sm"
-              disabled={linkingPasskey}
-              onClick={() => void onLinkPasskey()}
-              className="h-7 px-2.5 text-[11px]"
-            >
-              {linkingPasskey ? (
-                <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
-              ) : (
-                <Fingerprint className="w-3 h-3 shrink-0" />
-              )}
-              <span>
-                {linkingPasskey
-                  ? "Waiting for Biometrics..."
-                  : currentDevicePasskeys.length === 0
-                    ? "Link Hardware Passkey"
-                    : "Add Passkey"}
-              </span>
-            </Button>
+          {currentDevicePasskeys.length > 0 ? (
+            <StatusPill
+              label="Passkey Active"
+              variant="success"
+              size="xs"
+              icon={<Fingerprint className="w-3 h-3" />}
+            />
+          ) : (
+            passkeySupported &&
+            onLinkPasskey && (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={linkingPasskey}
+                onClick={() => void onLinkPasskey()}
+                className="h-7 px-2.5 text-[11px]"
+              >
+                {linkingPasskey ? (
+                  <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                ) : (
+                  <Fingerprint className="w-3 h-3 shrink-0" />
+                )}
+                <span>
+                  {linkingPasskey
+                    ? "Waiting for Biometrics..."
+                    : "Link Hardware Passkey"}
+                </span>
+              </Button>
+            )
           )}
 
           {health.storagePersisted === false && (
