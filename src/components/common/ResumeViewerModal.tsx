@@ -217,7 +217,7 @@ export function ResumeViewerModal({
               </div>
               <h2
                 id="resume-viewer-title"
-                className="font-display text-[clamp(1rem,2.6vw,1.25rem)] uppercase tracking-tight text-(--text-primary) truncate leading-tight"
+                className="font-display text-[clamp(1rem,0.9rem+0.5vw,1.25rem)] uppercase tracking-tight text-(--text-primary) truncate leading-tight"
               >
                 {fullName} — Resume
               </h2>

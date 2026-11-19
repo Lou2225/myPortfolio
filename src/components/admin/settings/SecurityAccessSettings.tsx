@@ -151,7 +151,8 @@ export function SecurityAccessSettings({
       return data;
     },
     initialData: () => readPersistedSecurityCache(),
-    staleTime: 10_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const summary = securityQuery.data;

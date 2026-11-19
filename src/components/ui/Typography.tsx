@@ -59,11 +59,11 @@ export function DisplayHeading({
   children,
 }: DisplayHeadingProps) {
   const sizeStyles = {
-    hero: "text-[clamp(2.125rem,6.5vw,5.5rem)] leading-[0.94]",
-    xl: "text-[clamp(1.875rem,5.2vw,4.5rem)] leading-[0.96]",
-    lg: "text-[clamp(1.625rem,4vw,3.125rem)] leading-[1.02]",
-    md: "text-[clamp(1.25rem,2.6vw,1.875rem)] leading-[1.06]",
-    sm: "text-[clamp(1.0625rem,2vw,1.5rem)] leading-[1.08]",
+    hero: "text-[calc(clamp(2.125rem,1.4rem+4.2vw,5.5rem)*var(--public-scale,1))] leading-[0.94]",
+    xl: "text-[calc(clamp(1.875rem,1.25rem+3.4vw,4.5rem)*var(--public-scale,1))] leading-[0.96]",
+    lg: "text-[calc(clamp(1.625rem,1.15rem+2.2vw,3.125rem)*var(--public-scale,1))] leading-[1.02]",
+    md: "text-[calc(clamp(1.25rem,0.95rem+1.2vw,1.875rem)*var(--public-scale,1))] leading-[1.06]",
+    sm: "text-[calc(clamp(1.0625rem,0.9rem+0.8vw,1.5rem)*var(--public-scale,1))] leading-[1.08]",
   };
 
   const toneStyles = {
@@ -106,10 +106,10 @@ export function BodyText({
   children,
 }: BodyTextProps) {
   const sizeStyles = {
-    lg: "text-[clamp(0.9375rem,0.86rem+0.3vw,1.125rem)] leading-relaxed",
-    md: "text-[clamp(0.84375rem,0.79rem+0.22vw,1rem)] leading-relaxed",
-    sm: "text-[clamp(0.78125rem,0.74rem+0.16vw,0.875rem)] leading-relaxed",
-    xs: "text-[clamp(0.71875rem,0.69rem+0.12vw,0.75rem)] leading-relaxed",
+    lg: "text-[calc(clamp(0.9375rem,0.86rem+0.3vw,1.125rem)*var(--public-scale,1))] leading-relaxed",
+    md: "text-[calc(clamp(0.84375rem,0.79rem+0.22vw,1rem)*var(--public-scale,1))] leading-relaxed",
+    sm: "text-[calc(clamp(0.78125rem,0.74rem+0.16vw,0.875rem)*var(--public-scale,1))] leading-relaxed",
+    xs: "text-[calc(clamp(0.71875rem,0.69rem+0.12vw,0.75rem)*var(--public-scale,1))] leading-relaxed",
   };
 
   const toneStyles = {

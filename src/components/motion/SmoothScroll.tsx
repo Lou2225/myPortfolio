@@ -262,6 +262,19 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
     });
 
     let rafId = 0;
+    let resizeRefreshTimer = 0;
+    const handleViewportChange = () => {
+      if (resizeRefreshTimer) window.clearTimeout(resizeRefreshTimer);
+      resizeRefreshTimer = window.setTimeout(() => {
+        activeLenis?.resize();
+        scrollTriggerRef.current?.refresh();
+      }, 120);
+    };
+    window.addEventListener("resize", handleViewportChange, { passive: true });
+    window.visualViewport?.addEventListener("resize", handleViewportChange, {
+      passive: true,
+    });
+
     const hashTimerId = window.location.hash
       ? window.setTimeout(() => {
           rafId = requestAnimationFrame(() => {
@@ -273,7 +286,13 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       if (hashTimerId) window.clearTimeout(hashTimerId);
+      if (resizeRefreshTimer) window.clearTimeout(resizeRefreshTimer);
       if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", handleViewportChange);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        handleViewportChange
+      );
       document.removeEventListener("click", handleAnchorClick);
       window.removeEventListener("wheel", onScrollIntent);
       window.removeEventListener("touchstart", onScrollIntent);

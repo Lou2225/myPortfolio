@@ -860,6 +860,7 @@ export function AdminDashboardClient({
         expanded={sidebarExpanded}
         onSelectTab={handleSelectTab}
         onToggleExpand={() => setSidebarExpanded((prev) => !prev)}
+        onCollapse={() => setSidebarExpanded(false)}
       />
 
       {/* Mobile Bottom Navigation Dock (`< md` screens) */}
@@ -869,12 +870,12 @@ export function AdminDashboardClient({
         onSelectTab={handleSelectTab}
       />
 
-      {/* Main Responsive Content Workspace */}
+      {/* Main Responsive Content Workspace (sidebar floats on md 768px–1023px / zoomed laptops, docks on lg+) */}
       <main
         className={cn(
           "max-w-370 mx-auto px-3 sm:px-6 lg:px-10 pt-4 sm:pt-7 space-y-5 sm:space-y-6 transition-[padding] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           sidebarExpanded
-            ? "md:pl-62 lg:pl-64"
+            ? "md:pl-22 lg:pl-64"
             : "md:pl-22 lg:pl-24"
         )}
       >

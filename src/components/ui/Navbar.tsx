@@ -309,7 +309,8 @@ export function Navbar() {
         <div
           aria-hidden={!mobileMenuOpen}
           inert={!mobileMenuOpen || undefined}
-          className={`fixed inset-0 z-40 bg-(--bg-canvas)/98 flex flex-col justify-between px-6 sm:px-10 pt-24 pb-10 lg:hidden transition-all duration-500 ${
+          data-lenis-prevent
+          className={`fixed inset-0 z-40 bg-(--bg-canvas)/98 flex flex-col justify-between gap-6 overflow-y-auto overscroll-contain px-6 sm:px-10 pt-20 pb-8 sm:pt-24 sm:pb-10 lg:hidden transition-all duration-500 ${
             mobileMenuOpen
               ? "opacity-100 translate-y-0 pointer-events-auto backdrop-blur-2xl visible"
               : "opacity-0 -translate-y-full pointer-events-none invisible"

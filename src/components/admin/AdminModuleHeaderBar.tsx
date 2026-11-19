@@ -59,7 +59,7 @@ export function AdminModuleHeaderBar({
       data-sticky-ceiling={sticky ? "true" : undefined}
       className={cn(
         "bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 lg:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4",
-        sticky && "sm:sticky sm:top-16 [@media(max-height:620px)]:static z-20 shadow-xl",
+        sticky && "lg:sticky lg:top-16 [@media(max-height:680px)]:static z-20 shadow-xl",
         className
       )}
     >
@@ -102,7 +102,7 @@ export function AdminModuleHeaderBar({
           {rightSlot}
         </div>
       ) : (
-        <div className="flex flex-wrap sm:flex-nowrap items-center sm:justify-end gap-2 sm:gap-2.5 pt-3 border-t border-(--border-subtle)/70 lg:border-t-0 lg:pt-0 w-full lg:w-auto lg:shrink-0">
+        <div className="flex flex-wrap items-center sm:justify-end gap-2 sm:gap-2.5 pt-3 border-t border-(--border-subtle)/70 lg:border-t-0 lg:pt-0 w-full lg:w-auto lg:shrink-0">
           {liveErrorsCount > 0 && onFollowIssue && (
             <div className="w-full sm:w-auto">
               <Button

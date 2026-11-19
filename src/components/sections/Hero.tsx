@@ -131,10 +131,10 @@ export function Hero() {
       ref={sectionRef}
       id="top"
       aria-label="Hero Section"
-      className="relative z-10 h-svh min-h-[29rem] sm:min-h-[32rem] max-h-[72rem] w-full flex flex-col justify-between overflow-hidden pt-[clamp(4.25rem,9.5svh,6.75rem)] pb-3.5 sm:pb-5 px-(--gutter) select-none bg-transparent"
+      className="relative z-10 min-h-svh [@media(min-height:680px)_and_(min-width:768px)]:h-svh [@media(min-height:680px)_and_(min-width:768px)]:max-h-[72rem] w-full flex flex-col justify-between gap-4 [@media(min-height:680px)_and_(min-width:768px)]:gap-0 overflow-x-clip overflow-y-hidden pt-[clamp(4.5rem,3.5rem+4svh,6.75rem)] pb-3.5 sm:pb-5 px-(--gutter) select-none bg-transparent"
     >
       {/* LAYER 4 (Top Foreground UI, z-30): Roles on Left, Pitch & CTAs on Right */}
-      <div className="relative z-30 max-w-7xl mx-auto w-full flex flex-col md:flex-row md:items-start justify-between gap-2.5 sm:gap-6">
+      <div className="relative z-30 max-w-7xl mx-auto w-full flex flex-col md:flex-row md:items-start justify-between gap-3 sm:gap-6">
         {/* Left: Semantic H1, Chapter Eyebrow & Stacked Roles */}
         <div className="flex flex-col min-w-0 w-full md:w-auto md:max-w-[48%]">
           <h1 className="sr-only">
@@ -145,9 +145,9 @@ export function Hero() {
             CH // 00 · Class of {profile.education.graduationYear} · BSIT
           </Eyebrow>
 
-          <h2 className="font-display text-[clamp(1.5rem,min(6.4vw,4.8svh),2.25rem)] md:text-[clamp(1.25rem,min(3vw,4.6svh),2.25rem)] [@media(max-height:640px)]:text-[clamp(1.0625rem,min(2.6vw,4.2svh),1.5rem)] uppercase tracking-tight text-(--text-primary) leading-[1.04] flex flex-col [@media(max-height:640px)]:grid [@media(max-height:640px)]:grid-cols-2 [@media(max-height:640px)]:gap-x-4 [@media(max-height:640px)]:gap-y-0.5">
+          <h2 className="font-display text-[calc(clamp(1.25rem,0.95rem+2vw,2.25rem)*var(--public-scale,1))] md:text-[calc(clamp(1.2rem,0.85rem+1.6vw,2.25rem)*var(--public-scale,1))] [@media(max-height:640px)_and_(min-width:640px)]:text-[calc(clamp(1.0625rem,0.85rem+1vw,1.5rem)*var(--public-scale,1))] uppercase tracking-tight text-(--text-primary) leading-[1.06] flex flex-col [@media(max-height:640px)_and_(min-width:640px)]:grid [@media(max-height:640px)_and_(min-width:640px)]:grid-cols-2 [@media(max-height:640px)_and_(min-width:640px)]:gap-x-4 [@media(max-height:640px)_and_(min-width:640px)]:gap-y-0.5">
             {profile.roles.map((role) => (
-              <span key={role} className="block truncate">
+              <span key={role} className="block wrap-break-word">
                 {role}
               </span>
             ))}
@@ -169,7 +169,7 @@ export function Hero() {
             {profile.bio}
           </BodyText>
 
-          <div className="flex flex-nowrap items-center md:justify-end gap-1.5 sm:gap-2.5 mt-3 sm:mt-3.5 w-full md:w-auto">
+          <div className="flex flex-wrap items-center md:justify-end gap-2 sm:gap-2.5 mt-3 sm:mt-3.5 w-full md:w-auto">
             <Button
               href="#projects"
               variant="primary"
@@ -218,13 +218,19 @@ export function Hero() {
         </div>
       </div>
 
+      {/* Visual Stage Spacer — guarantees non-overlapping headroom for portrait & backdrop display type on zoomed/short viewports */}
+      <div
+        aria-hidden="true"
+        className="w-full shrink-0 min-h-[clamp(14rem,36svh,22rem)] sm:min-h-[clamp(15.5rem,40svh,25rem)] [@media(max-height:640px)]:min-h-[clamp(11.5rem,36svh,16.5rem)] [@media(min-height:680px)_and_(min-width:768px)]:min-h-0 [@media(min-height:680px)_and_(min-width:768px)]:flex-1 pointer-events-none"
+      />
+
       {/* LAYER 1 (Background Giant Kinetic Name, z-10) */}
       <div
         ref={nameLayerRef}
         aria-hidden="true"
         className="absolute inset-x-0 bottom-[13svh] sm:bottom-[10svh] lg:bottom-[9svh] [@media(max-height:640px)]:bottom-[9svh] z-10 flex flex-col items-center justify-center text-center pointer-events-none select-none px-(--gutter) overflow-hidden"
       >
-        <div className="font-display uppercase text-[clamp(3.25rem,min(17.8vw,23svh),16.5rem)] sm:text-[clamp(4.25rem,min(18.5vw,25svh),16.5rem)] [@media(max-height:640px)]:text-[clamp(2.5rem,min(15vw,21svh),9.5rem)] leading-[0.82] tracking-tighter text-(--text-primary) opacity-92 whitespace-nowrap max-w-full">
+        <div className="font-display uppercase text-[clamp(2.75rem,min(16.8vw,22svh),16.5rem)] sm:text-[clamp(4rem,min(18vw,24svh),16.5rem)] [@media(max-height:640px)]:text-[clamp(2.25rem,min(14.5vw,20svh),9.5rem)] leading-[0.82] tracking-tighter text-(--text-primary) opacity-92 whitespace-nowrap max-w-full">
           <SplitText
             key={profile.name}
             text={profile.name.toUpperCase()}
@@ -233,7 +239,7 @@ export function Hero() {
             triggerOnScroll={false}
           />
         </div>
-        <span className="font-display uppercase text-[clamp(3.75rem,min(20.2vw,26svh),18.5rem)] sm:text-[clamp(4.75rem,min(21vw,28svh),18.5rem)] [@media(max-height:640px)]:text-[clamp(2.75rem,min(17vw,23svh),10.5rem)] leading-[0.78] tracking-tighter text-(--text-accent) whitespace-nowrap max-w-full">
+        <span className="font-display uppercase text-[clamp(3.25rem,min(19.2vw,25svh),18.5rem)] sm:text-[clamp(4.5rem,min(20.5vw,27svh),18.5rem)] [@media(max-height:640px)]:text-[clamp(2.5rem,min(16.5vw,22svh),10.5rem)] leading-[0.78] tracking-tighter text-(--text-accent) whitespace-nowrap max-w-full">
           <SplitText
             key={profile.lastName || "VALDELLON"}
             text={(profile.lastName || "VALDELLON").toUpperCase()}

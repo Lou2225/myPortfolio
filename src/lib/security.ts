@@ -300,33 +300,46 @@ async function readAdminSecurityStoreWithMeta(): Promise<{
     };
   }
 
-  try {
-    const raw = await fs.readFile(getLocalSecurityFile(), "utf-8");
-    const parsed = JSON.parse(raw) as Partial<InternalAdminSecurityStore>;
-    const rawRevision =
-      typeof parsed.revision === "number" && parsed.revision >= 0
-        ? Math.floor(parsed.revision)
-        : null;
-    return {
-      store: normalizeStore(parsed),
-      meta: {
-        exists: true,
-        revision: rawRevision,
-      },
-    };
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException | undefined)?.code;
-    if (code === "ENOENT") {
+  const filePath = getLocalSecurityFile();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const raw = await fs.readFile(filePath, "utf-8");
+      const parsed = JSON.parse(raw) as Partial<InternalAdminSecurityStore>;
+      const rawRevision =
+        typeof parsed.revision === "number" && parsed.revision >= 0
+          ? Math.floor(parsed.revision)
+          : null;
       return {
-        store: getDefaultSecurityStore(),
+        store: normalizeStore(parsed),
         meta: {
-          exists: false,
-          revision: null,
+          exists: true,
+          revision: rawRevision,
         },
       };
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code === "ENOENT") {
+        return {
+          store: getDefaultSecurityStore(),
+          meta: {
+            exists: false,
+            revision: null,
+          },
+        };
+      }
+      const isTransientWindowsLock =
+        code === "EBUSY" ||
+        code === "EPERM" ||
+        code === "EACCES" ||
+        err instanceof SyntaxError;
+      if (isTransientWindowsLock && attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 15 * (attempt + 1)));
+        continue;
+      }
+      throw new StorageReadError("Unable to read local security registry.");
     }
-    throw new StorageReadError("Unable to read local security registry.");
   }
+  throw new StorageReadError("Unable to read local security registry.");
 }
 
 export async function readAdminSecurityStore(): Promise<InternalAdminSecurityStore> {

@@ -21,6 +21,14 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
     const ssrHtml = await ssrRes.text();
     expect(ssrHtml).toMatch(/aria-label="Site loader"[^>]*class="[^"]*fixed inset-0/);
 
+    // Simulate an external visitor on a different physical machine so cross-browser
+    // same-host recognition from earlier admin E2E tests does not auto-trust this context.
+    await page.addInitScript(() => {
+      Object.defineProperty(window.screen, "width", { get: () => 1440 });
+      Object.defineProperty(window.screen, "height", { get: () => 900 });
+      Object.defineProperty(navigator, "hardwareConcurrency", { get: () => 4 });
+    });
+
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     // Wait for Preloader wipe to finish and hero heading to become interactive.
@@ -265,5 +273,82 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
       .getByRole("link", { name: /Back to Selected Systems/i })
       .click();
     await page.waitForURL("**/#projects", { timeout: 10000 });
+  });
+
+  test("adapts public portfolio cleanly across desktop, zoomed laptop (125%–200%), mobile, and WCAG 320px reflow without overflow", async ({
+    page,
+  }) => {
+    const viewports = [
+      { label: "1920x1080 (100% desktop)", width: 1920, height: 1080 },
+      { label: "1366x768 (100% laptop)", width: 1366, height: 768 },
+      { label: "1092x614 (125% zoom)", width: 1092, height: 614 },
+      { label: "910x512 (150% zoom)", width: 910, height: 512 },
+      { label: "683x384 (200% zoom)", width: 683, height: 384 },
+      { label: "390x844 (mobile)", width: 390, height: 844 },
+      { label: "320x568 (WCAG 400% reflow)", width: 320, height: 568 },
+    ] as const;
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('aside[aria-label="Site loader"]')
+    ).not.toBeAttached({ timeout: 15000 });
+
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.waitForTimeout(120);
+
+      const metrics = await page.evaluate(() => {
+        const hero = document.querySelector("#top");
+        const ctaLinks = hero
+          ? Array.from(hero.querySelectorAll("a, button"))
+          : [];
+        const clippedCtas = ctaLinks
+          .map((el) => {
+            const rect = el.getBoundingClientRect();
+            return {
+              text: el.textContent?.trim() || "",
+              rightOverflow: rect.right - window.innerWidth,
+              leftOverflow: -rect.left,
+            };
+          })
+          .filter((c) => c.rightOverflow > 2 || c.leftOverflow > 2);
+
+        const storyHeading = document.querySelector("#story h2");
+        const storyHeadingPx = storyHeading
+          ? parseFloat(getComputedStyle(storyHeading).fontSize)
+          : 0;
+
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          innerWidth: window.innerWidth,
+          clippedCtas,
+          storyHeadingPx,
+        };
+      });
+
+      expect(
+        metrics.scrollWidth,
+        `Horizontal overflow at ${vp.label}`
+      ).toBeLessThanOrEqual(metrics.innerWidth);
+      expect(
+        metrics.clippedCtas,
+        `Clipped Hero CTAs at ${vp.label}`
+      ).toEqual([]);
+      expect(
+        metrics.storyHeadingPx,
+        `Story heading font size at ${vp.label}`
+      ).toBeGreaterThanOrEqual(24);
+    }
+
+    // Verify mobile menu drawer is scrollable on short/zoomed viewports (e.g. 683x384)
+    await page.setViewportSize({ width: 683, height: 384 });
+    const openMenuBtn = page.getByRole("button", { name: /Open menu/i });
+    await expect(openMenuBtn).toBeVisible();
+    await openMenuBtn.click();
+    const drawerContactLink = page.getByRole("link", {
+      name: /Contact Lou Diamond/i,
+    });
+    await drawerContactLink.scrollIntoViewIfNeeded();
+    await expect(drawerContactLink).toBeVisible();
   });
 });

@@ -232,12 +232,19 @@ export async function POST(request: Request) {
           signatureBase64Url: signature,
         });
 
-      if (!matched || !signatureValid) {
+      if (!matched) {
+        return NextResponse.json({
+          success: false,
+          deviceRegistered: false,
+        });
+      }
+
+      if (!signatureValid) {
         await mutateAdminSecurityStore((store) =>
           recordSecurityRateFailure(store, recoverRateKey, { maxFailures: 8 })
         );
         return NextResponse.json(
-          { success: false, deviceRegistered: false, error: "Unrecognized device key." },
+          { success: false, deviceRegistered: false, error: "Invalid device key signature." },
           { status: 401 }
         );
       }

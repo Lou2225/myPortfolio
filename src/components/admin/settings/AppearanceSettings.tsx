@@ -1420,7 +1420,7 @@ export function AppearanceSettings({
       <div
         data-cascade
         data-sticky-ceiling="true"
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 lg:p-6 space-y-3 sm:space-y-4 lg:sticky lg:top-16 [@media(max-height:620px)]:static z-20 shadow-xl"
+        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 lg:p-6 space-y-3 sm:space-y-4 lg:sticky lg:top-16 [@media(max-height:680px)]:static z-20 shadow-xl"
       >
         <div className="flex flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1 space-y-1">

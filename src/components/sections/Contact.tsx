@@ -188,7 +188,7 @@ export function Contact() {
             <a
               href={`mailto:${profile.contact.email}`}
               onClick={() => trackEvent("contact_click", "Direct Email Click")}
-              className="group inline-flex flex-wrap items-center gap-2 sm:gap-3 font-display text-[clamp(1.0625rem,3.6vw,2.25rem)] text-(--text-primary) hover:text-(--text-accent) transition-colors break-all sm:break-normal"
+              className="group inline-flex flex-wrap items-center gap-2 sm:gap-3 font-display text-[calc(clamp(1.0625rem,0.85rem+1.7vw,2.25rem)*var(--public-scale,1))] text-(--text-primary) hover:text-(--text-accent) transition-colors break-all sm:break-normal"
             >
               <Mail className="w-4 h-4 sm:w-6 sm:h-6 text-(--text-accent) shrink-0" />
               <span className="underline underline-offset-8 decoration-(--border-strong) group-hover:decoration-(--text-accent)">

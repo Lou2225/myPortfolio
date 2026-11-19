@@ -49,7 +49,7 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
                     : "pr-4 sm:pr-6 lg:pr-4"
                 } group`}
               >
-                <dd className="font-display text-[clamp(2.125rem,6vw,4.5rem)] leading-[0.95] uppercase tracking-tight text-(--text-primary) group-hover:text-(--text-accent) transition-colors duration-300 tabular-nums">
+                <dd className="font-display text-[calc(clamp(2.125rem,1.35rem+3.4vw,4.5rem)*var(--public-scale,1))] leading-[0.95] uppercase tracking-tight text-(--text-primary) group-hover:text-(--text-accent) transition-colors duration-300 tabular-nums">
                   {stat.prefix}
                   <CountUpMetric value={stat.value} />
                   <span className="text-(--text-accent)">
