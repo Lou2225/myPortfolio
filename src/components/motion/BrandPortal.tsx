@@ -12,7 +12,10 @@ import React, {
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { BrandPortalOrb } from "@/components/motion/BrandPortalOrb";
-import { recoverOrRecognizeDeviceChallenge } from "@/lib/deviceTelemetry";
+import {
+  collectClientDeviceTelemetry,
+  recoverOrRecognizeDeviceChallenge,
+} from "@/lib/deviceTelemetry";
 import { authenticateWithPasskey } from "@/lib/passkeyClient";
 import {
   announceBrandPortalStatus,
@@ -20,11 +23,14 @@ import {
   DEVICE_STORAGE_KEY,
   DEVICE_SYNC_EVENT,
   dismissBrandPortalNotice,
+  markWorkspaceBootReady,
 } from "@/lib/brandPortalStatus";
 import {
   queryKeys,
   writePersistedAdminCache,
+  writePersistedSecurityCache,
 } from "@/lib/queryClient";
+import type { SafeSecuritySummary } from "@/types/security";
 
 interface BrandPortalContextValue {
   /**
@@ -168,9 +174,7 @@ export function BrandPortalProvider({
       }
     });
 
-    let authTimerId: ReturnType<typeof setTimeout> | null = null;
     let retryTimerId: ReturnType<typeof setTimeout> | null = null;
-    let idleCallbackId: number | null = null;
     let cancelled = false;
     let inFlight = false;
     let lastCheckedAt = 0;
@@ -191,10 +195,17 @@ export function BrandPortalProvider({
       inFlight = true;
       lastCheckedAt = Date.now();
       try {
+        // Start hardware telemetry & IndexedDB key collection in parallel with the auth request
+        // so cross-browser device recognition completes with zero sequential waterfall delay.
+        const parallelTelemetryPromise = !cached
+          ? collectClientDeviceTelemetry()
+          : null;
+
         const res = await fetch("/api/admin/auth", { cache: "no-store" });
         if (!res.ok) {
           // Never wipe persisted device trust on transient network/503 responses; retry with backoff
           lastCheckSucceeded = false;
+          markWorkspaceBootReady();
           scheduleRetry(retryAttempt);
           return;
         }
@@ -210,7 +221,8 @@ export function BrandPortalProvider({
         // physical device, prove ownership / match physical hardware to restore `lou_registered_device`.
         if (!verified && typeof data.deviceChallenge === "string" && data.deviceChallenge) {
           const recovered = await recoverOrRecognizeDeviceChallenge(
-            data.deviceChallenge
+            data.deviceChallenge,
+            parallelTelemetryPromise
           );
           if (!cancelled && recovered) {
             verified = true;
@@ -222,6 +234,9 @@ export function BrandPortalProvider({
         setIsRegisteredDevice(verified);
         if (verified) {
           localStorage.setItem(DEVICE_STORAGE_KEY, "true");
+          if (!isAdminRoute) {
+            router.prefetch("/admin");
+          }
         } else {
           localStorage.removeItem(DEVICE_STORAGE_KEY);
         }
@@ -254,20 +269,39 @@ export function BrandPortalProvider({
           router.refresh();
         }
 
-        // If already authenticated on this device, warm the admin DB cache in the background
+        // If already authenticated on this device, warm both the admin DB & security registry
+        // caches during the Preloader ("Preparing workspace & systems") window.
         if (data.authenticated) {
-          void queryClient.prefetchQuery({
-            queryKey: queryKeys.adminPortfolio,
-            queryFn: async () => {
-              const portfolioRes = await fetch("/api/admin/portfolio", {
-                cache: "no-store",
-              });
-              if (!portfolioRes.ok) throw new Error("Failed to prefetch admin DB");
-              const payload = await portfolioRes.json();
-              writePersistedAdminCache(payload);
-              return payload;
-            },
-          });
+          await Promise.allSettled([
+            queryClient.prefetchQuery({
+              queryKey: queryKeys.adminPortfolio,
+              queryFn: async () => {
+                const portfolioRes = await fetch("/api/admin/portfolio", {
+                  cache: "no-store",
+                });
+                if (!portfolioRes.ok) {
+                  throw new Error("Failed to prefetch admin DB");
+                }
+                const payload = await portfolioRes.json();
+                writePersistedAdminCache(payload);
+                return payload;
+              },
+            }),
+            queryClient.prefetchQuery({
+              queryKey: queryKeys.adminSecurity,
+              queryFn: async () => {
+                const secRes = await fetch("/api/admin/devices", {
+                  cache: "no-store",
+                });
+                if (!secRes.ok) {
+                  throw new Error("Failed to prefetch security registry");
+                }
+                const summary = (await secRes.json()) as SafeSecuritySummary;
+                writePersistedSecurityCache(summary);
+                return summary;
+              },
+            }),
+          ]);
         }
       } catch {
         // Keep last known local device state across transient connectivity drops and schedule retry
@@ -275,23 +309,12 @@ export function BrandPortalProvider({
         scheduleRetry(retryAttempt);
       } finally {
         inFlight = false;
+        markWorkspaceBootReady();
       }
     };
 
-    if (isAdminRoute || cached) {
-      void verifyAdminDeviceStatus();
-    } else if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      idleCallbackId = window.requestIdleCallback(
-        () => {
-          void verifyAdminDeviceStatus();
-        },
-        { timeout: 450 }
-      );
-    } else {
-      authTimerId = setTimeout(() => {
-        void verifyAdminDeviceStatus();
-      }, 250);
-    }
+    // Start device verification immediately (0ms) so it completes inside the Preloader curtain
+    void verifyAdminDeviceStatus();
 
     const handleVisibilityOrFocus = () => {
       if (
@@ -333,18 +356,10 @@ export function BrandPortalProvider({
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafId);
-      if (authTimerId !== null) clearTimeout(authTimerId);
       if (retryTimerId !== null) clearTimeout(retryTimerId);
       if (greetingTimerRef.current !== null) {
         clearTimeout(greetingTimerRef.current);
         greetingTimerRef.current = null;
-      }
-      if (
-        idleCallbackId !== null &&
-        typeof window !== "undefined" &&
-        "cancelIdleCallback" in window
-      ) {
-        window.cancelIdleCallback(idleCallbackId);
       }
       window.removeEventListener(DEVICE_SYNC_EVENT, handleDeviceSync);
       window.removeEventListener("keydown", handleKeyDown);

@@ -91,6 +91,16 @@ function getBrandPortalSnapshot(): BrandPortalSnapshot {
 export const DEVICE_STORAGE_KEY = "lou_registered_device";
 export const DEVICE_SYNC_EVENT = "lou-device-change";
 
+let workspaceBootReady = false;
+
+export function isWorkspaceBootReady(): boolean {
+  return workspaceBootReady;
+}
+
+export function markWorkspaceBootReady(): void {
+  workspaceBootReady = true;
+}
+
 function getBrandPortalServerSnapshot(): BrandPortalSnapshot {
   return SERVER_SNAPSHOT;
 }

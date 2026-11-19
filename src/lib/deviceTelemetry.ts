@@ -483,7 +483,8 @@ export async function signExistingDeviceChallenge(challenge: string): Promise<{
  *    matches this physical machine on the same network.
  */
 export async function recoverOrRecognizeDeviceChallenge(
-  challenge: string
+  challenge: string,
+  precollectedTelemetryPromise?: Promise<ClientDeviceTelemetry> | null
 ): Promise<boolean> {
   if (typeof window === "undefined" || !challenge) return false;
 
@@ -508,7 +509,9 @@ export async function recoverOrRecognizeDeviceChallenge(
       }
     }
 
-    const telemetry = await collectClientDeviceTelemetry();
+    const telemetry = precollectedTelemetryPromise
+      ? await precollectedTelemetryPromise
+      : await collectClientDeviceTelemetry();
     const newAssertion = await signExistingDeviceChallenge(challenge);
     const physRes = await fetch("/api/admin/auth", {
       method: "POST",

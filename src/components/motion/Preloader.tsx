@@ -8,6 +8,7 @@ import {
   PRELOADER_SEEN_SESSION_KEY,
   resolveEffectiveReducedMotion,
 } from "@/lib/appearance";
+import { isWorkspaceBootReady } from "@/lib/brandPortalStatus";
 
 export function Preloader() {
   const { profile, appearance } = usePortfolio();
@@ -59,7 +60,8 @@ export function Preloader() {
       }
     };
 
-    const countDurationMs = 360;
+    const minCountDurationMs = 360;
+    const maxBootWaitMs = 950;
     const holdAtFullMs = 40;
     const exitDurationMs = 380;
     const startTime = performance.now();
@@ -70,25 +72,37 @@ export function Preloader() {
     let doneTimer: ReturnType<typeof setTimeout> | null = null;
 
     const tick = (now: number) => {
-      const t = Math.min(1, (now - startTime) / countDurationMs);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const nextVal = Math.round(eased * 100);
+      const elapsed = now - startTime;
+      const bootSettled =
+        isWorkspaceBootReady() || elapsed >= maxBootWaitMs;
+      const minElapsedReached = elapsed >= minCountDurationMs;
+      const readyToComplete = minElapsedReached && bootSettled;
+
+      const t = Math.min(1, elapsed / minCountDurationMs);
+      const baseEased = 1 - Math.pow(1 - t, 3);
+      // Hold smoothly up to 92% while waiting for device recognition & workspace preloads
+      const progress = readyToComplete
+        ? 1
+        : bootSettled
+          ? baseEased
+          : Math.min(0.92, baseEased * 0.92);
+      const nextVal = readyToComplete ? 100 : Math.round(progress * 100);
 
       if (barRef.current) {
-        barRef.current.style.transform = `scaleX(${t >= 1 ? 1 : eased.toFixed(4)})`;
+        barRef.current.style.transform = `scaleX(${readyToComplete ? 1 : progress.toFixed(4)})`;
       }
 
       if (
         nextVal !== lastShown &&
-        (now - lastCommitAt >= 32 || t >= 1) &&
+        (now - lastCommitAt >= 32 || readyToComplete) &&
         countRef.current
       ) {
         lastShown = nextVal;
         lastCommitAt = now;
-        countRef.current.textContent = String(t >= 1 ? 100 : nextVal);
+        countRef.current.textContent = String(nextVal);
       }
 
-      if (t < 1) {
+      if (!readyToComplete) {
         rafId = requestAnimationFrame(tick);
       } else {
         pauseTimer = setTimeout(() => {

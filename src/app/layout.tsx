@@ -35,7 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
         { url: "/favicon.ico", type: "image/x-icon" },
       ];
 
-  const pageTitle = `${shortTitle} — ${db.profile.headline || "Full-Stack Developer & Business Analytics"}`;
+  const pageTitle = shortTitle;
   const pageDescription =
     db.profile.bio ||
     "Graduating BSIT in Business Analytics & Full-Stack Developer. Stepped up as lead developer to build end-to-end systems from database schemas to interactive user interfaces.";
