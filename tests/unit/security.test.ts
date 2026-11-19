@@ -37,6 +37,13 @@ import {
   verifyStealthRecoveryKey,
 } from "@/lib/security";
 import { POST as pairVerifyPost, PUT as pairVerifyPut } from "@/app/api/admin/devices/pair/verify/route";
+import { PATCH as devicesPatch } from "@/app/api/admin/devices/route";
+import {
+  ADMIN_COOKIE_NAME,
+  createAdminToken,
+  createRegisteredDeviceToken,
+  REGISTERED_DEVICE_COOKIE,
+} from "@/lib/auth";
 import { extractNormalizedClientIp } from "@/lib/rateLimit";
 import type { PairingChallenge } from "@/types/security";
 
@@ -450,5 +457,74 @@ describe("Security Rate Limiting, Stealth Keys & Pairing Abuse Guards", () => {
     const secondUpsert = upsertTrustedDevice(store, lanSecond);
     expect(secondUpsert.store.devices).toHaveLength(1);
     expect(secondUpsert.saved.id).toBe(lanFirst.id);
+  });
+
+  it("revokes all other active devices and rotates sessionEpoch when Sign Out All Other Devices is triggered", async () => {
+    const myLaptop = buildDeviceFromTelemetry({
+      ipMasked: "198.51.100.*",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0) Brave",
+      localHostname: null,
+      trustSource: "login",
+      customName: "Windows 11 · Brave",
+      telemetry: { keyThumbprint: "DEV-536E-D1EF-0523" },
+    });
+    const otherPhone = buildDeviceFromTelemetry({
+      ipMasked: "203.0.113.*",
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)",
+      localHostname: null,
+      trustSource: "qr-pair",
+      customName: "iPhone · Safari",
+      telemetry: { keyThumbprint: "DEV-AAAA-BBBB-CCCC" },
+    });
+    const otherBrowser = buildDeviceFromTelemetry({
+      ipMasked: "192.0.2.*",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0) Edge",
+      localHostname: null,
+      trustSource: "login",
+      customName: "Windows 11 · Edge",
+      telemetry: { keyThumbprint: "DEV-1111-2222-3333" },
+    });
+
+    await mutateAdminSecurityStore((store) => ({
+      ...store,
+      sessionEpoch: 1,
+      devices: [myLaptop, otherPhone, otherBrowser],
+    }));
+
+    cookieMap.set(ADMIN_COOKIE_NAME, {
+      name: ADMIN_COOKIE_NAME,
+      value: createAdminToken({ epoch: 1, deviceId: myLaptop.id }),
+    });
+    cookieMap.set(REGISTERED_DEVICE_COOKIE, {
+      name: REGISTERED_DEVICE_COOKIE,
+      value: createRegisteredDeviceToken({
+        deviceId: myLaptop.id,
+        keyThumbprint: myLaptop.keyThumbprint,
+        epoch: 1,
+      }),
+    });
+
+    const res = await devicesPatch(
+      new Request("http://127.0.0.1:3000/api/admin/devices", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "revoke-other-sessions" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      success: boolean;
+      summary: {
+        sessionEpoch: number;
+        activeDeviceCount: number;
+        devices: Array<{ id: string; status: string }>;
+      };
+    };
+    expect(data.success).toBe(true);
+    expect(data.summary.sessionEpoch).toBe(2);
+    expect(data.summary.activeDeviceCount).toBe(1);
+    const active = data.summary.devices.filter((d) => d.status === "active");
+    expect(active).toHaveLength(1);
+    expect(active[0].id).toBe(myLaptop.id);
   });
 });

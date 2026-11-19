@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PortfolioDatabase } from "@/types/portfolio";
+import type { SafeSecuritySummary } from "@/types/security";
 import { usePortfolio, PublicPortfolioData } from "@/context/PortfolioContext";
 import { useSmoothScroll } from "@/components/motion/SmoothScroll";
 import {
@@ -16,6 +17,8 @@ import {
   AdminPortfolioPayload,
   readPersistedAdminCache,
   writePersistedAdminCache,
+  readPersistedSecurityCache,
+  writePersistedSecurityCache,
   writePersistedPublicCache,
   clearPersistedAdminCache,
 } from "@/lib/queryClient";
@@ -51,6 +54,7 @@ import { ProjectsManager } from "@/components/admin/ProjectsManager";
 import { InboxManager } from "@/components/admin/InboxManager";
 import { SettingsManager } from "@/components/admin/SettingsManager";
 import {
+  clearStoredClientDeviceKey,
   collectClientDeviceTelemetry,
   signExistingDeviceChallenge,
 } from "@/lib/deviceTelemetry";
@@ -70,6 +74,7 @@ export interface AdminAuthStatus {
 export interface AdminDashboardClientProps {
   initialAuth: AdminAuthStatus;
   initialPortfolio?: AdminPortfolioPayload;
+  initialSecuritySummary?: SafeSecuritySummary;
   initialTab: AdminTab;
   initialSettingsSection?: SettingsSectionId;
   stealthUnlockToken?: string | null;
@@ -83,6 +88,7 @@ export interface AdminDashboardClientProps {
 export function AdminDashboardClient({
   initialAuth,
   initialPortfolio,
+  initialSecuritySummary,
   initialTab,
   initialSettingsSection = "hub",
   stealthUnlockToken,
@@ -276,7 +282,10 @@ export function AdminDashboardClient({
     if (initialPortfolio) {
       writePersistedAdminCache(initialPortfolio);
     }
-  }, [deviceRegistered, initialPortfolio]);
+    if (initialSecuritySummary) {
+      writePersistedSecurityCache(initialSecuritySummary);
+    }
+  }, [deviceRegistered, initialPortfolio, initialSecuritySummary]);
 
   // Listen for BrandPortal completing silent WebCrypto ECDSA recovery on /admin
   useEffect(() => {
@@ -310,6 +319,23 @@ export function AdminDashboardClient({
     staleTime: 30 * 1000,
   });
 
+  // 2b. Warm & Hydrate Security Registry Query from SSR / persistent cache so Security & Access opens with zero flicker
+  useQuery({
+    queryKey: queryKeys.adminSecurity,
+    queryFn: async (): Promise<SafeSecuritySummary> => {
+      const res = await fetch("/api/admin/devices", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("Failed to load security registry.");
+      }
+      const summary = (await res.json()) as SafeSecuritySummary;
+      writePersistedSecurityCache(summary);
+      return summary;
+    },
+    initialData: () => initialSecuritySummary ?? readPersistedSecurityCache(),
+    enabled: authenticated,
+    staleTime: 30 * 1000,
+  });
+
   // Notify BrandPortal slide curtain as soon as /admin is ready to reveal (both initial & cached revisit checks)
   const announceAdminReady = useCallback(() => {
     if (!authQuery.isPending && (!authenticated || portfolioQuery.data)) {
@@ -334,19 +360,28 @@ export function AdminDashboardClient({
   }, [announceAdminReady]);
 
   const reloadAdminData = useCallback(async () => {
-    // Prefetch portfolio payload before flipping auth status so login transition has zero skeleton flash
+    // Prefetch portfolio & security payloads before flipping auth status so login transition has zero skeleton flash
     try {
-      const res = await fetch("/api/admin/portfolio", { cache: "no-store" });
-      if (res.ok) {
-        const payload = (await res.json()) as AdminPortfolioPayload;
+      const [portfolioRes, securityRes] = await Promise.all([
+        fetch("/api/admin/portfolio", { cache: "no-store" }),
+        fetch("/api/admin/devices", { cache: "no-store" }),
+      ]);
+      if (portfolioRes.ok) {
+        const payload = (await portfolioRes.json()) as AdminPortfolioPayload;
         queryClient.setQueryData(queryKeys.adminPortfolio, payload);
         writePersistedAdminCache(payload);
+      }
+      if (securityRes.ok) {
+        const secSummary = (await securityRes.json()) as SafeSecuritySummary;
+        queryClient.setQueryData(queryKeys.adminSecurity, secSummary);
+        writePersistedSecurityCache(secSummary);
       }
     } catch {
       // Fall through to standard invalidation
     }
     await queryClient.invalidateQueries({ queryKey: queryKeys.adminAuth });
     await queryClient.invalidateQueries({ queryKey: queryKeys.adminPortfolio });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.adminSecurity });
   }, [queryClient]);
 
   // 3. Optimistic Save Mutation for Profile, Story, Skills, Impact & Projects (Online-Only)
@@ -605,6 +640,9 @@ export function AdminDashboardClient({
       if (!res.ok) {
         throw new Error(json?.error || "Failed to toggle device registration");
       }
+      if (!nextState) {
+        await clearStoredClientDeviceKey();
+      }
       return nextState;
     },
     onMutate: async (nextState) => {
@@ -731,6 +769,11 @@ export function AdminDashboardClient({
   };
 
   const handleLogout = async (unregisterDevice = false) => {
+    if (unregisterDevice) {
+      await clearStoredClientDeviceKey();
+      localStorage.removeItem(DEVICE_STORAGE_KEY);
+      window.dispatchEvent(new CustomEvent(DEVICE_SYNC_EVENT, { detail: false }));
+    }
     await fetch(
       unregisterDevice
         ? "/api/admin/auth?unregisterDevice=true"
@@ -738,10 +781,6 @@ export function AdminDashboardClient({
       { method: "DELETE" }
     );
     clearPersistedAdminCache();
-    if (unregisterDevice) {
-      localStorage.removeItem(DEVICE_STORAGE_KEY);
-      window.dispatchEvent(new CustomEvent(DEVICE_SYNC_EVENT, { detail: false }));
-    }
     queryClient.setQueryData<AdminAuthStatus>(queryKeys.adminAuth, (prev) => ({
       authenticated: false,
       deviceRegistered: unregisterDevice ? false : (prev?.deviceRegistered ?? true),
@@ -751,6 +790,7 @@ export function AdminDashboardClient({
       overrideUpdatedAt: null,
     }));
     queryClient.removeQueries({ queryKey: queryKeys.adminPortfolio });
+    queryClient.removeQueries({ queryKey: queryKeys.adminSecurity });
     router.refresh();
   };
 

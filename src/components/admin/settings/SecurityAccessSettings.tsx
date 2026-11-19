@@ -35,8 +35,17 @@ import {
   useStepNavigation,
 } from "@/components/admin/AdminMobileStepView";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import { collectClientDeviceTelemetry } from "@/lib/deviceTelemetry";
+import {
+  clearStoredClientDeviceKey,
+  collectClientDeviceTelemetry,
+  getInitialClientTelemetryPreview,
+} from "@/lib/deviceTelemetry";
 import { registerDevicePasskey } from "@/lib/passkeyClient";
+import {
+  queryKeys,
+  readPersistedSecurityCache,
+  writePersistedSecurityCache,
+} from "@/lib/queryClient";
 import {
   announceBrandPortalStatus,
   DEVICE_STORAGE_KEY,
@@ -98,7 +107,7 @@ export function SecurityAccessSettings({
     useStepNavigation<SecurityStep>(0);
 
   const [telemetry, setTelemetry] = useState<ClientDeviceTelemetry | null>(
-    null
+    () => getInitialClientTelemetryPreview()
   );
   const [editModalState, setEditModalState] = useState<{
     open: boolean;
@@ -131,22 +140,34 @@ export function SecurityAccessSettings({
   }, []);
 
   const securityQuery = useQuery<SafeSecuritySummary>({
-    queryKey: ["admin-security-registry"],
+    queryKey: queryKeys.adminSecurity,
     queryFn: async () => {
-      const res = await fetch("/api/admin/devices");
+      const res = await fetch("/api/admin/devices", { cache: "no-store" });
       if (!res.ok) {
         throw new Error("Failed to load security registry.");
       }
-      return (await res.json()) as SafeSecuritySummary;
+      const data = (await res.json()) as SafeSecuritySummary;
+      writePersistedSecurityCache(data);
+      return data;
     },
+    initialData: () => readPersistedSecurityCache(),
     staleTime: 10_000,
   });
 
   const summary = securityQuery.data;
 
+  const applyImmediateSummary = useCallback(
+    (nextSummary?: SafeSecuritySummary | null) => {
+      if (!nextSummary) return;
+      queryClient.setQueryData(queryKeys.adminSecurity, nextSummary);
+      writePersistedSecurityCache(nextSummary);
+    },
+    [queryClient]
+  );
+
   const refreshSecurityState = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: ["admin-security-registry"],
+      queryKey: queryKeys.adminSecurity,
     });
     if (onSyncAuth) {
       await onSyncAuth();
@@ -212,6 +233,7 @@ export function SecurityAccessSettings({
           return;
         }
         syncLocalDeviceFlag(true);
+        applyImmediateSummary(data.summary);
         onFeedback?.(null);
         announceBrandPortalStatus({
           tone: "live",
@@ -237,6 +259,7 @@ export function SecurityAccessSettings({
           });
           return;
         }
+        applyImmediateSummary(data.summary);
         onFeedback?.(null);
         announceBrandPortalStatus({
           tone: "synced",
@@ -280,6 +303,7 @@ export function SecurityAccessSettings({
         return;
       }
       syncLocalDeviceFlag(true);
+      applyImmediateSummary(data.summary);
       onFeedback?.(null);
       announceBrandPortalStatus({
         tone: "live",
@@ -316,6 +340,7 @@ export function SecurityAccessSettings({
       }
 
       syncLocalDeviceFlag(true);
+      applyImmediateSummary(result.summary);
       onFeedback?.(null);
       announceBrandPortalStatus({
         tone: "live",
@@ -352,6 +377,7 @@ export function SecurityAccessSettings({
             });
             return;
           }
+          applyImmediateSummary(data.summary);
           onFeedback?.(null);
           announceBrandPortalStatus({
             tone: "synced",
@@ -394,11 +420,13 @@ export function SecurityAccessSettings({
       }
 
       if (data.revokedCurrentDevice || data.removedCurrentDevice) {
+        await clearStoredClientDeviceKey();
         syncLocalDeviceFlag(false);
       }
       if (data.generatedStealthKey) {
         setGeneratedStealthKey(data.generatedStealthKey);
       }
+      applyImmediateSummary(data.summary);
 
       onFeedback?.(null);
       announceBrandPortalStatus({
@@ -451,16 +479,16 @@ export function SecurityAccessSettings({
   const promptRevokeOtherSessions = () => {
     setConfirmState({
       open: true,
-      title: "Sign Out All Other Sessions?",
+      title: "Sign Out & Revoke All Other Devices?",
       description:
-        "Rotates the global session epoch. Any other browser holding a 7-day admin cookie will be forced to sign in again immediately, while your current session stays active.",
-      confirmLabel: "Rotate Sessions",
+        "Rotates the global session epoch and revokes every other device in your Trusted Devices list, leaving only your current browser trusted and signed in.",
+      confirmLabel: "Revoke Other Devices",
       variant: "warning",
       onConfirm: async () => {
         setConfirmState(null);
         await runDevicePatch(
           { action: "revoke-other-sessions" },
-          "Session epoch rotated — all other admin sessions signed out.",
+          "All other devices revoked and signed out.",
           "rotate-sessions"
         );
       },
@@ -591,18 +619,20 @@ export function SecurityAccessSettings({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-            {currentDeviceRecord ? (
+            {currentDeviceRecord || deviceRegistered ? (
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() =>
+                disabled={!currentDeviceRecord}
+                onClick={() => {
+                  if (!currentDeviceRecord) return;
                   setEditModalState({
                     open: true,
                     mode: "edit",
                     device: currentDeviceRecord,
-                  })
-                }
+                  });
+                }}
                 aria-label="Edit current device details"
                 className="flex-1 sm:flex-none px-3"
               >

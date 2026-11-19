@@ -16,7 +16,9 @@ import {
   mutateAdminSecurityStore,
   readAdminSecurityStore,
   recordSecurityRateFailure,
+  toSafeSecuritySummary,
 } from "@/lib/security";
+import type { SafeSecuritySummary } from "@/types/security";
 import {
   parseAdminTab,
   parseSettingsSection,
@@ -140,12 +142,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   };
 
   let initialPortfolio: AdminPortfolioPayload | undefined;
+  let initialSecuritySummary: SafeSecuritySummary | undefined;
   if (ctx.authenticated) {
-    const db = await getPortfolioDB({ bypassCache: true });
+    const [db, securityStore] = await Promise.all([
+      getPortfolioDB({ bypassCache: true }),
+      readAdminSecurityStore(),
+    ]);
     initialPortfolio = {
       data: db,
       storageMode,
     };
+    initialSecuritySummary = toSafeSecuritySummary(
+      securityStore,
+      ctx.currentDeviceId
+    );
   }
 
   return (
@@ -153,6 +163,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       key={initialTab}
       initialAuth={initialAuth}
       initialPortfolio={initialPortfolio}
+      initialSecuritySummary={initialSecuritySummary}
       initialTab={initialTab}
       initialSettingsSection={initialSettingsSection}
       stealthUnlockToken={stealthUnlockToken}

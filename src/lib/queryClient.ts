@@ -2,16 +2,19 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { PortfolioDatabase } from "@/types/portfolio";
+import type { SafeSecuritySummary } from "@/types/security";
 import { PublicPortfolioData } from "@/context/PortfolioContext";
 
 export const queryKeys = {
   publicPortfolio: ["portfolio", "public"] as const,
   adminAuth: ["admin", "auth"] as const,
   adminPortfolio: ["admin", "portfolio"] as const,
+  adminSecurity: ["admin-security-registry"] as const,
 };
 
 export const PUBLIC_CACHE_STORAGE_KEY = "lou_query_cache_public_v1";
 const ADMIN_CACHE_STORAGE_KEY = "lou_query_cache_admin_v1";
+const ADMIN_SECURITY_CACHE_STORAGE_KEY = "lou_query_cache_security_v1";
 
 export function readPersistedPublicCache(): PublicPortfolioData | undefined {
   if (typeof window === "undefined") return undefined;
@@ -71,8 +74,34 @@ export function clearPersistedAdminCache(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(ADMIN_CACHE_STORAGE_KEY);
+    localStorage.removeItem(ADMIN_SECURITY_CACHE_STORAGE_KEY);
   } catch {
     // Ignore
+  }
+}
+
+export function readPersistedSecurityCache(): SafeSecuritySummary | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = localStorage.getItem(ADMIN_SECURITY_CACHE_STORAGE_KEY);
+    if (!raw) return undefined;
+    return JSON.parse(raw) as SafeSecuritySummary;
+  } catch {
+    return undefined;
+  }
+}
+
+export function writePersistedSecurityCache(
+  summary: SafeSecuritySummary
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      ADMIN_SECURITY_CACHE_STORAGE_KEY,
+      JSON.stringify(summary)
+    );
+  } catch {
+    // Ignore storage quota errors
   }
 }
 

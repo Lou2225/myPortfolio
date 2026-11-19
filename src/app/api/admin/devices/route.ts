@@ -243,21 +243,36 @@ export async function PATCH(request: Request) {
         const target = store.devices.find((d) => d.id === targetId);
         if (!target) return store;
 
-        const nextDevices = store.devices.map((d) =>
-          d.id === targetId
-            ? {
-                ...d,
-                status: "revoked" as const,
-                revokedAt: new Date().toISOString(),
-              }
-            : d
-        );
+        const revokedIds = new Set<string>([targetId]);
+        const nowIso = new Date().toISOString();
+        const nextDevices = store.devices.map((d) => {
+          const matchesTarget =
+            d.id === targetId ||
+            (Boolean(target.keyThumbprint) &&
+              d.keyThumbprint === target.keyThumbprint &&
+              d.status === "active");
+          if (matchesTarget) {
+            revokedIds.add(d.id);
+            return {
+              ...d,
+              status: "revoked" as const,
+              revokedAt: nowIso,
+            };
+          }
+          return d;
+        });
+
+        if (ctx.currentDeviceId && revokedIds.has(ctx.currentDeviceId)) {
+          revokedCurrentDevice = true;
+        }
 
         return appendSecurityAudit(
           {
             ...store,
             devices: nextDevices,
-            passkeys: store.passkeys.filter((pk) => pk.deviceId !== targetId),
+            passkeys: store.passkeys.filter(
+              (pk) => !revokedIds.has(pk.deviceId)
+            ),
           },
           {
             action: "device_revoked",
@@ -353,8 +368,30 @@ export async function PATCH(request: Request) {
     if (body.action === "revoke-other-sessions") {
       const updated = await mutateAdminSecurityStore((store) => {
         const nextEpoch = store.sessionEpoch + 1;
+        const nowIso = new Date().toISOString();
+        const revokedOtherIds = new Set<string>();
+        const nextDevices = store.devices.map((d) => {
+          if (ctx.currentDeviceId && d.id !== ctx.currentDeviceId && d.status === "active") {
+            revokedOtherIds.add(d.id);
+            return {
+              ...d,
+              status: "revoked" as const,
+              revokedAt: nowIso,
+            };
+          }
+          return d;
+        });
+
+        const revokedCount = revokedOtherIds.size;
         return appendSecurityAudit(
-          { ...store, sessionEpoch: nextEpoch },
+          {
+            ...store,
+            sessionEpoch: nextEpoch,
+            devices: nextDevices,
+            passkeys: store.passkeys.filter(
+              (pk) => !revokedOtherIds.has(pk.deviceId)
+            ),
+          },
           {
             action: "sessions_revoked",
             actorDeviceId: ctx.currentDeviceId,
@@ -363,16 +400,27 @@ export async function PATCH(request: Request) {
             ipMasked: reqInfo.ipMasked,
             outcome: "info",
             detail:
-              "Rotated global session epoch; signed out every other browser session.",
+              revokedCount > 0
+                ? `Rotated global session epoch and revoked ${revokedCount} other trusted device${revokedCount === 1 ? "" : "s"}.`
+                : "Rotated global session epoch; signed out every other browser session.",
           }
         );
       });
 
+      const secureCookie = isSecureRequest(request);
       setSessionCookie(cookieStore, {
         epoch: updated.sessionEpoch,
         deviceId: ctx.currentDeviceId ?? undefined,
-        secure: isSecureRequest(request),
+        secure: secureCookie,
       });
+      if (ctx.currentDeviceId) {
+        setDeviceCookie(cookieStore, {
+          deviceId: ctx.currentDeviceId,
+          keyThumbprint: ctx.currentDeviceThumbprint ?? null,
+          epoch: updated.sessionEpoch,
+          secure: secureCookie,
+        });
+      }
 
       return NextResponse.json({
         success: true,

@@ -167,6 +167,107 @@ async function writeStoredKeypair(
 }
 
 /**
+ * Deletes the stored WebCrypto ECDSA P-256 keypair from IndexedDB when a device is
+ * explicitly unregistered/revoked so background recovery does not silently re-trust it.
+ */
+export async function clearStoredClientDeviceKey(): Promise<void> {
+  if (typeof window === "undefined" || typeof indexedDB === "undefined") {
+    return;
+  }
+  try {
+    const db = await openKeyDb();
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(KEY_STORE_NAME, "readwrite");
+        const store = tx.objectStore(KEY_STORE_NAME);
+        store.delete(KEY_RECORD_ID);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+  } catch {
+    // Ignore IndexedDB error
+  }
+}
+
+/**
+ * Synchronous first-frame preview of client telemetry so UI cards never flicker
+ * "Inspecting browser capabilities..." while async WebCrypto / Client Hints resolve.
+ */
+export function getInitialClientTelemetryPreview(): ClientDeviceTelemetry | null {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return null;
+  }
+  const uaSummary = parseUserAgentSummary(navigator.userAgent);
+  const screenMetrics =
+    window.screen?.width && window.screen?.height
+      ? `${window.screen.width}×${window.screen.height}`
+      : null;
+  const cpuCores =
+    typeof navigator.hardwareConcurrency === "number"
+      ? navigator.hardwareConcurrency
+      : null;
+  const osLabel = uaSummary.osVersion
+    ? `${uaSummary.platform} ${uaSummary.osVersion}`
+    : uaSummary.platform;
+  const suggestedName =
+    uaSummary.deviceType === "mobile" || uaSummary.deviceType === "tablet"
+      ? `${uaSummary.model} · ${uaSummary.browser}`.slice(0, 56)
+      : `${osLabel} · ${uaSummary.browser}`.slice(0, 56);
+
+  return {
+    suggestedName,
+    model: uaSummary.model,
+    platform: uaSummary.platform,
+    osVersion: uaSummary.osVersion,
+    browser: uaSummary.browser,
+    architecture: null,
+    cpuCores,
+    gpuRenderer: null,
+    screenMetrics,
+    timezone: null,
+    deviceType: uaSummary.deviceType,
+    keyThumbprint: null,
+    publicKeySpki: null,
+    secureContext: Boolean(window.isSecureContext && window.crypto?.subtle),
+  };
+}
+
+/**
+ * Synchronous initial snapshot for `RecognitionHealthCard` so the diagnostics grid
+ * renders on the very first frame without layout jump.
+ */
+export function getInitialRecognitionHealthSnapshot(
+  knownThumbprint?: string | null
+): ClientRecognitionHealth | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const origin = window.location.origin;
+  const hostname = window.location.hostname;
+  const isPreviewHost =
+    hostname.endsWith(".vercel.app") &&
+    hostname !== "louvaldellon.vercel.app" &&
+    hostname.includes("-");
+  const secureContext = Boolean(window.isSecureContext && window.crypto?.subtle);
+  const localHintCached =
+    window.localStorage?.getItem("lou_registered_device") === "true";
+
+  return {
+    origin,
+    hostname,
+    isPreviewHost,
+    secureContext,
+    hasIndexedDbKey: Boolean(knownThumbprint),
+    keyThumbprint: knownThumbprint || null,
+    storagePersisted: null,
+    localHintCached,
+  };
+}
+
+/**
  * Requests persistent browser storage so IndexedDB ECDSA device keys are protected
  * from automatic browser storage-pressure eviction.
  */

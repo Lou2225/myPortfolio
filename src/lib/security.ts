@@ -111,6 +111,29 @@ function normalizeStore(
       })
     : [];
 
+  const rawDevices = Array.isArray(raw.devices) ? raw.devices : [];
+  const seenActiveThumbprints = new Set<string>();
+  const seenActiveFallbackProfiles = new Set<string>();
+  const deduplicatedDevices: TrustedDevice[] = [];
+
+  for (const d of rawDevices) {
+    if (d.status === "active") {
+      if (d.keyThumbprint) {
+        if (seenActiveThumbprints.has(d.keyThumbprint)) {
+          continue;
+        }
+        seenActiveThumbprints.add(d.keyThumbprint);
+      } else {
+        const profileKey = `${d.userAgent}|${d.platform}|${d.model}|${d.screenMetrics || ""}`;
+        if (seenActiveFallbackProfiles.has(profileKey)) {
+          continue;
+        }
+        seenActiveFallbackProfiles.add(profileKey);
+      }
+    }
+    deduplicatedDevices.push(d);
+  }
+
   return {
     revision:
       typeof raw.revision === "number" && raw.revision >= 0
@@ -137,7 +160,7 @@ function normalizeStore(
         : null,
     totpLastStepUsed:
       typeof raw.totpLastStepUsed === "number" ? raw.totpLastStepUsed : null,
-    devices: Array.isArray(raw.devices) ? raw.devices : [],
+    devices: deduplicatedDevices,
     passkeys: Array.isArray(raw.passkeys) ? raw.passkeys : [],
     pairings: pairings.slice(0, MAX_PAIRING_ENTRIES),
     auditLog: Array.isArray(raw.auditLog)
@@ -357,14 +380,15 @@ async function writeAdminSecurityStoreConditional(
           return { ok: false, conflict: true };
         }
       } else {
-        // Optimistic concurrency compare-and-swap (CAS) on the JSON revision we read
-        const revisionFilter =
+        // Optimistic concurrency compare-and-swap (CAS) on the JSON revision we read.
+        // Legacy rows saved before `revision` existed (meta.revision === null) upgrade directly by row id.
+        const patchQuery =
           meta.revision !== null
-            ? `payload->>revision=eq.${meta.revision}`
-            : `payload->>revision=is.null`;
+            ? `id=eq.${SUPABASE_SECURITY_ROW_ID}&payload->>revision=eq.${meta.revision}`
+            : `id=eq.${SUPABASE_SECURITY_ROW_ID}`;
 
         res = await fetch(
-          `${url}/rest/v1/portfolio_store?id=eq.${SUPABASE_SECURITY_ROW_ID}&${revisionFilter}`,
+          `${url}/rest/v1/portfolio_store?${patchQuery}`,
           {
             method: "PATCH",
             headers: buildSupabaseHeaders(key, {

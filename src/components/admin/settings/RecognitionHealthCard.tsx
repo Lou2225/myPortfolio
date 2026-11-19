@@ -18,6 +18,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import {
   ClientRecognitionHealth,
+  getInitialRecognitionHealthSnapshot,
   inspectDeviceRecognitionHealth,
   requestPersistentDeviceStorage,
 } from "@/lib/deviceTelemetry";
@@ -47,8 +48,13 @@ export function RecognitionHealthCard({
   onRemovePasskey,
   removingPasskeyId = null,
 }: RecognitionHealthCardProps) {
-  const [health, setHealth] = useState<ClientRecognitionHealth | null>(null);
-  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [health, setHealth] = useState<ClientRecognitionHealth | null>(() =>
+    getInitialRecognitionHealthSnapshot(currentDeviceRecord?.keyThumbprint)
+  );
+  const [passkeySupported, setPasskeySupported] = useState(true);
+  const [platformBioReady, setPlatformBioReady] = useState<boolean | null>(
+    null
+  );
   const [requestingPersist, setRequestingPersist] = useState(false);
 
   const refreshHealth = useCallback(async () => {
@@ -58,6 +64,7 @@ export function RecognitionHealthCard({
     ]);
     setHealth(snapshot);
     setPasskeySupported(pkSupport.supported);
+    setPlatformBioReady(pkSupport.platformAuthenticatorAvailable);
   }, []);
 
   useEffect(() => {
@@ -69,6 +76,7 @@ export function RecognitionHealthCard({
       if (!cancelled) {
         setHealth(snapshot);
         setPasskeySupported(pkSupport.supported);
+        setPlatformBioReady(pkSupport.platformAuthenticatorAvailable);
       }
     });
     return () => {
@@ -310,7 +318,7 @@ export function RecognitionHealthCard({
       </div>
 
       {/* Enrolled OS / Hardware Passkeys for Current Device */}
-      {currentDevicePasskeys.length > 0 && (
+      {currentDevicePasskeys.length > 0 ? (
         <div className="space-y-1.5 pt-1">
           {currentDevicePasskeys.map((pk) => (
             <div
@@ -360,6 +368,32 @@ export function RecognitionHealthCard({
             </div>
           ))}
         </div>
+      ) : (
+        passkeySupported && (
+          <div className="px-3 py-2.5 rounded-(--radius-control) bg-(--bg-surface) border border-(--border-subtle) text-[11px] text-(--text-muted) leading-relaxed">
+            <span className="font-semibold text-(--text-primary)">
+              Where to set your Biometrics or PIN:
+            </span>{" "}
+            Passkeys use your device&apos;s built-in OS lock —{" "}
+            <strong className="text-(--text-secondary)">
+              Windows Settings (Win + I) &rarr; Accounts &rarr; Sign-in options
+              &rarr; PIN (Windows Hello)
+            </strong>{" "}
+            on Windows, or{" "}
+            <strong className="text-(--text-secondary)">
+              Face ID / Touch ID / Screen Lock Fingerprint
+            </strong>{" "}
+            on mobile.
+            {platformBioReady === false && (
+              <span className="block mt-1 text-amber-300">
+                Note: Windows Hello PIN is not currently enabled on this
+                Windows account, so clicking &ldquo;Link Hardware Passkey&rdquo;
+                will offer your phone QR or browser passkey manager until you
+                enable a Windows Hello PIN.
+              </span>
+            )}
+          </div>
+        )
       )}
     </div>
   );

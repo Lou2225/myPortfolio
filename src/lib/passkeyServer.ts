@@ -367,11 +367,11 @@ export function verifyPasskeyRegistration(params: {
     return { ok: false, error: "Passkey RP ID hash does not match this domain." };
   }
 
-  if (!authData.userPresent || !authData.userVerified) {
+  if (!authData.userPresent) {
     return {
       ok: false,
       error:
-        "Biometric or PIN user verification (UV) is required to link an admin passkey.",
+        "Authenticator user presence confirmation (UP) is required to link an admin passkey.",
     };
   }
 
@@ -465,10 +465,10 @@ export function verifyPasskeyAssertion(params: {
     return { ok: false, error: "Passkey RP ID hash mismatch." };
   }
 
-  if (!authData.userPresent || !authData.userVerified) {
+  if (!authData.userPresent) {
     return {
       ok: false,
-      error: "Biometric or device PIN user verification is required.",
+      error: "Authenticator user presence confirmation is required.",
     };
   }
 

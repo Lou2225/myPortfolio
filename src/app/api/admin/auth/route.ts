@@ -796,20 +796,31 @@ export async function PATCH(request: Request) {
         const targetId = ctx.currentDeviceId;
         const updated = await mutateAdminSecurityStore((store) => {
           const target = store.devices.find((d) => d.id === targetId);
-          const nextDevices = store.devices.map((d) =>
-            d.id === targetId
-              ? {
-                  ...d,
-                  status: "revoked" as const,
-                  revokedAt: new Date().toISOString(),
-                }
-              : d
-          );
+          const revokedIds = new Set<string>([targetId]);
+          const nowIso = new Date().toISOString();
+          const nextDevices = store.devices.map((d) => {
+            const matches =
+              d.id === targetId ||
+              (Boolean(target?.keyThumbprint) &&
+                d.keyThumbprint === target?.keyThumbprint &&
+                d.status === "active");
+            if (matches) {
+              revokedIds.add(d.id);
+              return {
+                ...d,
+                status: "revoked" as const,
+                revokedAt: nowIso,
+              };
+            }
+            return d;
+          });
           return appendSecurityAudit(
             {
               ...store,
               devices: nextDevices,
-              passkeys: store.passkeys.filter((pk) => pk.deviceId !== targetId),
+              passkeys: store.passkeys.filter(
+                (pk) => !revokedIds.has(pk.deviceId)
+              ),
             },
             {
               action: "device_revoked",
@@ -856,37 +867,53 @@ export async function DELETE(request: Request) {
   cookieStore.delete(ADMIN_COOKIE_NAME);
 
   if (unregisterDevice) {
+    cookieStore.delete(REGISTERED_DEVICE_COOKIE);
     if (ctx.currentDeviceId) {
       const targetId = ctx.currentDeviceId;
-      await mutateAdminSecurityStore((store) => {
-        const target = store.devices.find((d) => d.id === targetId);
-        return appendSecurityAudit(
-          {
-            ...store,
-            devices: store.devices.map((d) =>
-              d.id === targetId
-                ? {
+      try {
+        await mutateAdminSecurityStore((store) => {
+          const target = store.devices.find((d) => d.id === targetId);
+          const revokedIds = new Set<string>([targetId]);
+          const nowIso = new Date().toISOString();
+          return appendSecurityAudit(
+            {
+              ...store,
+              devices: store.devices.map((d) => {
+                const matches =
+                  d.id === targetId ||
+                  (Boolean(target?.keyThumbprint) &&
+                    d.keyThumbprint === target?.keyThumbprint &&
+                    d.status === "active");
+                if (matches) {
+                  revokedIds.add(d.id);
+                  return {
                     ...d,
                     status: "revoked" as const,
-                    revokedAt: new Date().toISOString(),
-                  }
-                : d
-            ),
-            passkeys: store.passkeys.filter((pk) => pk.deviceId !== targetId),
-          },
-          {
-            action: "device_revoked",
-            actorDeviceId: targetId,
-            targetDeviceId: targetId,
-            deviceLabel: target?.name || "Current Browser",
-            ipMasked: reqInfo.ipMasked,
-            outcome: "info",
-            detail: "Signed out and unregistered device from trusted portal list.",
-          }
-        );
-      });
+                    revokedAt: nowIso,
+                  };
+                }
+                return d;
+              }),
+              passkeys: store.passkeys.filter(
+                (pk) => !revokedIds.has(pk.deviceId)
+              ),
+            },
+            {
+              action: "device_revoked",
+              actorDeviceId: targetId,
+              targetDeviceId: targetId,
+              deviceLabel: target?.name || "Current Browser",
+              ipMasked: reqInfo.ipMasked,
+              outcome: "info",
+              detail:
+                "Signed out and unregistered device from trusted portal list.",
+            }
+          );
+        });
+      } catch {
+        // Ensure sign-out and cookie deletion still complete if storage write is busy
+      }
     }
-    cookieStore.delete(REGISTERED_DEVICE_COOKIE);
   }
 
   return NextResponse.json({

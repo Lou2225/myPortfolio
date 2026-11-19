@@ -275,10 +275,9 @@ export async function registerDevicePasskey(options?: {
           { type: "public-key", alg: -257 }, // RS256
         ],
         authenticatorSelection: {
-          authenticatorAttachment: "platform",
-          residentKey: "required",
-          requireResidentKey: true,
-          userVerification: "required",
+          residentKey: "preferred",
+          requireResidentKey: false,
+          userVerification: "preferred",
         },
         attestation: "none",
         excludeCredentials,
@@ -487,7 +486,7 @@ export async function authenticateWithPasskey(): Promise<
         challenge: challengeBytes as BufferSource,
         rpId: optData.rpId,
         allowCredentials,
-        userVerification: "required",
+        userVerification: "preferred",
         timeout: 60_000,
       },
     })) as PublicKeyCredential | null;
