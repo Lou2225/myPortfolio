@@ -164,7 +164,7 @@ export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
       data-lenis-prevent
       className="fixed inset-0 z-50 h-dvh w-full overflow-y-auto overflow-x-clip bg-(--bg-canvas) text-(--text-primary) flex flex-col justify-between gap-4 px-4 py-4 sm:px-8 sm:py-6 [@media(max-height:640px)]:py-3 select-none"
     >
-      <div className="max-w-7xl w-full mx-auto flex items-center justify-between gap-2 shrink-0">
+      <div className="max-w-(--container-max) w-full mx-auto flex items-center justify-between gap-2 shrink-0">
         <Button
           href="/"
           variant="ghost"

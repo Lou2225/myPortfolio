@@ -168,7 +168,7 @@ export function Projects() {
       onPointerDownCapture={markUserPresent}
       className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
     >
-      <div className="max-w-7xl mx-auto w-full flex flex-col gap-5 sm:gap-8">
+      <div className="max-w-(--container-max) mx-auto w-full flex flex-col gap-5 sm:gap-8">
         {/* Header Row */}
         <ScrollReveal
           variant="fade-up"

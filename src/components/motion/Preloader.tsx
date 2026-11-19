@@ -162,7 +162,7 @@ export function Preloader() {
           transition:
             "transform 0.42s cubic-bezier(0.76, 0, 0.24, 1), opacity 0.32s ease-out",
         }}
-        className="relative z-10 max-w-7xl w-full mx-auto flex items-center justify-between gap-4 pb-4 border-b border-(--border-subtle) will-change-transform"
+        className="relative z-10 max-w-(--container-max) w-full mx-auto flex items-center justify-between gap-4 pb-4 border-b border-(--border-subtle) will-change-transform"
       >
         <div className="flex items-center gap-3 min-w-0">
           <MonogramBadge
@@ -200,7 +200,7 @@ export function Preloader() {
           transition:
             "transform 0.46s cubic-bezier(0.76, 0, 0.24, 1), opacity 0.34s ease-out",
         }}
-        className="relative z-10 max-w-7xl w-full mx-auto my-auto py-6 flex flex-col items-start justify-center min-w-0 will-change-transform"
+        className="relative z-10 max-w-(--container-max) w-full mx-auto my-auto py-6 flex flex-col items-start justify-center min-w-0 will-change-transform"
       >
         <div className="flex items-center gap-2.5 text-[10px] sm:text-xs font-mono uppercase tracking-[0.22em] text-(--text-accent) mb-3 sm:mb-4 max-w-full">
           <span className="w-5 sm:w-8 h-px bg-brand shrink-0" />
@@ -247,7 +247,7 @@ export function Preloader() {
           transition:
             "transform 0.42s cubic-bezier(0.76, 0, 0.24, 1), opacity 0.32s ease-out",
         }}
-        className="relative z-10 max-w-7xl w-full mx-auto pt-4 border-t border-(--border-subtle) flex flex-col gap-3 sm:gap-4 will-change-transform"
+        className="relative z-10 max-w-(--container-max) w-full mx-auto pt-4 border-t border-(--border-subtle) flex flex-col gap-3 sm:gap-4 will-change-transform"
       >
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">

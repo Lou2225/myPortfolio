@@ -23,7 +23,7 @@ export function Story({ profile, pillars, sectionHeaders }: StoryProps) {
       aria-label="About and Origin Story"
       className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
     >
-      <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-12 lg:gap-16">
+      <div className="max-w-(--container-max) mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-12 lg:gap-16">
         {/* Left Column: Origin Narrative */}
         <ScrollReveal
           variant="fade-up"

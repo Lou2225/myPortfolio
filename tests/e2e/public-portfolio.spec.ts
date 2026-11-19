@@ -279,6 +279,7 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
     page,
   }) => {
     const viewports = [
+      { label: "2560x1440 (50% zoom-out / QHD)", width: 2560, height: 1440 },
       { label: "1920x1080 (100% desktop)", width: 1920, height: 1080 },
       { label: "1366x768 (100% laptop)", width: 1366, height: 768 },
       { label: "1092x614 (125% zoom)", width: 1092, height: 614 },
@@ -318,11 +319,14 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
           ? parseFloat(getComputedStyle(storyHeading).fontSize)
           : 0;
 
+        const heroHeight = hero ? hero.getBoundingClientRect().height : 0;
+
         return {
           scrollWidth: document.documentElement.scrollWidth,
           innerWidth: window.innerWidth,
           clippedCtas,
           storyHeadingPx,
+          heroHeight,
         };
       });
 
@@ -338,6 +342,12 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
         metrics.storyHeadingPx,
         `Story heading font size at ${vp.label}`
       ).toBeGreaterThanOrEqual(24);
+      if (vp.height >= 1080) {
+        expect(
+          metrics.heroHeight,
+          `Hero height should stay capped without dead vertical void at ${vp.label}`
+        ).toBeLessThanOrEqual(880);
+      }
     }
 
     // Verify mobile menu drawer is scrollable on short/zoomed viewports (e.g. 683x384)

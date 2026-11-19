@@ -131,10 +131,10 @@ export function Hero() {
       ref={sectionRef}
       id="top"
       aria-label="Hero Section"
-      className="relative z-10 min-h-svh [@media(min-height:680px)_and_(min-width:768px)]:h-svh [@media(min-height:680px)_and_(min-width:768px)]:max-h-[72rem] w-full flex flex-col justify-between gap-4 [@media(min-height:680px)_and_(min-width:768px)]:gap-0 overflow-x-clip overflow-y-hidden pt-[clamp(4.5rem,3.5rem+4svh,6.75rem)] pb-3.5 sm:pb-5 px-(--gutter) select-none bg-transparent"
+      className="relative z-10 min-h-[min(100svh,54rem)] [@media(min-height:680px)_and_(min-width:768px)]:h-[min(100svh,54rem)] w-full flex flex-col justify-between gap-4 [@media(min-height:680px)_and_(min-width:768px)]:gap-0 overflow-x-clip overflow-y-hidden pt-[clamp(4.5rem,3.5rem+3.5svh,6rem)] pb-3.5 sm:pb-5 px-(--gutter) select-none bg-transparent"
     >
       {/* LAYER 4 (Top Foreground UI, z-30): Roles on Left, Pitch & CTAs on Right */}
-      <div className="relative z-30 max-w-7xl mx-auto w-full flex flex-col md:flex-row md:items-start justify-between gap-3 sm:gap-6">
+      <div className="relative z-30 max-w-(--container-max) mx-auto w-full flex flex-col md:flex-row md:items-start justify-between gap-3 sm:gap-6">
         {/* Left: Semantic H1, Chapter Eyebrow & Stacked Roles */}
         <div className="flex flex-col min-w-0 w-full md:w-auto md:max-w-[48%]">
           <h1 className="sr-only">
@@ -228,7 +228,7 @@ export function Hero() {
       <div
         ref={nameLayerRef}
         aria-hidden="true"
-        className="absolute inset-x-0 bottom-[13svh] sm:bottom-[10svh] lg:bottom-[9svh] [@media(max-height:640px)]:bottom-[9svh] z-10 flex flex-col items-center justify-center text-center pointer-events-none select-none px-(--gutter) overflow-hidden"
+        className="absolute inset-x-0 bottom-[clamp(3.25rem,8%,5rem)] z-10 flex flex-col items-center justify-center text-center pointer-events-none select-none px-(--gutter) overflow-hidden"
       >
         <div className="font-display uppercase text-[clamp(2.75rem,min(16.8vw,22svh),16.5rem)] sm:text-[clamp(4rem,min(18vw,24svh),16.5rem)] [@media(max-height:640px)]:text-[clamp(2.25rem,min(14.5vw,20svh),9.5rem)] leading-[0.82] tracking-tighter text-(--text-primary) opacity-92 whitespace-nowrap max-w-full">
           <SplitText
@@ -268,7 +268,7 @@ export function Hero() {
       />
 
       {/* LAYER 4 (Bottom Scroll Bar, z-30 — pl-12 clears the bottom-left LV BrandPortalOrb) */}
-      <div className="relative z-30 max-w-7xl mx-auto w-full flex items-center justify-center sm:justify-between pl-12 sm:pl-14 xl:pl-0 pr-12 sm:pr-14 xl:pr-0 pt-2.5 sm:pt-3 border-t border-(--border-subtle)">
+      <div className="relative z-30 max-w-(--container-max) mx-auto w-full flex items-center justify-center sm:justify-between pl-12 sm:pl-14 2xl:pl-0 pr-12 sm:pr-14 2xl:pr-0 pt-2.5 sm:pt-3 border-t border-(--border-subtle)">
         <a
           href="#story"
           className="flex items-center gap-2.5 text-[0.625rem] sm:text-[0.75rem] font-mono uppercase tracking-[0.2em] text-(--text-muted) hover:text-(--text-primary) transition-colors pointer-events-auto"

@@ -35,7 +35,7 @@ export function Footer() {
 
   return (
     <footer className="lou-public-footer relative z-10 w-full border-t border-(--border-subtle) bg-(--bg-canvas)/88 pt-8 sm:pt-14 pb-5 sm:pb-10 px-(--gutter)">
-      <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 sm:gap-10">
+      <div className="max-w-(--container-max) mx-auto w-full flex flex-col gap-6 sm:gap-10">
         {/* Top Footer Row: Identity Signature & Uniform Action Grid */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 sm:gap-8">
           {/* Left: Monogram + Name + Tagline + Live Availability Pill */}
@@ -139,7 +139,7 @@ export function Footer() {
         </div>
 
         {/* Bottom Dock Row: Framed cleanly between the bottom-left LV Orb and bottom-right ScrollToTop */}
-        <div className="pt-4 sm:pt-6 border-t border-(--border-subtle) px-12 sm:px-14 xl:px-0 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left text-[0.6875rem] text-(--text-muted)">
+        <div className="pt-4 sm:pt-6 border-t border-(--border-subtle) px-12 sm:px-14 2xl:px-0 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-center sm:text-left text-[0.6875rem] text-(--text-muted)">
           <p className="truncate max-w-full">
             © {currentYear} {profile.fullName}.
           </p>

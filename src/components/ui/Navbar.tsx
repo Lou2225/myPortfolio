@@ -173,7 +173,7 @@ export function Navbar() {
       >
         <nav
           aria-label="Main Storytelling Navigation"
-          className="max-w-7xl mx-auto w-full px-(--gutter) flex items-center justify-between gap-2 sm:gap-4"
+          className="max-w-(--container-max) mx-auto w-full px-(--gutter) flex items-center justify-between gap-2 sm:gap-4"
         >
           {/* Brand Logo & Monogram */}
           <Magnetic strength={0.18} className="min-w-0">

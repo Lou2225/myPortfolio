@@ -46,6 +46,7 @@ html[data-theme="dark"] {
   --shadow-card: 0 24px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(243, 241, 234, 0.04);
   --gutter: clamp(1rem, 0.75rem + 2vw, 2.5rem);
   --section-py: clamp(2.75rem, 2rem + 4.5vw, 7rem);
+  --container-max: 92rem;
 }
 
 html[data-theme="light"] {

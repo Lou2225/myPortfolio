@@ -72,7 +72,7 @@ export function Avatar({
       {...pointerHandlers}
       onClick={handleAvatarTap}
       className={cn(
-        "relative h-[clamp(14rem,42svh,25rem)] sm:h-[clamp(16rem,50svh,34rem)] lg:h-[clamp(22rem,62svh,46rem)] [@media(max-height:640px)]:h-[clamp(12.5rem,44svh,19.5rem)] aspect-3/4 max-w-[92vw] flex items-end justify-center select-none pointer-events-auto group",
+        "relative h-[clamp(14rem,42svh,25rem)] sm:h-[clamp(16rem,50svh,34rem)] lg:h-[clamp(22rem,62svh,36rem)] [@media(max-height:640px)]:h-[clamp(12.5rem,44svh,19.5rem)] aspect-3/4 max-w-[92vw] flex items-end justify-center select-none pointer-events-auto group",
         className
       )}
     >

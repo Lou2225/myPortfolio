@@ -20,7 +20,7 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
       aria-label="Impact Metrics"
       className="relative z-10 scroll-mt-20 w-full py-(--section-py) px-(--gutter) border-b border-(--border-subtle) bg-(--bg-canvas)/74"
     >
-      <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 sm:gap-12">
+      <div className="max-w-(--container-max) mx-auto w-full flex flex-col gap-6 sm:gap-12">
         {/* Header */}
         <ScrollReveal variant="fade-up">
           <Eyebrow withDot className="mb-2.5">
