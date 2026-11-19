@@ -15,6 +15,7 @@ export interface TransformedImageProps {
   className?: string;
   imgClassName?: string;
   sizes?: string;
+  unoptimized?: boolean;
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low" | "auto";
   onNaturalSize?: (size: { width: number; height: number }) => void;
@@ -34,6 +35,7 @@ export function TransformedImage({
   className,
   imgClassName,
   sizes,
+  unoptimized = false,
   loading,
   fetchPriority,
   onNaturalSize,
@@ -222,9 +224,17 @@ export function TransformedImage({
             width={Math.max(1, Math.round(renderedWidth || activeNat.w))}
             height={Math.max(1, Math.round(renderedHeight || activeNat.h))}
             sizes={sizes}
+            unoptimized={unoptimized}
           />
         ) : (
-          <Image key={src} {...sharedProps} alt={alt} fill sizes={sizes} />
+          <Image
+            key={src}
+            {...sharedProps}
+            alt={alt}
+            fill
+            sizes={sizes}
+            unoptimized={unoptimized}
+          />
         )
       ) : (
         /* eslint-disable-next-line @next/next/no-img-element */

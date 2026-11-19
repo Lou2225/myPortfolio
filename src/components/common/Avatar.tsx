@@ -130,7 +130,8 @@ export function Avatar({
                 transform={transform}
                 defaultFit="contain"
                 defaultPosition="bottom"
-                sizes="(max-width: 640px) 75vw, (max-width: 1024px) 50vw, 38vw"
+                sizes="(max-width: 640px) 90vw, (max-width: 1024px) 65vw, 50vw"
+                unoptimized
                 loading="eager"
                 fetchPriority="high"
                 className="w-full h-full"
@@ -146,9 +147,10 @@ export function Avatar({
                 src={imageSrc}
                 alt={displayAlt}
                 fill
+                unoptimized
                 loading="eager"
                 fetchPriority="high"
-                sizes="(max-width: 640px) 75vw, (max-width: 1024px) 50vw, 38vw"
+                sizes="(max-width: 640px) 90vw, (max-width: 1024px) 65vw, 50vw"
                 className="object-contain object-bottom"
                 onLoad={(e) => {
                   const img = e.currentTarget;

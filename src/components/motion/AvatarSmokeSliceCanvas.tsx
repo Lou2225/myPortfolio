@@ -217,17 +217,24 @@ function drawImageWithSpec(
     ctx.arc(cw / 2, ch / 2, radius, 0, Math.PI * 2);
     ctx.clip();
   }
-  ctx.translate(spec.centerX, spec.centerY);
-  if (spec.rotationRad !== 0) {
+  if (spec.rotationRad === 0) {
+    // Snap unrotated draw coordinates to exact pixel boundaries to prevent half-pixel bilinear blur
+    const drawW = Math.round(spec.drawW);
+    const drawH = Math.round(spec.drawH);
+    const dx = Math.round(spec.centerX - drawW / 2);
+    const dy = Math.round(spec.centerY - drawH / 2);
+    ctx.drawImage(img, dx, dy, drawW, drawH);
+  } else {
+    ctx.translate(spec.centerX, spec.centerY);
     ctx.rotate(spec.rotationRad);
+    ctx.drawImage(
+      img,
+      -spec.drawW / 2,
+      -spec.drawH / 2,
+      spec.drawW,
+      spec.drawH
+    );
   }
-  ctx.drawImage(
-    img,
-    -spec.drawW / 2,
-    -spec.drawH / 2,
-    spec.drawW,
-    spec.drawH
-  );
   ctx.restore();
 }
 
@@ -382,28 +389,29 @@ export function AvatarSmokeSliceCanvas({
     }
 
     const rect = container.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
     if (w <= 0 || h <= 0) return false;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const bleedX = BLEED_X;
     const bleedTop = BLEED_TOP;
     const bleedBottom = BLEED_BOTTOM;
     dimsRef.current = { w, h, bleedX, bleedTop, bleedBottom, dpr };
 
+    const stageCssW = w + bleedX * 2;
+    const stageCssH = h + bleedTop + bleedBottom;
     const portraitPixelW = Math.max(1, Math.round(w * dpr));
     const portraitPixelH = Math.max(1, Math.round(h * dpr));
-    const stagePixelW = Math.max(1, Math.round((w + bleedX * 2) * dpr));
-    const stagePixelH = Math.max(
-      1,
-      Math.round((h + bleedTop + bleedBottom) * dpr)
-    );
+    const stagePixelW = Math.max(1, Math.round(stageCssW * dpr));
+    const stagePixelH = Math.max(1, Math.round(stageCssH * dpr));
 
     if (canvas.width !== stagePixelW || canvas.height !== stagePixelH) {
       canvas.width = stagePixelW;
       canvas.height = stagePixelH;
     }
+    canvas.style.width = `${stageCssW}px`;
+    canvas.style.height = `${stageCssH}px`;
 
     const portraitCache = document.createElement("canvas");
     portraitCache.width = portraitPixelW;
@@ -679,7 +687,7 @@ export function AvatarSmokeSliceCanvas({
         plainImg.onload = () => adoptImage(plainImg);
         plainImg.src = imageSrc;
       };
-      corsImg.src = domImg?.currentSrc || imageSrc;
+      corsImg.src = imageSrc;
     };
 
     const domImg = containerRef.current?.querySelector("img") ?? null;

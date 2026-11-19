@@ -50,7 +50,8 @@ export function MonogramBadge({
           transform={transform}
           defaultFit="cover"
           defaultPosition="center"
-          sizes="80px"
+          sizes="160px"
+          unoptimized
           loading={loading}
           fetchPriority={fetchPriority}
           onError={() => setFailedUrl(resolvedUrl)}
