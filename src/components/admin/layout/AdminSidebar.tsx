@@ -35,24 +35,24 @@ export function AdminSidebar({
 }: AdminSidebarProps) {
   const gradientId = useId();
   const navRef = useRef<HTMLElement>(null);
-  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const slotRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const activeIndex = Math.max(
     0,
     items.findIndex((i) => i.id === activeTab)
   );
 
-  // Dynamic measurement keeps the sliding active squircle locked onto the active button
-  // across both default (`h-11` / `52px`) and compact zoomed heights (`max-height: 640px`).
+  // Dynamic measurement on the untransformed direct child slot of <nav> keeps the sliding
+  // active squircle locked onto the active button without being zeroed out by <Magnetic>'s transform.
   const [indicatorMetric, setIndicatorMetric] = useState<{
     top: number;
     height: number;
   } | null>(null);
 
   const syncIndicator = useCallback(() => {
-    const activeBtn = buttonRefs.current[activeTab];
-    if (!activeBtn) return;
-    const nextTop = activeBtn.offsetTop;
-    const nextHeight = activeBtn.offsetHeight;
+    const activeSlot = slotRefs.current[activeTab];
+    if (!activeSlot) return;
+    const nextTop = activeSlot.offsetTop;
+    const nextHeight = activeSlot.offsetHeight;
     if (nextHeight <= 0) return;
     setIndicatorMetric((prev) =>
       prev && prev.top === nextTop && prev.height === nextHeight
@@ -165,8 +165,8 @@ export function AdminSidebar({
             maxHeight="calc(100dvh - 11rem)"
             scrollbarVariant="hidden"
             fadeEdges={false}
-            className="my-auto w-full"
-            viewportClassName="py-1"
+            className="my-auto w-[calc(100%+1rem)] -mx-2"
+            viewportClassName="py-1.5 px-2"
           >
             <nav
               ref={navRef}
@@ -190,89 +190,93 @@ export function AdminSidebar({
                 const isActive = activeTab === item.id;
 
                 return (
-                  <Tooltip
+                  <div
                     key={item.id}
-                    label={item.label}
-                    badge={item.badge}
-                    side="right"
-                    disabled={expanded}
+                    ref={(el) => {
+                      slotRefs.current[item.id] = el;
+                    }}
                     className="w-full"
                   >
-                    <Magnetic strength={expanded ? 0.08 : 0.2} fullWidth>
-                      <button
-                        ref={(el) => {
-                          buttonRefs.current[item.id] = el;
-                        }}
-                        type="button"
-                        onClick={() => handleTabClick(item.id)}
-                        aria-label={item.label}
-                        aria-current={isActive ? "page" : undefined}
-                        className={cn(
-                          "relative z-10 h-11 [@media(max-height:640px)]:h-9.5 w-full rounded-2xl flex items-center justify-start transition-colors duration-200 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
-                          isActive
-                            ? "text-(--text-accent) font-semibold"
-                            : "text-brand-contrast/90 hover:text-brand-contrast hover:bg-white/12"
-                        )}
-                      >
-                        {/* Fixed 44px Icon Track prevents icons from snapping horizontally on expand/collapse */}
-                        <span className="relative w-11 h-full shrink-0 flex items-center justify-center">
-                          <Icon
-                            className={cn(
-                              "w-5 h-5 [@media(max-height:640px)]:w-4.5 [@media(max-height:640px)]:h-4.5 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-                              isActive ? "scale-110 text-(--text-accent)" : "text-brand-contrast"
-                            )}
-                          />
-
-                          {item.badge !== undefined && (
-                            <BadgeCounter
-                              count={item.badge}
-                              size="sm"
-                              floating
-                              onAccentSurface={!isActive}
-                              variant={isActive ? "inverted" : "alert"}
-                              className={cn(
-                                "pointer-events-none transition-[opacity,transform] duration-200 ease-out",
-                                expanded
-                                  ? "opacity-0 scale-75"
-                                  : "opacity-100 scale-100"
-                              )}
-                            />
-                          )}
-                        </span>
-
-                        {/* Inline Label & Badge smoothly fade & glide alongside container expansion */}
-                        <span
-                          aria-hidden={!expanded}
+                    <Tooltip
+                      label={item.label}
+                      badge={item.badge}
+                      side="right"
+                      disabled={expanded}
+                      className="w-full"
+                    >
+                      <Magnetic strength={expanded ? 0.08 : 0.2} fullWidth>
+                        <button
+                          type="button"
+                          onClick={() => handleTabClick(item.id)}
+                          aria-label={item.label}
+                          aria-current={isActive ? "page" : undefined}
                           className={cn(
-                            "flex items-center gap-2 min-w-0 flex-1 overflow-hidden transition-[opacity,transform,max-width,padding] duration-360 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                            expanded
-                              ? "opacity-100 translate-x-0 max-w-44 pr-2.5"
-                              : "opacity-0 -translate-x-2 max-w-0 pr-0 pointer-events-none"
+                            "relative z-10 h-11 [@media(max-height:640px)]:h-9.5 w-full rounded-2xl flex items-center justify-start transition-colors duration-200 active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+                            isActive
+                              ? "text-(--text-accent) font-semibold"
+                              : "text-brand-contrast/90 hover:text-brand-contrast hover:bg-white/12"
                           )}
                         >
-                          <span
-                            className={cn(
-                              "text-xs tracking-wide whitespace-nowrap truncate flex-1 text-left transition-colors duration-200",
-                              isActive
-                                ? "text-(--text-accent) font-semibold"
-                                : "text-brand-contrast"
+                          {/* Fixed 44px Icon Track prevents icons from snapping horizontally on expand/collapse */}
+                          <span className="relative w-11 h-full shrink-0 flex items-center justify-center">
+                            <Icon
+                              className={cn(
+                                "w-5 h-5 [@media(max-height:640px)]:w-4.5 [@media(max-height:640px)]:h-4.5 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+                                isActive ? "scale-110 text-(--text-accent)" : "text-brand-contrast"
+                              )}
+                            />
+
+                            {item.badge !== undefined && (
+                              <BadgeCounter
+                                count={item.badge}
+                                size="sm"
+                                floating
+                                onAccentSurface={!isActive}
+                                variant={isActive ? "inverted" : "alert"}
+                                className={cn(
+                                  "pointer-events-none transition-[opacity,transform] duration-200 ease-out",
+                                  expanded
+                                    ? "opacity-0 scale-75"
+                                    : "opacity-100 scale-100"
+                                )}
+                              />
                             )}
-                          >
-                            {item.label}
                           </span>
 
-                          {item.badge !== undefined && (
-                            <BadgeCounter
-                              count={item.badge}
-                              size="sm"
-                              onAccentSurface={!isActive}
-                              variant={isActive ? "inverted" : "alert"}
-                            />
-                          )}
-                        </span>
-                      </button>
-                    </Magnetic>
-                  </Tooltip>
+                          {/* Inline Label & Badge smoothly fade & glide alongside container expansion */}
+                          <span
+                            aria-hidden={!expanded}
+                            className={cn(
+                              "flex items-center gap-2 min-w-0 flex-1 overflow-hidden transition-[opacity,transform,max-width,padding] duration-360 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                              expanded
+                                ? "opacity-100 translate-x-0 max-w-44 pr-2.5"
+                                : "opacity-0 -translate-x-2 max-w-0 pr-0 pointer-events-none"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "text-xs tracking-wide whitespace-nowrap truncate flex-1 text-left transition-colors duration-200",
+                                isActive
+                                  ? "text-(--text-accent) font-semibold"
+                                  : "text-brand-contrast"
+                              )}
+                            >
+                              {item.label}
+                            </span>
+
+                            {item.badge !== undefined && (
+                              <BadgeCounter
+                                count={item.badge}
+                                size="sm"
+                                onAccentSurface={!isActive}
+                                variant={isActive ? "inverted" : "alert"}
+                              />
+                            )}
+                          </span>
+                        </button>
+                      </Magnetic>
+                    </Tooltip>
+                  </div>
                 );
               })}
             </nav>
