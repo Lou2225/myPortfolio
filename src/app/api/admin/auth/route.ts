@@ -28,20 +28,18 @@ import {
 import {
   appendSecurityAudit,
   buildDeviceFromTelemetry,
-  checkLoginRateLimit,
   checkSecurityRateLimit,
-  clearLoginFailureState,
   clearSecurityRateBucket,
   extractRequestNetworkInfo,
   mutateAdminSecurityStore,
   readAdminSecurityStore,
-  recordLoginFailureState,
   recordSecurityRateFailure,
   toSafeSecuritySummary,
   touchDeviceActivity,
   upsertTrustedDevice,
 } from "@/lib/security";
 import { decryptTotpSecret, verifyTotpToken } from "@/lib/totp";
+import { resolvePasskeyRelyingParty } from "@/lib/passkeyServer";
 import {
   clientTelemetrySchema,
   passwordChangeSchema,
@@ -64,10 +62,36 @@ export async function GET(request: Request) {
       void touchDeviceActivity(ctx.currentDeviceId, reqInfo.ipMasked);
     }
 
+    // Rolling renewal: refresh `lou_registered_device` cookie once older than 7 days
+    // (or when recovered from an active bound session cookie).
+    if (ctx.deviceTokenNeedsRefresh && ctx.currentDeviceId) {
+      const cookieStore = await cookies();
+      setDeviceCookie(cookieStore, {
+        deviceId: ctx.currentDeviceId,
+        keyThumbprint: ctx.currentDeviceThumbprint ?? null,
+        epoch: ctx.sessionEpoch,
+        secure: isSecureRequest(request),
+      });
+    }
+
+    const rp = resolvePasskeyRelyingParty(request);
+
     if (!ctx.authenticated) {
+      const store = await readAdminSecurityStore();
+      const activeIds = new Set(
+        store.devices.filter((d) => d.status === "active").map((d) => d.id)
+      );
+      const passkeyAvailable =
+        rp.supported &&
+        store.passkeys.some(
+          (pk) => pk.rpId === rp.rpId && activeIds.has(pk.deviceId)
+        );
+
       return NextResponse.json({
         authenticated: false,
         deviceRegistered: ctx.deviceRegistered,
+        currentDeviceId: ctx.currentDeviceId,
+        passkeyAvailable,
         storageMode: getStorageMode(),
         ...(!ctx.deviceRegistered
           ? { deviceChallenge: createDeviceChallengeToken() }
@@ -84,11 +108,22 @@ export async function GET(request: Request) {
       securityStore,
       ctx.currentDeviceId
     );
+    const activeIds = new Set(
+      securityStore.devices
+        .filter((d) => d.status === "active")
+        .map((d) => d.id)
+    );
+    const passkeyAvailable =
+      rp.supported &&
+      securityStore.passkeys.some(
+        (pk) => pk.rpId === rp.rpId && activeIds.has(pk.deviceId)
+      );
 
     return NextResponse.json({
       authenticated: true,
       deviceRegistered: ctx.deviceRegistered,
       currentDeviceId: ctx.currentDeviceId,
+      passkeyAvailable,
       sessionEpoch: securitySummary.sessionEpoch,
       stealthGateEnabled: securitySummary.stealthGateEnabled,
       stealthKeyConfigured: securitySummary.stealthKeyConfigured,
@@ -254,7 +289,7 @@ export async function POST(request: Request) {
     }
 
     const currentStore = await readAdminSecurityStore();
-    const rate = checkLoginRateLimit(currentStore, reqInfo.ipRateKey);
+    const rate = checkSecurityRateLimit(currentStore, reqInfo.ipRateKey);
     if (!rate.allowed) {
       const mins = Math.floor(rate.retryAfterSec / 60);
       const secs = rate.retryAfterSec % 60;
@@ -287,7 +322,7 @@ export async function POST(request: Request) {
 
     if (!check.valid) {
       await mutateAdminSecurityStore((store) => {
-        const penalized = recordLoginFailureState(store, reqInfo.ipRateKey);
+        const penalized = recordSecurityRateFailure(store, reqInfo.ipRateKey);
         const nowBlocked =
           penalized.loginFailures[reqInfo.ipRateKey]?.blockedUntil != null;
         return appendSecurityAudit(penalized, {
@@ -358,7 +393,7 @@ export async function POST(request: Request) {
           : { valid: false, matchedStep: null, replayed: false };
 
         if (!verified.valid || verified.matchedStep === null) {
-          const penalized = recordLoginFailureState(store, reqInfo.ipRateKey);
+          const penalized = recordSecurityRateFailure(store, reqInfo.ipRateKey);
           const nowBlocked =
             penalized.loginFailures[reqInfo.ipRateKey]?.blockedUntil != null;
           totpOutcomeBox.current = {
@@ -387,7 +422,7 @@ export async function POST(request: Request) {
         };
       }
 
-      nextStore = clearLoginFailureState(nextStore, reqInfo.ipRateKey);
+      nextStore = clearSecurityRateBucket(nextStore, reqInfo.ipRateKey);
       totpOutcomeBox.current = { ok: true, usedTotp };
 
       if (shouldRegisterDevice) {
@@ -475,15 +510,21 @@ export async function POST(request: Request) {
         epoch: updatedStore.sessionEpoch,
         secure: secureCookie,
       });
-    } else {
+    } else if (!existingCtx.deviceRegistered) {
       cookieStore.delete(REGISTERED_DEVICE_COOKIE);
     }
+
+    const effectiveDeviceRegistered =
+      shouldRegisterDevice || existingCtx.deviceRegistered;
+    const effectiveDeviceId = shouldRegisterDevice
+      ? registeredDeviceId ?? null
+      : existingCtx.currentDeviceId;
 
     const authMeta = await getAdminAuthMeta();
     return NextResponse.json({
       success: true,
-      deviceRegistered: shouldRegisterDevice,
-      currentDeviceId: shouldRegisterDevice ? registeredDeviceId : null,
+      deviceRegistered: effectiveDeviceRegistered,
+      currentDeviceId: effectiveDeviceId,
       sessionEpoch: updatedStore.sessionEpoch,
       stealthGateEnabled: updatedStore.stealthGateEnabled,
       totpEnabled: updatedStore.totpEnabled,
@@ -765,7 +806,11 @@ export async function PATCH(request: Request) {
               : d
           );
           return appendSecurityAudit(
-            { ...store, devices: nextDevices },
+            {
+              ...store,
+              devices: nextDevices,
+              passkeys: store.passkeys.filter((pk) => pk.deviceId !== targetId),
+            },
             {
               action: "device_revoked",
               actorDeviceId: targetId,
@@ -827,6 +872,7 @@ export async function DELETE(request: Request) {
                   }
                 : d
             ),
+            passkeys: store.passkeys.filter((pk) => pk.deviceId !== targetId),
           },
           {
             action: "device_revoked",

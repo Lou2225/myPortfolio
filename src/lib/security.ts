@@ -14,6 +14,7 @@ import { parseUserAgentSummary } from "@/lib/deviceTelemetry";
 import type {
   AdminSecurityStore,
   ClientDeviceTelemetry,
+  DevicePasskey,
   DeviceTrustSource,
   PairingChallenge,
   SafeSecuritySummary,
@@ -34,19 +35,47 @@ const LOGIN_MAX_FAILURES = 5;
 const LOGIN_BLOCK_MS = 15 * 60 * 1000;
 const LAST_SEEN_THROTTLE_MS = 5 * 60 * 1000;
 
+const MAX_MUTATION_ATTEMPTS = 4;
+
 export interface InternalAdminSecurityStore extends AdminSecurityStore {
+  /**
+   * Monotonic optimistic-concurrency revision. Every successful write increments it,
+   * and Supabase writes are conditional on the revision that was read, so parallel
+   * serverless instances can never silently overwrite each other's device records.
+   */
+  revision: number;
   stealthKeyHash: string | null;
   totpEnabled: boolean;
   totpSecretEnc: string | null;
   totpPendingSecretEnc: string | null;
   totpLastStepUsed: number | null;
+  passkeys: DevicePasskey[];
 }
 
-// In-process async write queue so concurrent security updates never clobber one another
+/**
+ * Raised when a conditional (compare-and-swap) security write keeps losing the race
+ * against concurrent writers after all retry attempts.
+ */
+export class SecurityStoreConflictError extends StorageWriteError {
+  constructor(message = "Security registry is being updated concurrently. Please retry.") {
+    super(message);
+    this.name = "SecurityStoreConflictError";
+  }
+}
+
+interface SecurityStoreSnapshotMeta {
+  /** Whether the persisted row / file already exists. */
+  exists: boolean;
+  /** Raw persisted revision (`null` for legacy payloads written before revisions existed). */
+  revision: number | null;
+}
+
+// In-process async write queue so concurrent security updates within one instance stay ordered
 let securityWriteQueue: Promise<unknown> = Promise.resolve();
 
 export function getDefaultSecurityStore(): InternalAdminSecurityStore {
   return {
+    revision: 0,
     sessionEpoch: 1,
     stealthGateEnabled: false,
     stealthKeyHash: null,
@@ -55,6 +84,7 @@ export function getDefaultSecurityStore(): InternalAdminSecurityStore {
     totpPendingSecretEnc: null,
     totpLastStepUsed: null,
     devices: [],
+    passkeys: [],
     pairings: [],
     auditLog: [],
     loginFailures: {},
@@ -82,6 +112,10 @@ function normalizeStore(
     : [];
 
   return {
+    revision:
+      typeof raw.revision === "number" && raw.revision >= 0
+        ? Math.floor(raw.revision)
+        : 0,
     sessionEpoch:
       typeof raw.sessionEpoch === "number" && raw.sessionEpoch >= 1
         ? Math.floor(raw.sessionEpoch)
@@ -104,6 +138,7 @@ function normalizeStore(
     totpLastStepUsed:
       typeof raw.totpLastStepUsed === "number" ? raw.totpLastStepUsed : null,
     devices: Array.isArray(raw.devices) ? raw.devices : [],
+    passkeys: Array.isArray(raw.passkeys) ? raw.passkeys : [],
     pairings: pairings.slice(0, MAX_PAIRING_ENTRIES),
     auditLog: Array.isArray(raw.auditLog)
       ? raw.auditLog.slice(0, MAX_AUDIT_ENTRIES)
@@ -181,7 +216,10 @@ export function extractRequestNetworkInfo(headers: Headers): {
   };
 }
 
-export async function readAdminSecurityStore(): Promise<InternalAdminSecurityStore> {
+async function readAdminSecurityStoreWithMeta(): Promise<{
+  store: InternalAdminSecurityStore;
+  meta: SecurityStoreSnapshotMeta;
+}> {
   if (getStorageMode() === "supabase") {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -217,30 +255,75 @@ export async function readAdminSecurityStore(): Promise<InternalAdminSecuritySto
 
     const rows = await res.json();
     if (Array.isArray(rows) && rows.length > 0 && rows[0]?.payload) {
-      return normalizeStore(rows[0].payload);
+      const rawPayload = rows[0].payload as Partial<InternalAdminSecurityStore>;
+      const rawRevision =
+        typeof rawPayload.revision === "number" && rawPayload.revision >= 0
+          ? Math.floor(rawPayload.revision)
+          : null;
+      return {
+        store: normalizeStore(rawPayload),
+        meta: {
+          exists: true,
+          revision: rawRevision,
+        },
+      };
     }
-    return getDefaultSecurityStore();
+    return {
+      store: getDefaultSecurityStore(),
+      meta: {
+        exists: false,
+        revision: null,
+      },
+    };
   }
 
   try {
     const raw = await fs.readFile(getLocalSecurityFile(), "utf-8");
     const parsed = JSON.parse(raw) as Partial<InternalAdminSecurityStore>;
-    return normalizeStore(parsed);
+    const rawRevision =
+      typeof parsed.revision === "number" && parsed.revision >= 0
+        ? Math.floor(parsed.revision)
+        : null;
+    return {
+      store: normalizeStore(parsed),
+      meta: {
+        exists: true,
+        revision: rawRevision,
+      },
+    };
   } catch (err) {
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") {
-      return getDefaultSecurityStore();
+      return {
+        store: getDefaultSecurityStore(),
+        meta: {
+          exists: false,
+          revision: null,
+        },
+      };
     }
     throw new StorageReadError("Unable to read local security registry.");
   }
 }
 
-async function writeAdminSecurityStore(
-  store: InternalAdminSecurityStore
-): Promise<InternalAdminSecurityStore> {
+export async function readAdminSecurityStore(): Promise<InternalAdminSecurityStore> {
+  const { store } = await readAdminSecurityStoreWithMeta();
+  return store;
+}
+
+async function writeAdminSecurityStoreConditional(
+  store: InternalAdminSecurityStore,
+  meta: SecurityStoreSnapshotMeta
+): Promise<
+  | { ok: true; store: InternalAdminSecurityStore }
+  | { ok: false; conflict: true }
+> {
+  const nextRevision = (meta.revision ?? store.revision ?? 0) + 1;
+  const nowIso = new Date().toISOString();
   const next = normalizeStore({
     ...store,
-    updatedAt: new Date().toISOString(),
+    revision: nextRevision,
+    updatedAt: nowIso,
   });
 
   const mode = getStorageMode();
@@ -255,18 +338,46 @@ async function writeAdminSecurityStore(
 
     let res: Response;
     try {
-      res = await fetch(`${url}/rest/v1/portfolio_store`, {
-        method: "POST",
-        headers: buildSupabaseHeaders(key, {
-          "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates",
-        }),
-        body: JSON.stringify({
-          id: SUPABASE_SECURITY_ROW_ID,
-          payload: next,
-          updated_at: new Date().toISOString(),
-        }),
-      });
+      if (!meta.exists) {
+        // Atomic first-time insert: fails with 409 if another instance created the row concurrently
+        res = await fetch(`${url}/rest/v1/portfolio_store`, {
+          method: "POST",
+          headers: buildSupabaseHeaders(key, {
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          }),
+          body: JSON.stringify({
+            id: SUPABASE_SECURITY_ROW_ID,
+            payload: next,
+            updated_at: nowIso,
+          }),
+        });
+
+        if (res.status === 409) {
+          return { ok: false, conflict: true };
+        }
+      } else {
+        // Optimistic concurrency compare-and-swap (CAS) on the JSON revision we read
+        const revisionFilter =
+          meta.revision !== null
+            ? `payload->>revision=eq.${meta.revision}`
+            : `payload->>revision=is.null`;
+
+        res = await fetch(
+          `${url}/rest/v1/portfolio_store?id=eq.${SUPABASE_SECURITY_ROW_ID}&${revisionFilter}`,
+          {
+            method: "PATCH",
+            headers: buildSupabaseHeaders(key, {
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            }),
+            body: JSON.stringify({
+              payload: next,
+              updated_at: nowIso,
+            }),
+          }
+        );
+      }
     } catch (err) {
       const detail =
         err instanceof Error ? err.message : "Network request failed";
@@ -287,6 +398,11 @@ async function writeAdminSecurityStore(
         `Failed to update security registry in Supabase (${reason}).`
       );
     }
+
+    const updatedRows = await res.json().catch(() => null);
+    if (Array.isArray(updatedRows) && updatedRows.length === 0) {
+      return { ok: false, conflict: true };
+    }
   }
 
   try {
@@ -306,16 +422,35 @@ async function writeAdminSecurityStore(
     }
   }
 
-  return next;
+  return { ok: true, store: next };
 }
 
 export async function mutateAdminSecurityStore(
-  updater: (current: InternalAdminSecurityStore) => InternalAdminSecurityStore
+  updater: (current: InternalAdminSecurityStore) => InternalAdminSecurityStore,
+  options?: { maxAttempts?: number }
 ): Promise<InternalAdminSecurityStore> {
-  const executeMutation = async () => {
-    const current = await readAdminSecurityStore();
-    const next = updater(current);
-    return writeAdminSecurityStore(next);
+  const maxAttempts = Math.max(
+    1,
+    Math.min(8, options?.maxAttempts ?? MAX_MUTATION_ATTEMPTS)
+  );
+
+  const executeMutation = async (): Promise<InternalAdminSecurityStore> => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const { store: current, meta } = await readAdminSecurityStoreWithMeta();
+      const candidate = updater(current);
+
+      // Skip unnecessary I/O and conflict contention when the updater returns current unchanged
+      if (candidate === current) {
+        return current;
+      }
+
+      const result = await writeAdminSecurityStoreConditional(candidate, meta);
+      if (result.ok) {
+        return result.store;
+      }
+    }
+
+    throw new SecurityStoreConflictError();
   };
 
   const queuedTask = securityWriteQueue.then(executeMutation, executeMutation);
@@ -391,27 +526,6 @@ export function clearSecurityRateBucket(
   return { ...store, loginFailures: copy };
 }
 
-export function checkLoginRateLimit(
-  store: InternalAdminSecurityStore,
-  ipRateKey: string
-): { allowed: boolean; retryAfterSec: number } {
-  return checkSecurityRateLimit(store, ipRateKey);
-}
-
-export function recordLoginFailureState(
-  store: InternalAdminSecurityStore,
-  ipRateKey: string
-): InternalAdminSecurityStore {
-  return recordSecurityRateFailure(store, ipRateKey);
-}
-
-export function clearLoginFailureState(
-  store: InternalAdminSecurityStore,
-  ipRateKey: string
-): InternalAdminSecurityStore {
-  return clearSecurityRateBucket(store, ipRateKey);
-}
-
 export function buildDeviceFromTelemetry(params: {
   telemetry?: Partial<ClientDeviceTelemetry> | null;
   customName?: string | null;
@@ -474,7 +588,14 @@ export function upsertTrustedDevice(
       d.id === device.id ||
       (Boolean(device.keyThumbprint) &&
         d.keyThumbprint === device.keyThumbprint &&
-        d.status === "active")
+        d.status === "active") ||
+      (!device.keyThumbprint &&
+        !d.keyThumbprint &&
+        d.status === "active" &&
+        d.userAgent === device.userAgent &&
+        d.platform === device.platform &&
+        d.model === device.model &&
+        d.screenMetrics === device.screenMetrics)
   );
 
   if (existingIdx >= 0) {
@@ -525,33 +646,38 @@ export async function touchDeviceActivity(
       return;
     }
 
-    await mutateAdminSecurityStore((latest) => {
-      const currentTarget = latest.devices.find(
-        (d) => d.id === deviceId && d.status === "active"
-      );
-      if (!currentTarget) return latest;
+    // Best-effort single-attempt CAS touch so background lastSeenAt pings never contend with active mutations
+    await mutateAdminSecurityStore(
+      (latest) => {
+        const currentTarget = latest.devices.find(
+          (d) => d.id === deviceId && d.status === "active"
+        );
+        if (!currentTarget) return latest;
 
-      const latestAgeMs = Date.now() - new Date(currentTarget.lastSeenAt).getTime();
-      if (
-        latestAgeMs < LAST_SEEN_THROTTLE_MS &&
-        (!ipMasked || ipMasked === currentTarget.ipMasked)
-      ) {
-        return latest;
-      }
+        const latestAgeMs =
+          Date.now() - new Date(currentTarget.lastSeenAt).getTime();
+        if (
+          latestAgeMs < LAST_SEEN_THROTTLE_MS &&
+          (!ipMasked || ipMasked === currentTarget.ipMasked)
+        ) {
+          return latest;
+        }
 
-      return {
-        ...latest,
-        devices: latest.devices.map((d) =>
-          d.id === deviceId
-            ? {
-                ...d,
-                lastSeenAt: new Date().toISOString(),
-                ipMasked: ipMasked || d.ipMasked,
-              }
-            : d
-        ),
-      };
-    });
+        return {
+          ...latest,
+          devices: latest.devices.map((d) =>
+            d.id === deviceId
+              ? {
+                  ...d,
+                  lastSeenAt: new Date().toISOString(),
+                  ipMasked: ipMasked || d.ipMasked,
+                }
+              : d
+          ),
+        };
+      },
+      { maxAttempts: 1 }
+    );
   } catch {
     // Non-blocking activity touch
   }
@@ -614,6 +740,7 @@ export function toSafeSecuritySummary(
     currentDeviceId,
     activeDeviceCount: activeDevices.length,
     devices: store.devices,
+    passkeys: store.passkeys,
     auditLog: store.auditLog,
     pendingPairings,
   };

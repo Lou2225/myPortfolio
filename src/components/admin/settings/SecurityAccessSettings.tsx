@@ -36,17 +36,20 @@ import {
 } from "@/components/admin/AdminMobileStepView";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { collectClientDeviceTelemetry } from "@/lib/deviceTelemetry";
-import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
+import { registerDevicePasskey } from "@/lib/passkeyClient";
 import {
+  announceBrandPortalStatus,
   DEVICE_STORAGE_KEY,
   DEVICE_SYNC_EVENT,
-} from "@/components/admin/AdminLogin";
+} from "@/lib/brandPortalStatus";
 import { DeviceEditModal } from "./DeviceEditModal";
 import { QrDevicePairModal } from "./QrDevicePairModal";
+import { RecognitionHealthCard } from "./RecognitionHealthCard";
 import { SecurityAuditFeed } from "./SecurityAuditFeed";
 import { TotpSetupModal } from "./TotpSetupModal";
 import type {
   ClientDeviceTelemetry,
+  DevicePasskey,
   SafeSecuritySummary,
   TrustedDevice,
 } from "@/types/security";
@@ -67,6 +70,7 @@ const TRUST_SOURCE_LABELS: Record<TrustedDevice["trustSource"], string> = {
   "qr-pair": "QR Paired",
   "stealth-unlock": "Stealth Unlock",
   totp: "Authenticator 2FA",
+  passkey: "Hardware Passkey",
 };
 
 const TRUSTED_DEVICES_PAGE_SIZE = 3;
@@ -252,6 +256,120 @@ export function SecurityAccessSettings({
     } finally {
       setSavingDevice(false);
     }
+  };
+
+  const handleRepairDeviceRecognition = async () => {
+    setBusyAction("repair-device-key");
+    try {
+      const live = await collectClientDeviceTelemetry();
+      setTelemetry(live);
+      const res = await fetch("/api/admin/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: currentDeviceRecord?.name || live.suggestedName,
+          telemetry: live,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        onFeedback?.({
+          type: "error",
+          message: data.error || "Failed to sync recovery key with server.",
+        });
+        return;
+      }
+      syncLocalDeviceFlag(true);
+      onFeedback?.(null);
+      announceBrandPortalStatus({
+        tone: "live",
+        label: "Recovery Key Synced",
+        detail: live.keyThumbprint || "Hardware key linked",
+        durationMs: 3000,
+      });
+      await refreshSecurityState();
+    } catch {
+      onFeedback?.({
+        type: "error",
+        message: "Network error while syncing device recovery key.",
+      });
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleLinkPasskey = async () => {
+    setBusyAction("link-passkey");
+    try {
+      const result = await registerDevicePasskey({
+        deviceId: currentDeviceRecord?.id,
+        deviceName: currentDeviceRecord?.name || telemetry?.suggestedName,
+      });
+      if (!result.ok) {
+        if (!result.cancelled) {
+          onFeedback?.({
+            type: "error",
+            message: result.error,
+          });
+        }
+        return;
+      }
+
+      syncLocalDeviceFlag(true);
+      onFeedback?.(null);
+      announceBrandPortalStatus({
+        tone: "live",
+        label: "Passkey Linked",
+        detail: `${result.passkey.authenticatorLabel} (${result.passkey.backedUp ? "Synced" : "Hardware-Bound"})`,
+        durationMs: 3500,
+      });
+      await refreshSecurityState();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const promptRemovePasskey = (passkey: DevicePasskey) => {
+    setConfirmState({
+      open: true,
+      title: "Remove Linked Passkey?",
+      description: `Removing "${passkey.authenticatorLabel}" (${passkey.rpId}) disables 1-step biometric/PIN passkey sign-in for this credential until you link it again.`,
+      confirmLabel: "Remove Passkey",
+      variant: "danger",
+      onConfirm: async () => {
+        setConfirmState(null);
+        setBusyAction(`remove-pk-${passkey.credentialId}`);
+        try {
+          const res = await fetch(
+            `/api/admin/devices/passkey?credentialId=${encodeURIComponent(passkey.credentialId)}`,
+            { method: "DELETE" }
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            onFeedback?.({
+              type: "error",
+              message: data.error || "Failed to remove passkey.",
+            });
+            return;
+          }
+          onFeedback?.(null);
+          announceBrandPortalStatus({
+            tone: "synced",
+            label: "Passkey Removed",
+            detail: passkey.authenticatorLabel,
+            durationMs: 3000,
+          });
+          await refreshSecurityState();
+        } catch {
+          onFeedback?.({
+            type: "error",
+            message: "Network error while removing passkey.",
+          });
+        } finally {
+          setBusyAction(null);
+        }
+      },
+    });
   };
 
   const runDevicePatch = async (
@@ -572,6 +690,21 @@ export function SecurityAccessSettings({
             </div>
           </div>
         )}
+
+        {/* Recognition Health & Persistence Diagnostics */}
+        <RecognitionHealthCard
+          deviceRegistered={deviceRegistered}
+          currentDeviceRecord={currentDeviceRecord}
+          passkeys={summary?.passkeys || []}
+          onRepairSync={handleRepairDeviceRecognition}
+          repairing={busyAction === "repair-device-key"}
+          onLinkPasskey={handleLinkPasskey}
+          linkingPasskey={busyAction === "link-passkey"}
+          onRemovePasskey={promptRemovePasskey}
+          removingPasskeyId={
+            busyAction?.startsWith("remove-pk-") ? busyAction.slice(10) : null
+          }
+        />
       </div>
     </div>
   );
@@ -663,12 +796,23 @@ export function SecurityAccessSettings({
                         <StatusPill
                           label={TRUST_SOURCE_LABELS[device.trustSource]}
                           variant={
-                            device.trustSource === "qr-pair"
+                            device.trustSource === "qr-pair" ||
+                            device.trustSource === "passkey"
                               ? "success"
                               : "neutral"
                           }
                           size="xs"
                         />
+                        {(summary?.passkeys || [])
+                          .filter((pk) => pk.deviceId === device.id)
+                          .map((pk) => (
+                            <StatusPill
+                              key={pk.credentialId}
+                              label={`Passkey: ${pk.authenticatorLabel}`}
+                              variant="success"
+                              size="xs"
+                            />
+                          ))}
                         {device.keyThumbprint && (
                           <StatusPill
                             label={device.keyThumbprint}

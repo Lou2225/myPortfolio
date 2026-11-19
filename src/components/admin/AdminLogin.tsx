@@ -7,18 +7,28 @@ import { PasswordField } from "@/components/ui/fields/PasswordField";
 import { validatePassword } from "@/lib/inputValidation";
 import { collectClientDeviceTelemetry } from "@/lib/deviceTelemetry";
 import {
+  announceBrandPortalStatus,
   DEVICE_STORAGE_KEY,
   DEVICE_SYNC_EVENT,
 } from "@/lib/brandPortalStatus";
+import {
+  authenticateWithPasskey,
+  checkPlatformPasskeySupport,
+} from "@/lib/passkeyClient";
 import { useBrandPortal } from "@/components/motion/BrandPortal";
-import { Lock, ArrowLeft, Loader2, ShieldCheck, KeyRound } from "lucide-react";
+import {
+  Lock,
+  ArrowLeft,
+  Loader2,
+  ShieldCheck,
+  KeyRound,
+  Fingerprint,
+} from "lucide-react";
 
 interface AdminLoginProps {
   onSuccess: () => void | Promise<void>;
   stealthUnlockToken?: string | null;
 }
-
-export { DEVICE_STORAGE_KEY, DEVICE_SYNC_EVENT };
 
 export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
   const { triggerLoginPortal } = useBrandPortal();
@@ -27,7 +37,21 @@ export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
   const [totpCode, setTotpCode] = useState("");
   const [forceTouched, setForceTouched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void checkPlatformPasskeySupport().then((res) => {
+      if (!cancelled) {
+        setPasskeySupported(res.supported);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Lock viewport scrolling while the login screen is mounted
   useEffect(() => {
@@ -49,6 +73,33 @@ export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
     maxLength: 128,
     required: true,
   });
+
+  const handlePasskeySignIn = async () => {
+    if (loading || passkeyBusy) return;
+    setPasskeyBusy(true);
+    setError("");
+    try {
+      const result = await authenticateWithPasskey();
+      if (!result.ok) {
+        if (!result.cancelled) {
+          setError(result.error);
+        }
+        setPasskeyBusy(false);
+        return;
+      }
+
+      announceBrandPortalStatus({
+        tone: "live",
+        label: "Passkey Verified",
+        detail: `${result.authenticatorLabel} · ${result.deviceName}`,
+        durationMs: 3200,
+      });
+      triggerLoginPortal(onSuccess);
+    } catch {
+      setError("Failed to authenticate with passkey.");
+      setPasskeyBusy(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,7 +259,11 @@ export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
 
           <Button
             type="submit"
-            disabled={loading || (requiresTotp && totpCode.replace(/\D/g, "").length !== 6)}
+            disabled={
+              loading ||
+              passkeyBusy ||
+              (requiresTotp && totpCode.replace(/\D/g, "").length !== 6)
+            }
             variant="primary"
             size="lg"
             fullWidth
@@ -229,6 +284,29 @@ export function AdminLogin({ onSuccess, stealthUnlockToken }: AdminLoginProps) {
               </>
             )}
           </Button>
+
+          {!requiresTotp && passkeySupported && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              fullWidth
+              disabled={loading || passkeyBusy}
+              onClick={() => void handlePasskeySignIn()}
+            >
+              {passkeyBusy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-(--text-accent)" />
+                  <span>Waiting for Device Passkey...</span>
+                </>
+              ) : (
+                <>
+                  <Fingerprint className="w-4 h-4 text-(--text-accent)" />
+                  <span>Sign In with Passkey (Biometrics / PIN)</span>
+                </>
+              )}
+            </Button>
+          )}
         </form>
 
         <div className="mt-5 pt-4 border-t border-(--border-subtle) text-[11px] text-(--text-muted) leading-relaxed">

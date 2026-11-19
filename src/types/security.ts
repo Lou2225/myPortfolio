@@ -5,7 +5,8 @@ export type DeviceTrustSource =
   | "manual"
   | "qr-pair"
   | "stealth-unlock"
-  | "totp";
+  | "totp"
+  | "passkey";
 
 export type DeviceStatus = "active" | "revoked";
 
@@ -94,6 +95,21 @@ export interface PairingChallenge {
   pairedDeviceId: string | null;
 }
 
+export interface DevicePasskey {
+  credentialId: string;
+  publicKeySpki: string;
+  algorithm: number;
+  counter: number;
+  transports: string[];
+  aaguid: string | null;
+  authenticatorLabel: string;
+  backedUp: boolean;
+  rpId: string;
+  deviceId: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 export type SecurityAuditAction =
   | "login_success"
   | "login_failed"
@@ -106,7 +122,10 @@ export type SecurityAuditAction =
   | "sessions_revoked"
   | "stealth_toggled"
   | "stealth_unlock"
-  | "totp_updated";
+  | "totp_updated"
+  | "passkey_registered"
+  | "passkey_login"
+  | "passkey_revoked";
 
 export type SecurityAuditOutcome = "success" | "blocked" | "info";
 
@@ -132,6 +151,7 @@ export interface AdminSecurityStore {
   sessionEpoch: number;
   stealthGateEnabled: boolean;
   devices: TrustedDevice[];
+  passkeys?: DevicePasskey[];
   pairings: PairingChallenge[];
   auditLog: SecurityAuditEvent[];
   loginFailures: Record<string, LoginRateLimitBucket>;
@@ -146,6 +166,7 @@ export interface SafeSecuritySummary {
   currentDeviceId: string | null;
   activeDeviceCount: number;
   devices: TrustedDevice[];
+  passkeys: DevicePasskey[];
   auditLog: SecurityAuditEvent[];
   pendingPairings: Array<{
     id: string;

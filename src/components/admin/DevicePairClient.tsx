@@ -6,6 +6,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
+  Fingerprint,
   Loader2,
   ShieldAlert,
   ShieldCheck,
@@ -16,8 +17,15 @@ import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { OtpCodeField, TextField } from "@/components/ui/fields";
 import { collectClientDeviceTelemetry } from "@/lib/deviceTelemetry";
+import {
+  checkPlatformPasskeySupport,
+  registerDevicePasskey,
+} from "@/lib/passkeyClient";
 import { sanitizeDeviceLabel } from "@/lib/validation";
-import { DEVICE_STORAGE_KEY, DEVICE_SYNC_EVENT } from "@/components/admin/AdminLogin";
+import {
+  DEVICE_STORAGE_KEY,
+  DEVICE_SYNC_EVENT,
+} from "@/lib/brandPortalStatus";
 import type { ClientDeviceTelemetry } from "@/types/security";
 
 interface ChallengeCheckState {
@@ -77,6 +85,12 @@ export function DevicePairClient({ challengeId }: DevicePairClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [claimToken, setClaimToken] = useState<string | null>(null);
   const [completedAuth, setCompletedAuth] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyLinking, setPasskeyLinking] = useState(false);
+  const [passkeyLinkedLabel, setPasskeyLinkedLabel] = useState<string | null>(
+    null
+  );
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
 
   const [challengeState, setChallengeState] = useState<ChallengeCheckState>({
     status: challengeId ? "loading" : "manual_entry",
@@ -90,7 +104,30 @@ export function DevicePairClient({ challengeId }: DevicePairClientProps) {
       setTelemetry(data);
       setDeviceName((prev) => prev || data.suggestedName);
     });
+    void checkPlatformPasskeySupport().then((res) => {
+      setPasskeySupported(res.supported);
+    });
   }, []);
+
+  const handleLinkPasskeyAfterPair = async () => {
+    if (passkeyLinking) return;
+    setPasskeyLinking(true);
+    setPasskeyError(null);
+    try {
+      const result = await registerDevicePasskey({
+        deviceName: deviceName.trim() || undefined,
+      });
+      if (!result.ok) {
+        if (!result.cancelled) {
+          setPasskeyError(result.error);
+        }
+        return;
+      }
+      setPasskeyLinkedLabel(result.passkey.authenticatorLabel);
+    } finally {
+      setPasskeyLinking(false);
+    }
+  };
 
   // Load QR / manual pairing challenge state asynchronously inside effect callback
   useEffect(() => {
@@ -399,6 +436,42 @@ export function DevicePairClient({ challengeId }: DevicePairClientProps) {
             </div>
 
             <div className="flex flex-col gap-2 pt-1">
+              {completedAuth && passkeySupported && !passkeyLinkedLabel && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  fullWidth
+                  disabled={passkeyLinking}
+                  onClick={() => void handleLinkPasskeyAfterPair()}
+                >
+                  {passkeyLinking ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-(--text-accent)" />
+                      <span>Linking Device Passkey...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Fingerprint className="w-4 h-4 text-(--text-accent)" />
+                      <span>Link Passkey (Face ID / Biometrics)</span>
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {passkeyLinkedLabel && (
+                <div className="p-2.5 rounded-(--radius-control) bg-(--bg-surface) border border-emerald-500/35 text-[11px] font-mono text-emerald-300 flex items-center justify-center gap-1.5">
+                  <Fingerprint className="w-3.5 h-3.5 shrink-0" />
+                  <span>Linked via {passkeyLinkedLabel}</span>
+                </div>
+              )}
+
+              {passkeyError && (
+                <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 p-2 rounded-(--radius-control)">
+                  {passkeyError}
+                </p>
+              )}
+
               <Button
                 href="/admin"
                 variant="primary"

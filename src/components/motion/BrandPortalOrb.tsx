@@ -33,6 +33,7 @@ export interface BrandPortalOrbProps {
   isAnimating: boolean;
   isSlideTransition?: boolean;
   onOrbAction: () => void;
+  onOrbLongPress?: () => void;
 }
 
 function StatusGlyph({
@@ -65,6 +66,7 @@ export function BrandPortalOrb({
   isAnimating,
   isSlideTransition = false,
   onOrbAction,
+  onOrbLongPress,
 }: BrandPortalOrbProps) {
   const { profile, updatedAt } = usePortfolio();
   const {
@@ -81,6 +83,7 @@ export function BrandPortalOrb({
   const haloRef = useRef<HTMLSpanElement>(null);
   const textSlotRef = useRef<HTMLDivElement>(null);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevOnlineRef = useRef(isOnline);
   const prevNoticeIdRef = useRef<number | null>(null);
 
@@ -197,14 +200,33 @@ export function BrandPortalOrb({
     return () => clearTimeout(timerId);
   }, [notice, hovered, focused]);
 
-  // Clean hover timer on unmount
+  // Clean hover & long-press timers on unmount
   useEffect(() => {
     return () => {
       if (hoverCloseTimerRef.current) {
         clearTimeout(hoverCloseTimerRef.current);
       }
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
     };
   }, []);
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startLongPress = () => {
+    if (canNavigate || isAnimating || !onOrbLongPress) return;
+    cancelLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      onOrbLongPress();
+    }, 650);
+  };
 
   // Kinetic GSAP orb spring + halo pulse whenever a new status notice is announced
   const activeNoticeId = notice?.id ?? null;
@@ -355,6 +377,10 @@ export function BrandPortalOrb({
           {/* Left: 40x40 Circular Brand Monogram Orb */}
           <div
             ref={logoButtonRef}
+            onPointerDown={startLongPress}
+            onPointerUp={cancelLongPress}
+            onPointerLeave={cancelLongPress}
+            onPointerCancel={cancelLongPress}
             onClick={
               canNavigate && !isAnimating
                 ? (e) => {

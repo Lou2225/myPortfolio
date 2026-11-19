@@ -48,11 +48,15 @@ interface AdminSessionPayload {
   exp: number;
 }
 
+const DEVICE_COOKIE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365; // 365 days
+const DEVICE_COOKIE_RENEW_INTERVAL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+
 interface RegisteredDevicePayload {
   device: "registered_admin_device";
   deviceId?: string;
   keyThumbprint?: string | null;
   epoch?: number;
+  iat?: number;
   exp: number;
 }
 
@@ -194,11 +198,13 @@ export function createAdminToken(options?: {
   });
 }
 
-function createRegisteredDeviceToken(options?: {
+export function createRegisteredDeviceToken(options?: {
   deviceId?: string;
   keyThumbprint?: string | null;
   epoch?: number;
+  iat?: number;
 }): string {
+  const issuedAt = options?.iat ?? Date.now();
   return signPayload({
     device: "registered_admin_device",
     epoch: options?.epoch ?? 1,
@@ -206,7 +212,8 @@ function createRegisteredDeviceToken(options?: {
     ...(options?.keyThumbprint
       ? { keyThumbprint: options.keyThumbprint }
       : {}),
-    exp: Date.now() + 1000 * 60 * 60 * 24 * 365, // 365 days
+    iat: issuedAt,
+    exp: issuedAt + DEVICE_COOKIE_MAX_AGE_MS,
   });
 }
 
@@ -323,6 +330,8 @@ export async function getSessionAndDeviceContext(): Promise<{
   authenticated: boolean;
   deviceRegistered: boolean;
   currentDeviceId: string | null;
+  currentDeviceThumbprint?: string | null;
+  deviceTokenNeedsRefresh?: boolean;
   sessionEpoch: number;
   storageUnavailable?: boolean;
 }> {
@@ -364,6 +373,8 @@ export async function getSessionAndDeviceContext(): Promise<{
     // Validate Registered Device Cookie against Server Registry
     let deviceRegistered = false;
     let currentDeviceId: string | null = null;
+    let currentDeviceThumbprint: string | null = null;
+    let deviceTokenNeedsRefresh = false;
 
     if (devicePayload?.device === "registered_admin_device") {
       if (devicePayload.deviceId) {
@@ -373,6 +384,14 @@ export async function getSessionAndDeviceContext(): Promise<{
         if (match) {
           deviceRegistered = true;
           currentDeviceId = match.id;
+          currentDeviceThumbprint = match.keyThumbprint;
+          const tokenAgeMs =
+            typeof devicePayload.iat === "number"
+              ? Date.now() - devicePayload.iat
+              : Number.POSITIVE_INFINITY;
+          if (tokenAgeMs >= DEVICE_COOKIE_RENEW_INTERVAL_MS) {
+            deviceTokenNeedsRefresh = true;
+          }
         }
       } else if (isLegacyPermitted) {
         deviceRegistered = true;
@@ -385,6 +404,9 @@ export async function getSessionAndDeviceContext(): Promise<{
       );
       if (boundActive) {
         currentDeviceId = boundActive.id;
+        currentDeviceThumbprint = boundActive.keyThumbprint;
+        deviceRegistered = true;
+        deviceTokenNeedsRefresh = true;
       }
     }
 
@@ -392,6 +414,8 @@ export async function getSessionAndDeviceContext(): Promise<{
       authenticated,
       deviceRegistered,
       currentDeviceId,
+      currentDeviceThumbprint,
+      deviceTokenNeedsRefresh,
       sessionEpoch: securityStore.sessionEpoch,
     };
   } catch (err) {
@@ -399,6 +423,8 @@ export async function getSessionAndDeviceContext(): Promise<{
       authenticated: false,
       deviceRegistered: false,
       currentDeviceId: null,
+      currentDeviceThumbprint: null,
+      deviceTokenNeedsRefresh: false,
       sessionEpoch: 1,
       storageUnavailable: err instanceof StorageReadError,
     };

@@ -13,6 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { BrandPortalOrb } from "@/components/motion/BrandPortalOrb";
 import { signExistingDeviceChallenge } from "@/lib/deviceTelemetry";
+import { authenticateWithPasskey } from "@/lib/passkeyClient";
 import {
   announceBrandPortalStatus,
   BrandPortalTone,
@@ -24,13 +25,6 @@ import {
   queryKeys,
   writePersistedAdminCache,
 } from "@/lib/queryClient";
-
-export {
-  announceBrandPortalStatus,
-  useBrandPortalWorkspaceSync,
-  setBrandPortalMeta,
-} from "@/lib/brandPortalStatus";
-export type { BrandPortalTone } from "@/lib/brandPortalStatus";
 
 interface BrandPortalContextValue {
   /**
@@ -95,9 +89,14 @@ export function BrandPortalProvider({
   const isAnimatingRef = useRef(false);
   const greetingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isGreetingRef = useRef(false);
+  const passkeyAvailableRef = useRef(false);
+  const passkeyUnlockBusyRef = useRef(false);
   const triggerSlideNavigateRef = useRef<
     (href: string, direction?: "left" | "right") => void
   >(() => {});
+  const handlePasskeyShortcutRef = useRef<
+    (fallbackToAdminRoute: boolean) => Promise<void>
+  >(async () => {});
   const [isAnimating, setIsAnimating] = useState(false);
   const [portalMode, setPortalMode] = useState<"idle" | "slide" | "wave">(
     "idle"
@@ -170,19 +169,39 @@ export function BrandPortalProvider({
     });
 
     let authTimerId: ReturnType<typeof setTimeout> | null = null;
+    let retryTimerId: ReturnType<typeof setTimeout> | null = null;
     let idleCallbackId: number | null = null;
     let cancelled = false;
+    let inFlight = false;
+    let lastCheckedAt = 0;
+    let lastCheckSucceeded = false;
+    const RETRY_DELAYS_MS = [1000, 3000, 8000] as const;
 
-    const verifyAdminDeviceStatus = async () => {
-      if (cancelled) return;
+    const scheduleRetry = (attempt: number) => {
+      if (cancelled || attempt >= RETRY_DELAYS_MS.length) return;
+      if (retryTimerId !== null) clearTimeout(retryTimerId);
+      retryTimerId = setTimeout(() => {
+        retryTimerId = null;
+        void verifyAdminDeviceStatus(attempt + 1);
+      }, RETRY_DELAYS_MS[attempt]);
+    };
+
+    const verifyAdminDeviceStatus = async (retryAttempt = 0) => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      lastCheckedAt = Date.now();
       try {
         const res = await fetch("/api/admin/auth", { cache: "no-store" });
         if (!res.ok) {
-          // Never wipe persisted device trust on transient network/503 responses
+          // Never wipe persisted device trust on transient network/503 responses; retry with backoff
+          lastCheckSucceeded = false;
+          scheduleRetry(retryAttempt);
           return;
         }
         const data = await res.json();
         if (cancelled) return;
+        lastCheckSucceeded = true;
+        passkeyAvailableRef.current = Boolean(data.passkeyAvailable);
 
         let verified = Boolean(data.deviceRegistered || data.authenticated);
         let recoveredFromHardwareKey = false;
@@ -219,6 +238,9 @@ export function BrandPortalProvider({
         } else {
           localStorage.removeItem(DEVICE_STORAGE_KEY);
         }
+        window.dispatchEvent(
+          new CustomEvent(DEVICE_SYNC_EVENT, { detail: verified })
+        );
 
         // Seed TanStack Query cache ONLY when authenticated (or sync updated deviceRegistered flag
         // when cache already exists), so SSR `initialAuth` remains authoritative on /admin entry.
@@ -261,19 +283,44 @@ export function BrandPortalProvider({
           });
         }
       } catch {
-        // Keep last known local device state across transient connectivity drops
+        // Keep last known local device state across transient connectivity drops and schedule retry
+        lastCheckSucceeded = false;
+        scheduleRetry(retryAttempt);
+      } finally {
+        inFlight = false;
       }
     };
 
     if (isAdminRoute || cached) {
-      verifyAdminDeviceStatus();
+      void verifyAdminDeviceStatus();
     } else if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      idleCallbackId = window.requestIdleCallback(verifyAdminDeviceStatus, {
-        timeout: 450,
-      });
+      idleCallbackId = window.requestIdleCallback(
+        () => {
+          void verifyAdminDeviceStatus();
+        },
+        { timeout: 450 }
+      );
     } else {
-      authTimerId = setTimeout(verifyAdminDeviceStatus, 250);
+      authTimerId = setTimeout(() => {
+        void verifyAdminDeviceStatus();
+      }, 250);
     }
+
+    const handleVisibilityOrFocus = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
+      const minIntervalMs = lastCheckSucceeded ? 60_000 : 5_000;
+      if (Date.now() - lastCheckedAt < minIntervalMs) return;
+      void verifyAdminDeviceStatus();
+    };
+
+    const handleOnline = () => {
+      void verifyAdminDeviceStatus();
+    };
 
     const handleDeviceSync = (e: Event) => {
       const custom = e as CustomEvent<boolean>;
@@ -287,16 +334,20 @@ export function BrandPortalProvider({
         e.key.toLowerCase() === "a"
       ) {
         e.preventDefault();
-        triggerSlideNavigateRef.current("/admin", "right");
+        void handlePasskeyShortcutRef.current(true);
       }
     };
 
     window.addEventListener(DEVICE_SYNC_EVENT, handleDeviceSync);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafId);
       if (authTimerId !== null) clearTimeout(authTimerId);
+      if (retryTimerId !== null) clearTimeout(retryTimerId);
       if (greetingTimerRef.current !== null) {
         clearTimeout(greetingTimerRef.current);
         greetingTimerRef.current = null;
@@ -310,6 +361,9 @@ export function BrandPortalProvider({
       }
       window.removeEventListener(DEVICE_SYNC_EVENT, handleDeviceSync);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
     };
   }, [router, queryClient, isAdminRoute]);
 
@@ -719,6 +773,60 @@ export function BrandPortalProvider({
     }, 420);
   }, [isAnimating, isRegisteredDevice, isAdminRoute, triggerSlideNavigate]);
 
+  const handlePasskeyUnlock = useCallback(
+    async (fallbackToAdminRoute: boolean) => {
+      if (isAnimating || isGreetingRef.current || passkeyUnlockBusyRef.current) {
+        return;
+      }
+
+      if (isAdminRoute) {
+        triggerSlideNavigate("/", "left");
+        return;
+      }
+
+      if (isRegisteredDevice) {
+        handleOrbAction();
+        return;
+      }
+
+      if (!passkeyAvailableRef.current && fallbackToAdminRoute) {
+        triggerSlideNavigateRef.current("/admin", "right");
+        return;
+      }
+
+      passkeyUnlockBusyRef.current = true;
+      try {
+        const result = await authenticateWithPasskey();
+        if (result.ok) {
+          setIsRegisteredDevice(true);
+          announceBrandPortalStatus({
+            tone: "live",
+            label: "Welcome Admin",
+            detail: `${result.authenticatorLabel} · Opening CMS...`,
+            durationMs: 2200,
+          });
+          triggerSlideNavigateRef.current("/admin", "right");
+          return;
+        }
+
+        if (fallbackToAdminRoute) {
+          triggerSlideNavigateRef.current("/admin", "right");
+        }
+      } finally {
+        passkeyUnlockBusyRef.current = false;
+      }
+    },
+    [isAnimating, isAdminRoute, isRegisteredDevice, triggerSlideNavigate, handleOrbAction]
+  );
+
+  useEffect(() => {
+    handlePasskeyShortcutRef.current = handlePasskeyUnlock;
+  }, [handlePasskeyUnlock]);
+
+  const handleOrbLongPress = useCallback(() => {
+    void handlePasskeyUnlock(false);
+  }, [handlePasskeyUnlock]);
+
   const contextValue = useMemo<BrandPortalContextValue>(
     () => ({
       triggerLoginPortal,
@@ -740,6 +848,7 @@ export function BrandPortalProvider({
         isAnimating={isAnimating}
         isSlideTransition={portalMode === "slide"}
         onOrbAction={handleOrbAction}
+        onOrbLongPress={handleOrbLongPress}
       />
 
       {/* Radial Wave Pulse Overlay (Expands from Logo across Viewport, then Collapses Reverse back to Logo) */}

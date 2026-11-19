@@ -254,7 +254,11 @@ export async function PATCH(request: Request) {
         );
 
         return appendSecurityAudit(
-          { ...store, devices: nextDevices },
+          {
+            ...store,
+            devices: nextDevices,
+            passkeys: store.passkeys.filter((pk) => pk.deviceId !== targetId),
+          },
           {
             action: "device_revoked",
             actorDeviceId: ctx.currentDeviceId,
@@ -312,6 +316,7 @@ export async function PATCH(request: Request) {
           {
             ...store,
             devices: store.devices.filter((d) => d.id !== targetId),
+            passkeys: store.passkeys.filter((pk) => pk.deviceId !== targetId),
           },
           {
             action: "device_revoked",

@@ -167,6 +167,123 @@ async function writeStoredKeypair(
 }
 
 /**
+ * Requests persistent browser storage so IndexedDB ECDSA device keys are protected
+ * from automatic browser storage-pressure eviction.
+ */
+export async function requestPersistentDeviceStorage(): Promise<boolean | null> {
+  if (
+    typeof window === "undefined" ||
+    typeof navigator === "undefined" ||
+    !navigator.storage
+  ) {
+    return null;
+  }
+
+  try {
+    if (typeof navigator.storage.persisted === "function") {
+      const alreadyPersisted = await navigator.storage.persisted();
+      if (alreadyPersisted) return true;
+    }
+    if (typeof navigator.storage.persist === "function") {
+      return await navigator.storage.persist();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export interface ClientRecognitionHealth {
+  origin: string;
+  hostname: string;
+  isPreviewHost: boolean;
+  secureContext: boolean;
+  hasIndexedDbKey: boolean;
+  keyThumbprint: string | null;
+  storagePersisted: boolean | null;
+  localHintCached: boolean;
+}
+
+/**
+ * Inspects client-side device recognition layers without generating a new keypair
+ * unless `ensureKeypair` is explicitly passed.
+ */
+export async function inspectDeviceRecognitionHealth(options?: {
+  ensureKeypair?: boolean;
+}): Promise<ClientRecognitionHealth> {
+  if (typeof window === "undefined") {
+    return {
+      origin: "",
+      hostname: "",
+      isPreviewHost: false,
+      secureContext: false,
+      hasIndexedDbKey: false,
+      keyThumbprint: null,
+      storagePersisted: null,
+      localHintCached: false,
+    };
+  }
+
+  const origin = window.location.origin;
+  const hostname = window.location.hostname;
+  const isPreviewHost =
+    hostname.endsWith(".vercel.app") &&
+    hostname !== "louvaldellon.vercel.app" &&
+    hostname.includes("-");
+  const secureContext = Boolean(window.isSecureContext && window.crypto?.subtle);
+  const localHintCached =
+    window.localStorage?.getItem("lou_registered_device") === "true";
+
+  let storagePersisted: boolean | null = null;
+  try {
+    if (typeof navigator?.storage?.persisted === "function") {
+      storagePersisted = await navigator.storage.persisted();
+    }
+  } catch {
+    storagePersisted = null;
+  }
+
+  let hasIndexedDbKey = false;
+  let keyThumbprint: string | null = null;
+
+  if (secureContext && typeof indexedDB !== "undefined") {
+    try {
+      if (options?.ensureKeypair) {
+        const created = await getOrCreateClientDeviceKey();
+        hasIndexedDbKey = Boolean(created.keyThumbprint);
+        keyThumbprint = created.keyThumbprint;
+      } else {
+        const db = await openKeyDb();
+        const pair = await readStoredKeypair(db);
+        if (pair?.publicKey && pair?.privateKey) {
+          const spki = await window.crypto.subtle.exportKey(
+            "spki",
+            pair.publicKey
+          );
+          const digest = await window.crypto.subtle.digest("SHA-256", spki);
+          hasIndexedDbKey = true;
+          keyThumbprint = formatThumbprint(digest);
+        }
+      }
+    } catch {
+      hasIndexedDbKey = false;
+      keyThumbprint = null;
+    }
+  }
+
+  return {
+    origin,
+    hostname,
+    isPreviewHost,
+    secureContext,
+    hasIndexedDbKey,
+    keyThumbprint,
+    storagePersisted,
+    localHintCached,
+  };
+}
+
+/**
  * Generates or loads a non-extractable ECDSA P-256 hardware/browser keypair in IndexedDB.
  * Returns null cleanly when running on insecure plain-HTTP LAN origins where SubtleCrypto is restricted.
  */
@@ -196,6 +313,8 @@ async function getOrCreateClientDeviceKey(): Promise<{
       );
       await writeStoredKeypair(db, pair);
     }
+
+    void requestPersistentDeviceStorage();
 
     const spki = await window.crypto.subtle.exportKey("spki", pair.publicKey);
     const digest = await window.crypto.subtle.digest("SHA-256", spki);

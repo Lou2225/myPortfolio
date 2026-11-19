@@ -26,13 +26,11 @@ import { ScrollToTop } from "@/components/ui/ScrollToTop";
 import { AdminSlideView } from "@/components/motion/AdminMotion";
 import {
   announceBrandPortalStatus,
-  setBrandPortalMeta,
-} from "@/lib/brandPortalStatus";
-import {
-  AdminLogin,
   DEVICE_STORAGE_KEY,
   DEVICE_SYNC_EVENT,
-} from "@/components/admin/AdminLogin";
+  setBrandPortalMeta,
+} from "@/lib/brandPortalStatus";
+import { AdminLogin } from "@/components/admin/AdminLogin";
 import {
   AdminTab,
   SettingsSectionId,
@@ -52,7 +50,10 @@ import { SkillsImpactManager } from "@/components/admin/SkillsImpactManager";
 import { ProjectsManager } from "@/components/admin/ProjectsManager";
 import { InboxManager } from "@/components/admin/InboxManager";
 import { SettingsManager } from "@/components/admin/SettingsManager";
-import { collectClientDeviceTelemetry } from "@/lib/deviceTelemetry";
+import {
+  collectClientDeviceTelemetry,
+  signExistingDeviceChallenge,
+} from "@/lib/deviceTelemetry";
 import { applyAppearanceToDocument } from "@/lib/appearance";
 import { ALL_FONT_PAIRING_CLASSES } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
@@ -201,19 +202,51 @@ export function AdminDashboardClient({
     queryFn: async (): Promise<AdminAuthStatus> => {
       const res = await fetch("/api/admin/auth", { cache: "no-store" });
       if (!res.ok) {
-        return {
-          authenticated: false,
-          deviceRegistered: false,
-          storageMode: "local-json",
-        };
+        // Never wipe persisted device trust on transient 5xx/network responses;
+        // throwing preserves initialData / last known good query cache.
+        throw new Error(`Auth status check failed (HTTP ${res.status})`);
       }
       const data = await res.json();
-      const isReg = Boolean(data.deviceRegistered);
+      let isReg = Boolean(data.deviceRegistered || data.authenticated);
+
+      // If cookie was missing/expired, attempt silent WebCrypto ECDSA P-256 recovery before clearing trust
+      if (
+        !isReg &&
+        typeof data.deviceChallenge === "string" &&
+        data.deviceChallenge
+      ) {
+        const assertion = await signExistingDeviceChallenge(
+          data.deviceChallenge
+        );
+        if (assertion) {
+          const recRes = await fetch("/api/admin/auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "recover-device-trust",
+              challenge: data.deviceChallenge,
+              keyThumbprint: assertion.keyThumbprint,
+              signature: assertion.signature,
+            }),
+          });
+          if (recRes.ok) {
+            const recData = await recRes.json().catch(() => ({}));
+            if (recData?.deviceRegistered) {
+              isReg = true;
+            }
+          }
+        }
+      }
+
       if (isReg) {
         localStorage.setItem(DEVICE_STORAGE_KEY, "true");
       } else {
         localStorage.removeItem(DEVICE_STORAGE_KEY);
       }
+      window.dispatchEvent(
+        new CustomEvent(DEVICE_SYNC_EVENT, { detail: isReg })
+      );
+
       return {
         authenticated: Boolean(data.authenticated),
         deviceRegistered: isReg,
@@ -230,20 +263,35 @@ export function AdminDashboardClient({
   const authenticated = Boolean(authQuery.data?.authenticated);
   const deviceRegistered = Boolean(authQuery.data?.deviceRegistered);
 
-  // Sync SSR device registration and initial portfolio payload into localStorage after mount
+  // Sync SSR device registration and initial portfolio payload into localStorage after mount.
+  // When SSR reports deviceRegistered=false (e.g. cookie missing), do not wipe localStorage
+  // until client-side WebCrypto ECDSA verification in BrandPortal / authQuery has run.
   useEffect(() => {
     if (deviceRegistered) {
       localStorage.setItem(DEVICE_STORAGE_KEY, "true");
-    } else {
-      localStorage.removeItem(DEVICE_STORAGE_KEY);
+      window.dispatchEvent(
+        new CustomEvent(DEVICE_SYNC_EVENT, { detail: true })
+      );
     }
-    window.dispatchEvent(
-      new CustomEvent(DEVICE_SYNC_EVENT, { detail: deviceRegistered })
-    );
     if (initialPortfolio) {
       writePersistedAdminCache(initialPortfolio);
     }
   }, [deviceRegistered, initialPortfolio]);
+
+  // Listen for BrandPortal completing silent WebCrypto ECDSA recovery on /admin
+  useEffect(() => {
+    const handleDeviceSync = (e: Event) => {
+      const custom = e as CustomEvent<boolean>;
+      const nextReg = Boolean(custom.detail);
+      queryClient.setQueryData<AdminAuthStatus>(queryKeys.adminAuth, (prev) =>
+        prev && prev.deviceRegistered !== nextReg
+          ? { ...prev, deviceRegistered: nextReg }
+          : prev
+      );
+    };
+    window.addEventListener(DEVICE_SYNC_EVENT, handleDeviceSync);
+    return () => window.removeEventListener(DEVICE_SYNC_EVENT, handleDeviceSync);
+  }, [queryClient]);
 
   // 2. Full Admin Portfolio Database Query (Hydrated cleanly from SSR, fallback to persistent cache)
   const portfolioQuery = useQuery({
