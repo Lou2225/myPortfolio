@@ -73,7 +73,7 @@ export function AdminDashboardSkeleton() {
       </div>
 
       {/* Main Workspace Skeleton */}
-      <div className="md:pl-22 lg:pl-24 max-w-370 mx-auto px-4 sm:px-6 lg:px-10 pt-6 space-y-6">
+      <div className="w-full px-3 sm:px-6 lg:px-8 md:pl-22 lg:pl-24 pt-6 space-y-6">
         {/* Page Title Header Skeleton */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-(--border-subtle)">
           <div className="space-y-2">
