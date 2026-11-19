@@ -21,7 +21,6 @@ import {
   isNetworkOffline,
   useOfflineStatus,
 } from "@/components/pwa/OfflineManager";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import { Button } from "@/components/ui/Button";
 import {
@@ -125,19 +124,6 @@ export function JumpscareSettings({
   const volume = resolveJumpscareVolume(draft.jumpscareVolume);
   const caption = draft.jumpscareCaption ?? "GOTCHA.";
 
-  const hasUnsavedJumpscareChanges = savedSnapshot
-    ? Boolean(draft.jumpscareEnabled) !== Boolean(savedSnapshot.jumpscareEnabled) ||
-      (draft.jumpscareTrigger || "secret-taps") !==
-        (savedSnapshot.jumpscareTrigger || "secret-taps") ||
-      (draft.jumpscareImageUrl || "") !== (savedSnapshot.jumpscareImageUrl || "") ||
-      (draft.jumpscareAudioUrl || "") !== (savedSnapshot.jumpscareAudioUrl || "") ||
-      Number(volume.toFixed(2)) !==
-        Number(resolveJumpscareVolume(savedSnapshot.jumpscareVolume).toFixed(2)) ||
-      (caption || "") !== (savedSnapshot.jumpscareCaption ?? "GOTCHA.") ||
-      JSON.stringify(draft.jumpscareImageTransform) !==
-        JSON.stringify(savedSnapshot.jumpscareImageTransform)
-    : false;
-
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawFile = e.target.files?.[0];
     e.target.value = "";
@@ -233,46 +219,27 @@ export function JumpscareSettings({
       {/* Header + Master ON/OFF Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-0.5 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.18em] text-(--text-muted)">
-              <Ghost className="w-3.5 h-3.5 text-(--text-accent)" />
-              <span>Jumpscare Easter Egg (Prank Mode)</span>
-              <InfoTooltip
-                label="Full-screen once-per-session Easter egg"
-                content="Slams edge-to-edge full screen with pre-decoded <5ms sound when triggered. Toggle OFF cleanly before sharing your portfolio with recruiters."
-              />
-            </span>
-            <StatusPill
-              label={
-                hasUnsavedJumpscareChanges
-                  ? "Draft · Unsaved"
-                  : enabled
-                    ? "Live on Public Site"
-                    : "Paused · Recruiter Safe"
-              }
-              variant={
-                hasUnsavedJumpscareChanges
-                  ? "accent"
-                  : enabled
-                    ? "warning"
-                    : "neutral"
-              }
-              size="xs"
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.18em] text-(--text-muted)">
+            <Ghost className="w-3.5 h-3.5 text-(--text-accent)" />
+            <span>Jumpscare Easter Egg (Prank Mode)</span>
+            <InfoTooltip
+              label="Full-screen once-per-session Easter egg"
+              content="Slams edge-to-edge full screen with pre-decoded <5ms sound when triggered. Toggle OFF cleanly before sharing your portfolio with recruiters."
             />
-          </div>
+          </span>
           <p className="text-[11px] text-(--text-muted) leading-snug">
             Slams edge-to-edge full screen with instant sound. Keep paused for
             hiring managers or flip ON and publish for friends.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => dispatchJumpscareTrigger("preview", true)}
-            className="h-9.5 text-xs font-mono"
+            className="h-9.5 w-full sm:w-auto text-xs font-mono"
           >
             <Play className="w-3.5 h-3.5 text-(--text-accent)" />
             <span>Test Jumpscare</span>
@@ -289,7 +256,7 @@ export function JumpscareSettings({
                 jumpscareEnabled: !prev.jumpscareEnabled,
               }))
             }
-            className="inline-flex items-center gap-2.5 px-3 py-2 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) hover:border-(--border-strong) transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="inline-flex items-center justify-between sm:justify-start gap-2.5 px-3 py-2 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) hover:border-(--border-strong) transition-colors cursor-pointer w-full sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <span className="text-xs font-mono uppercase tracking-wider text-(--text-primary)">
               {enabled ? "Scare On" : "Scare Off"}

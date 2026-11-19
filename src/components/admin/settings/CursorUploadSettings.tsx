@@ -4,7 +4,6 @@ import React, { useMemo, useState } from "react";
 import { Crosshair, MousePointerClick } from "lucide-react";
 import type { AppearanceConfig, CursorSizeMode } from "@/types/portfolio";
 import type { SettingsFeedback } from "./types";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import { ImageUploadField } from "@/components/ui/fields";
 import { TransformedImage } from "@/components/ui/TransformedImage";
@@ -162,36 +161,17 @@ export function CursorUploadSettings({
   );
 
   return (
-    <div className="pt-4 border-t border-(--border-subtle) space-y-4">
+    <div className="space-y-4">
       {/* Header + Master ON/OFF Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-0.5 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.18em] text-(--text-muted)">
-              <span>Uploaded Cursor Pack (Native CSS)</span>
-              <InfoTooltip
-                label="Zero-JS hardware pointer & recruiter toggle"
-                content="Uses native CSS cursor & image-set scaling from your single sharp upload on desktop fine pointers with 0% CPU cost. Toggle OFF anytime for recruiters without deleting your uploaded files."
-              />
-            </span>
-            <StatusPill
-              label={
-                cursorEnabled && hasAnyCursor
-                  ? "Live on Public Site"
-                  : cursorEnabled && !hasAnyCursor
-                    ? "Enabled · Upload Asset"
-                    : "Paused · OS Pointer"
-              }
-              variant={
-                cursorEnabled && hasAnyCursor
-                  ? "success"
-                  : cursorEnabled
-                    ? "warning"
-                    : "neutral"
-              }
-              size="xs"
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.18em] text-(--text-muted)">
+            <span>Uploaded Cursor Pack (Full-Viewport GPU)</span>
+            <InfoTooltip
+              label="Edge-to-edge custom cursor & recruiter toggle"
+              content="Renders your uploaded cursor across 100% of the viewport, Brand Portal, and Admin without edge fallback. Toggle OFF anytime for recruiters without deleting your uploaded files."
             />
-          </div>
+          </span>
           <p className="text-[11px] text-(--text-muted) leading-snug">
             Upload `.png` or `.cur` packs once. Hover a placeholder to zoom,
             reposition, or frame it cleanly without re-uploading.
@@ -209,7 +189,7 @@ export function CursorUploadSettings({
               customCursorEnabled: !prev.customCursorEnabled,
             }))
           }
-          className="inline-flex items-center gap-2.5 px-3 py-2 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) hover:border-(--border-strong) transition-colors cursor-pointer shrink-0 self-start sm:self-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          className="inline-flex items-center justify-between sm:justify-start gap-2.5 px-3 py-2 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) hover:border-(--border-strong) transition-colors cursor-pointer w-full sm:w-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <span className="text-xs font-mono uppercase tracking-wider text-(--text-primary)">
             {cursorEnabled ? "Cursor On" : "Cursor Off"}
@@ -389,7 +369,7 @@ export function CursorUploadSettings({
       </div>
 
       {/* Live CSS Size Scaling + Visual Hotspot Calibration + Test Pad */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {/* 1. Zero-Upload CSS Cursor Display Size */}
         <div className="p-3 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex flex-col justify-between gap-2.5">
           <div className="space-y-2">
@@ -618,10 +598,12 @@ export function CursorUploadSettings({
 
         {/* 3. Live Hover & Click Calibration Pad */}
         <div
-          style={{
-            cursor: hasAnyCursor ? previewCursorVars.defaultCss : "auto",
-          }}
-          className="p-3 rounded-(--radius-control) bg-(--bg-surface-2) border border-dashed border-(--border-strong) flex flex-col justify-between gap-2.5"
+          style={
+            activeIsNativeBinary
+              ? { cursor: hasAnyCursor ? previewCursorVars.defaultCss : "auto" }
+              : undefined
+          }
+          className="md:col-span-2 xl:col-span-1 p-3 rounded-(--radius-control) bg-(--bg-surface-2) border border-dashed border-(--border-strong) flex flex-col justify-between gap-2.5"
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-mono uppercase tracking-[0.16em] text-(--text-accent)">
@@ -641,10 +623,16 @@ export function CursorUploadSettings({
             <button
               type="button"
               onClick={() => setPadClicks((c) => c + 1)}
-              style={{
-                cursor: hasAnyCursor ? previewCursorVars.pointerCss : "pointer",
-              }}
-              className="px-3 py-1.5 rounded-(--radius-control) bg-brand text-brand-contrast text-[11px] font-mono uppercase tracking-wider transition-opacity hover:opacity-90"
+              style={
+                activeIsNativeBinary
+                  ? {
+                      cursor: hasAnyCursor
+                        ? previewCursorVars.pointerCss
+                        : "pointer",
+                    }
+                  : undefined
+              }
+              className="px-3 py-1.5 rounded-(--radius-control) bg-brand text-brand-contrast text-[11px] font-mono uppercase tracking-wider cursor-pointer transition-opacity hover:opacity-90"
             >
               Test Click ({padClicks})
             </button>

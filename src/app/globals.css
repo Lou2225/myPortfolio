@@ -398,7 +398,6 @@ html[data-navbar="solid"] .admin-navbar-surface {
 html[data-navbar="solid"] .navbar-top {
   background-image: none !important;
   background-color: var(--bg-canvas) !important;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 html[data-theme="light"] .hero-bottom-melt {
@@ -727,6 +726,30 @@ html[data-motion="reduced"] *::after {
   html[data-custom-cursor="on"] iframe,
   html[data-custom-cursor="on"] [data-cursor="native"] {
     cursor: auto;
+  }
+
+  /* Edge-free GPU-composited cursor overlay mode: hides native OS cursor right up to 0px viewport edges */
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"],
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] body,
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] * {
+    cursor: none !important;
+  }
+
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] .cursor-crosshair,
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] .cursor-crosshair * {
+    cursor: crosshair !important;
+  }
+
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"]
+    input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="range"]):not([type="file"]),
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] textarea,
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] [contenteditable="true"] {
+    cursor: text !important;
+  }
+
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] iframe,
+  html[data-custom-cursor="on"][data-cursor-overlay="ready"] [data-cursor="native"] {
+    cursor: auto !important;
   }
 }
 

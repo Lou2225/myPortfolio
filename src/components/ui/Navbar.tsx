@@ -165,9 +165,9 @@ export function Navbar() {
   return (
     <>
       <header
-        className={`fixed inset-x-0 top-0 z-50 w-full max-w-full overflow-x-clip transition-all duration-500 ${
+        className={`fixed inset-x-0 top-0 z-50 w-full max-w-full overflow-x-clip transition-[background-color,padding,box-shadow] duration-500 ${
           scrolled
-            ? "navbar-scrolled bg-[#08080a]/85 backdrop-blur-xl border-b border-(--border-subtle) py-2.5 sm:py-3.5 shadow-lg"
+            ? "navbar-scrolled bg-[#08080a]/85 backdrop-blur-xl py-2.5 sm:py-3.5 shadow-lg"
             : "navbar-top bg-linear-to-b from-[#08080a]/90 via-[#08080a]/40 to-transparent py-3.5 sm:py-5"
         }`}
       >

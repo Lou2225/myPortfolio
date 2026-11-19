@@ -582,11 +582,18 @@ export function SecurityAccessSettings({
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-(--text-primary) truncate">
-                  {currentDeviceRecord?.name ||
-                    telemetry?.suggestedName ||
-                    "Current Browser Session"}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-(--text-primary) truncate">
+                    {currentDeviceRecord?.name ||
+                      telemetry?.suggestedName ||
+                      "Current Browser Session"}
+                  </p>
+                  <StatusPill
+                    label={deviceRegistered ? "Trusted Device" : "Unregistered"}
+                    variant={deviceRegistered ? "success" : "neutral"}
+                    size="xs"
+                  />
+                </div>
                 <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
                   {currentDeviceRecord
                     ? `${currentDeviceRecord.model} · ${currentDeviceRecord.platform} ${currentDeviceRecord.osVersion} · ${
@@ -601,29 +608,9 @@ export function SecurityAccessSettings({
                 </p>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <StatusPill
-                label={deviceRegistered ? "Trusted Device" : "Unregistered"}
-                variant={deviceRegistered ? "success" : "neutral"}
-                size="xs"
-              />
-              {(currentDeviceRecord?.keyThumbprint ||
-                telemetry?.keyThumbprint) && (
-                <StatusPill
-                  label={
-                    currentDeviceRecord?.keyThumbprint ||
-                    telemetry?.keyThumbprint ||
-                    ""
-                  }
-                  variant="accent"
-                  size="xs"
-                />
-              )}
-            </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
             {currentDeviceRecord || deviceRegistered ? (
               <Button
                 type="button"
@@ -639,7 +626,7 @@ export function SecurityAccessSettings({
                   });
                 }}
                 aria-label="Edit current device details"
-                className="flex-1 sm:flex-none px-3"
+                className="w-full sm:w-auto px-3"
               >
                 <Pencil className="w-3.5 h-3.5 shrink-0" />
                 <span>Edit</span>
@@ -657,7 +644,7 @@ export function SecurityAccessSettings({
                     device: null,
                   })
                 }
-                className="flex-1 sm:flex-none"
+                className="col-span-2 sm:col-span-1 w-full sm:w-auto"
               >
                 <MonitorCheck className="w-3.5 h-3.5 shrink-0" />
                 <span>Register Device</span>
@@ -677,7 +664,7 @@ export function SecurityAccessSettings({
                     onToggleDevice();
                   }
                 }}
-                className="flex-1 sm:flex-none px-3"
+                className="w-full sm:w-auto px-3"
               >
                 <MonitorOff className="w-3.5 h-3.5 shrink-0" />
                 <span>Unregister</span>
@@ -798,21 +785,33 @@ export function SecurityAccessSettings({
             <div className="space-y-3">
               {visibleActiveDevices.map((device) => {
                 const isCurrent = device.id === summary?.currentDeviceId;
+                const hasLinkedPasskey = (summary?.passkeys || []).some(
+                  (pk) => pk.deviceId === device.id
+                );
                 return (
                   <div
                     key={device.id}
-                    className="p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 lg:gap-4"
+                    className="p-3.5 sm:p-4 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4"
                   >
-                    <div className="min-w-0 flex-1 space-y-2.5">
+                    <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="w-9.5 h-9.5 rounded-(--radius-control) bg-(--bg-surface) border border-(--border-subtle) flex items-center justify-center shrink-0 text-(--text-accent)">
                           {renderDeviceIcon(device.deviceType)}
                         </span>
 
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-(--text-primary) truncate">
-                            {device.name}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-(--text-primary) truncate">
+                              {device.name}
+                            </p>
+                            {isCurrent && (
+                              <StatusPill
+                                label="This Browser"
+                                variant="accent"
+                                size="xs"
+                              />
+                            )}
+                          </div>
                           <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
                             {device.model} · {device.platform} {device.osVersion} ·{" "}
                             {device.browsers && device.browsers.length > 1
@@ -822,51 +821,19 @@ export function SecurityAccessSettings({
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {isCurrent && (
-                          <StatusPill
-                            label="This Browser"
-                            variant="accent"
-                            size="xs"
-                          />
-                        )}
-                        <StatusPill
-                          label={TRUST_SOURCE_LABELS[device.trustSource]}
-                          variant={
-                            device.trustSource === "qr-pair" ||
-                            device.trustSource === "passkey"
-                              ? "success"
-                              : "neutral"
-                          }
-                          size="xs"
-                        />
-                        {(summary?.passkeys || [])
-                          .filter((pk) => pk.deviceId === device.id)
-                          .map((pk) => (
-                            <StatusPill
-                              key={pk.credentialId}
-                              label={`Passkey: ${pk.authenticatorLabel}`}
-                              variant="success"
-                              size="xs"
-                            />
-                          ))}
-                        {device.keyThumbprint && (
-                          <StatusPill
-                            label={device.keyThumbprint}
-                            variant="neutral"
-                            size="xs"
-                          />
-                        )}
-                      </div>
-
                       <div className="rounded-(--radius-control) bg-(--bg-surface)/85 border border-(--border-subtle)/80 px-2.5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] font-mono text-(--text-muted)">
                         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 min-w-0">
+                          <span className="text-(--text-secondary)">
+                            {hasLinkedPasskey
+                              ? "Passkey Linked"
+                              : TRUST_SOURCE_LABELS[device.trustSource]}
+                          </span>
                           {device.gpuRenderer && (
-                            <span className="truncate max-w-full sm:max-w-60">
-                              GPU: {device.gpuRenderer}
+                            <span className="truncate max-w-full sm:max-w-52">
+                              · GPU: {device.gpuRenderer}
                             </span>
                           )}
-                          <span>IP: {device.ipMasked}</span>
+                          <span>· IP: {device.ipMasked}</span>
                         </div>
                         <span suppressHydrationWarning className="shrink-0">
                           Seen {new Date(device.lastSeenAt).toLocaleString()}
@@ -874,7 +841,7 @@ export function SecurityAccessSettings({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full lg:w-auto pt-2.5 border-t border-(--border-subtle)/60 lg:pt-0 lg:border-t-0 shrink-0">
+                    <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full lg:w-auto pt-2.5 border-t border-(--border-subtle)/60 lg:pt-0 lg:border-t-0 shrink-0">
                       <Button
                         type="button"
                         variant="secondary"
@@ -886,7 +853,7 @@ export function SecurityAccessSettings({
                             device,
                           })
                         }
-                        className="flex-1 lg:flex-none"
+                        className="w-full lg:w-auto"
                       >
                         <Pencil className="w-3 h-3 shrink-0" />
                         <span>Edit</span>
@@ -897,7 +864,7 @@ export function SecurityAccessSettings({
                         size="sm"
                         disabled={busyAction === `revoke-${device.id}`}
                         onClick={() => promptRevokeDevice(device)}
-                        className="flex-1 lg:flex-none"
+                        className="w-full lg:w-auto"
                       >
                         {busyAction === `revoke-${device.id}` ? (
                           <Loader2 className="w-3 h-3 animate-spin shrink-0" />
@@ -1042,17 +1009,6 @@ export function SecurityAccessSettings({
                 variant={summary?.stealthGateEnabled ? "success" : "neutral"}
                 size="xs"
               />
-              {summary && (
-                <StatusPill
-                  label={
-                    summary.stealthKeyConfigured
-                      ? "Bypass Key Set"
-                      : "No Bypass Key"
-                  }
-                  variant={summary.stealthKeyConfigured ? "accent" : "warning"}
-                  size="xs"
-                />
-              )}
             </div>
             <p className="text-[11px] text-(--text-muted) leading-relaxed">
               When enabled and at least 1 device is registered, unknown visitors opening <code className="font-mono">/admin</code> get HTTP 404. Use your Brand Portal, QR pairing, or secret <code className="font-mono">?portal=</code> link to access.
@@ -1190,11 +1146,9 @@ export function SecurityAccessSettings({
             <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted)">
               Session Epoch &amp; Rate Limit
             </span>
-            <StatusPill
-              label={`Epoch #${summary?.sessionEpoch ?? 1}`}
-              variant="neutral"
-              size="xs"
-            />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-accent)">
+              Epoch #{summary?.sessionEpoch ?? 1}
+            </span>
           </div>
           <p className="text-xs font-mono text-(--text-primary)">
             7-day HMAC Cookie · 5-try / 15m login lockout
@@ -1209,7 +1163,10 @@ export function SecurityAccessSettings({
             <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted)">
               Search Engine Crawlers (SEO)
             </span>
-            <StatusPill label="noindex + robots.txt" variant="success" size="xs" />
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>noindex</span>
+            </span>
           </div>
           <p className="text-xs font-mono text-(--text-primary)">
             /admin &amp; /admin/pair blocked from indexing

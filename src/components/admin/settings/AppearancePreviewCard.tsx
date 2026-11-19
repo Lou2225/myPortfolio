@@ -132,18 +132,6 @@ export function AppearancePreviewCard({
               size="xs"
               icon={<Sparkles className="w-3 h-3" />}
             />
-            <StatusPill
-              label={isLight ? "Daylight Bone" : "Obsidian Dark"}
-              variant="neutral"
-              size="xs"
-            />
-            {cursorVars.active && (
-              <StatusPill
-                label="Custom Cursor"
-                variant="accent"
-                size="xs"
-              />
-            )}
           </div>
         </div>
       )}
@@ -353,22 +341,9 @@ export function AppearancePreviewCard({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          <StatusPill
-            label={`Dark ${palette.contrastOnDarkCanvas}:1`}
-            variant={palette.contrastOnDarkCanvas >= 4.5 ? "success" : "warning"}
-            size="xs"
-          />
-          <StatusPill
-            label={`Light ${palette.contrastOnLightCanvas}:1`}
-            variant={palette.contrastOnLightCanvas >= 4.5 ? "success" : "warning"}
-            size="xs"
-          />
-          <StatusPill
-            label={`CTA ${palette.contrastOnButton}:1`}
-            variant={palette.contrastOnButton >= 3.0 ? "accent" : "warning"}
-            size="xs"
-          />
+        <div className="text-[10px] font-mono text-(--text-muted)">
+          Dark {palette.contrastOnDarkCanvas}:1 · Light{" "}
+          {palette.contrastOnLightCanvas}:1 · CTA {palette.contrastOnButton}:1
         </div>
       </div>
     </div>

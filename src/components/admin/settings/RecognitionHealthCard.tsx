@@ -14,7 +14,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import {
   ClientRecognitionHealth,
@@ -120,12 +119,19 @@ export function RecognitionHealthCard({
       )
     : [];
 
+  const hasHeaderActions =
+    (currentDevicePasskeys.length === 0 &&
+      passkeySupported &&
+      Boolean(onLinkPasskey)) ||
+    health.storagePersisted === false ||
+    (needsKeyRepair && Boolean(onRepairSync));
+
   return (
     <div className="pt-3.5 border-t border-(--border-subtle) space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-mono uppercase tracking-[0.16em] text-(--text-muted)">
-            Recognition Health &amp; Hardware Passkey Link
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[10px] font-mono uppercase tracking-[0.16em] text-(--text-muted) truncate">
+            Recognition Health &amp; Hardware Passkey
           </span>
           <InfoTooltip
             label="How multi-layer device recognition works"
@@ -133,74 +139,68 @@ export function RecognitionHealthCard({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {currentDevicePasskeys.length > 0 ? (
-            <StatusPill
-              label="Passkey Active"
-              variant="success"
-              size="xs"
-              icon={<Fingerprint className="w-3 h-3" />}
-            />
-          ) : (
-            passkeySupported &&
-            onLinkPasskey && (
+        {hasHeaderActions && (
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {currentDevicePasskeys.length === 0 &&
+              passkeySupported &&
+              onLinkPasskey && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  disabled={linkingPasskey}
+                  onClick={() => void onLinkPasskey()}
+                  className="flex-1 sm:flex-none h-8 sm:h-7 px-2.5 text-[11px]"
+                >
+                  {linkingPasskey ? (
+                    <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                  ) : (
+                    <Fingerprint className="w-3 h-3 shrink-0" />
+                  )}
+                  <span>
+                    {linkingPasskey
+                      ? "Waiting for Biometrics..."
+                      : "Link Hardware Passkey"}
+                  </span>
+                </Button>
+              )}
+
+            {health.storagePersisted === false && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={requestingPersist}
+                onClick={() => void handleRequestPersist()}
+                className="flex-1 sm:flex-none h-8 sm:h-7 px-2.5 text-[11px]"
+              >
+                <Database className="w-3 h-3 shrink-0" />
+                <span>
+                  {requestingPersist ? "Requesting..." : "Lock Browser Storage"}
+                </span>
+              </Button>
+            )}
+
+            {needsKeyRepair && onRepairSync && (
               <Button
                 type="button"
                 variant="primary"
                 size="sm"
-                disabled={linkingPasskey}
-                onClick={() => void onLinkPasskey()}
-                className="h-7 px-2.5 text-[11px]"
+                disabled={repairing}
+                onClick={async () => {
+                  await onRepairSync();
+                  await refreshHealth();
+                }}
+                className="flex-1 sm:flex-none h-8 sm:h-7 px-2.5 text-[11px]"
               >
-                {linkingPasskey ? (
-                  <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
-                ) : (
-                  <Fingerprint className="w-3 h-3 shrink-0" />
-                )}
-                <span>
-                  {linkingPasskey
-                    ? "Waiting for Biometrics..."
-                    : "Link Hardware Passkey"}
-                </span>
+                <RefreshCw
+                  className={`w-3 h-3 shrink-0 ${repairing ? "animate-spin" : ""}`}
+                />
+                <span>{repairing ? "Syncing Key..." : "Sync Recovery Key"}</span>
               </Button>
-            )
-          )}
-
-          {health.storagePersisted === false && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={requestingPersist}
-              onClick={() => void handleRequestPersist()}
-              className="h-7 px-2.5 text-[11px]"
-            >
-              <Database className="w-3 h-3 shrink-0" />
-              <span>
-                {requestingPersist ? "Requesting..." : "Lock Browser Storage"}
-              </span>
-            </Button>
-          )}
-
-          {needsKeyRepair && onRepairSync && (
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              disabled={repairing}
-              onClick={async () => {
-                await onRepairSync();
-                await refreshHealth();
-              }}
-              className="h-7 px-2.5 text-[11px]"
-            >
-              <RefreshCw
-                className={`w-3 h-3 shrink-0 ${repairing ? "animate-spin" : ""}`}
-              />
-              <span>{repairing ? "Syncing Key..." : "Sync Recovery Key"}</span>
-            </Button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {health.isPreviewHost && (
@@ -219,19 +219,22 @@ export function RecognitionHealthCard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] font-mono">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] font-mono">
         {/* 1. Active Origin & Secure Context */}
-        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-3 py-2 min-w-0 space-y-1">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1">
-              <Globe className="w-3 h-3 text-(--text-accent)" />
-              Origin Scope
+        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-2.5 py-2 min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1 truncate">
+              <Globe className="w-3 h-3 text-(--text-accent) shrink-0" />
+              <span className="truncate">Origin</span>
             </span>
-            <StatusPill
-              label={health.secureContext ? "TLS / Secure" : "Plain HTTP"}
-              variant={health.secureContext ? "success" : "warning"}
-              size="xs"
-            />
+            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  health.secureContext ? "bg-emerald-400" : "bg-amber-400"
+                }`}
+              />
+              <span>{health.secureContext ? "TLS" : "HTTP"}</span>
+            </span>
           </div>
           <span
             className="text-(--text-primary) truncate block"
@@ -242,84 +245,87 @@ export function RecognitionHealthCard({
         </div>
 
         {/* 2. Server Cookie & Registry Link */}
-        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-3 py-2 min-w-0 space-y-1">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-(--text-accent)" />
-              Portal Cookie
+        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-2.5 py-2 min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1 truncate">
+              <ShieldCheck className="w-3 h-3 text-(--text-accent) shrink-0" />
+              <span className="truncate">Cookie</span>
             </span>
-            <StatusPill
-              label={deviceRegistered ? "Active (365d)" : "Not Set"}
-              variant={deviceRegistered ? "success" : "neutral"}
-              size="xs"
-            />
+            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  deviceRegistered ? "bg-emerald-400" : "bg-(--text-muted)"
+                }`}
+              />
+              <span>{deviceRegistered ? "365d" : "Off"}</span>
+            </span>
           </div>
           <span className="text-(--text-primary) truncate block">
             {currentDeviceRecord
-              ? `ID: ${currentDeviceRecord.id}`
+              ? currentDeviceRecord.id
               : deviceRegistered
                 ? "Bound to session"
-                : "Sign in or register"}
+                : "Not registered"}
           </span>
         </div>
 
         {/* 3. WebCrypto ECDSA P-256 Silent Recovery Key */}
-        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-3 py-2 min-w-0 space-y-1">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1">
-              <KeyRound className="w-3 h-3 text-(--text-accent)" />
-              Recovery Key
+        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-2.5 py-2 min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1 truncate">
+              <KeyRound className="w-3 h-3 text-(--text-accent) shrink-0" />
+              <span className="truncate">ECDSA Key</span>
             </span>
-            <StatusPill
-              label={
-                keySyncedWithServer
+            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  keySyncedWithServer
+                    ? "bg-emerald-400"
+                    : health.hasIndexedDbKey
+                      ? "bg-amber-400"
+                      : "bg-(--text-muted)"
+                }`}
+              />
+              <span>
+                {keySyncedWithServer
                   ? "Synced"
                   : health.hasIndexedDbKey
-                    ? "Local Only"
-                    : health.secureContext
-                      ? "Missing"
-                      : "Unavailable"
-              }
-              variant={
-                keySyncedWithServer
-                  ? "success"
-                  : health.hasIndexedDbKey
-                    ? "warning"
-                    : "neutral"
-              }
-              size="xs"
-            />
+                    ? "Local"
+                    : "None"}
+              </span>
+            </span>
           </div>
           <span className="text-(--text-primary) truncate block">
-            {health.keyThumbprint || "No IndexedDB ECDSA key"}
+            {health.keyThumbprint || "No local key"}
           </span>
         </div>
 
         {/* 4. Eviction Protection & Local Hint */}
-        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-3 py-2 min-w-0 space-y-1">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1">
+        <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-control) px-2.5 py-2 min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) flex items-center gap-1 truncate">
               {health.storagePersisted ? (
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
               ) : (
-                <Database className="w-3 h-3 text-(--text-accent)" />
+                <Database className="w-3 h-3 text-(--text-accent) shrink-0" />
               )}
-              Storage Lock
+              <span className="truncate">Storage</span>
             </span>
-            <StatusPill
-              label={
-                health.storagePersisted === true
-                  ? "Protected"
-                  : health.storagePersisted === false
-                    ? "Best-Effort"
-                    : "Standard"
-              }
-              variant={health.storagePersisted === true ? "success" : "neutral"}
-              size="xs"
-            />
+            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  health.storagePersisted === true
+                    ? "bg-emerald-400"
+                    : "bg-(--text-muted)"
+                }`}
+              />
+              <span>
+                {health.storagePersisted === true ? "Locked" : "Standard"}
+              </span>
+            </span>
           </div>
           <span className="text-(--text-primary) truncate block">
-            Orb Hint: {health.localHintCached ? "Cached" : "Uncached"}
+            Orb: {health.localHintCached ? "Cached" : "Uncached"}
           </span>
         </div>
       </div>
@@ -330,25 +336,19 @@ export function RecognitionHealthCard({
           {currentDevicePasskeys.map((pk) => (
             <div
               key={pk.credentialId}
-              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-(--radius-control) bg-(--bg-surface) border border-emerald-500/25 text-xs"
+              className="flex items-center justify-between gap-2 px-3 py-2 rounded-(--radius-control) bg-(--bg-surface) border border-emerald-500/25 text-xs"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <Fingerprint className="w-4 h-4 text-emerald-400 shrink-0" />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-semibold text-(--text-primary) truncate">
-                      {pk.authenticatorLabel}
-                    </span>
-                    <StatusPill
-                      label={pk.backedUp ? "Synced Passkey" : "Hardware-Bound"}
-                      variant={pk.backedUp ? "accent" : "success"}
-                      size="xs"
-                    />
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-(--text-primary) truncate">
+                    {pk.authenticatorLabel}
+                  </p>
                   <p className="text-[10px] font-mono text-(--text-muted) truncate">
-                    Domain: {pk.rpId} ·{" "}
+                    {pk.backedUp ? "Synced Passkey" : "Hardware-Bound"} ·{" "}
+                    {pk.rpId} ·{" "}
                     {pk.lastUsedAt
-                      ? `Last used ${new Date(pk.lastUsedAt).toLocaleDateString()}`
+                      ? `Used ${new Date(pk.lastUsedAt).toLocaleDateString()}`
                       : `Linked ${new Date(pk.createdAt).toLocaleDateString()}`}
                   </p>
                 </div>
@@ -362,14 +362,14 @@ export function RecognitionHealthCard({
                   disabled={removingPasskeyId === pk.credentialId}
                   onClick={() => onRemovePasskey(pk)}
                   aria-label={`Remove ${pk.authenticatorLabel} passkey`}
-                  className="h-7 px-2 text-[11px] text-(--text-muted) hover:text-rose-400"
+                  className="h-7 px-2 text-[11px] text-(--text-muted) hover:text-rose-400 shrink-0"
                 >
                   {removingPasskeyId === pk.credentialId ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Trash2 className="w-3.5 h-3.5" />
                   )}
-                  <span>Remove</span>
+                  <span className="hidden min-[380px]:inline">Remove</span>
                 </Button>
               )}
             </div>

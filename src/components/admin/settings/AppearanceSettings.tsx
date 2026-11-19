@@ -18,6 +18,7 @@ import {
   RefreshCw,
   ChevronDown,
   Eye,
+  MousePointerClick,
 } from "lucide-react";
 import {
   ACCENT_PRESETS,
@@ -95,14 +96,15 @@ export interface AppearanceSettingsProps {
   onFeedback: (next: SettingsFeedback | null) => void;
 }
 
-type AppearanceStep = 0 | 1 | 2 | 3 | 4;
+type AppearanceStep = 0 | 1 | 2 | 3 | 4 | 5;
 
 const APPEARANCE_STEPS: readonly MobileStepItem[] = [
   { code: "01", shortTitle: "Theme" },
   { code: "02", shortTitle: "Fonts" },
   { code: "03", shortTitle: "Surface" },
   { code: "04", shortTitle: "Motion" },
-  { code: "05", shortTitle: "Local" },
+  { code: "05", shortTitle: "FX" },
+  { code: "06", shortTitle: "Local" },
 ];
 
 const SITE_THEME_OPTIONS: readonly {
@@ -582,11 +584,9 @@ export function AppearanceSettings({
               />
             </span>
             {deviceThemeOverride !== "site-default" && (
-              <StatusPill
-                label={`Local override active (${deviceThemeOverride})`}
-                variant="accent"
-                size="xs"
-              />
+              <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-accent)">
+                Local override: {deviceThemeOverride}
+              </span>
             )}
           </div>
 
@@ -801,9 +801,6 @@ export function AppearanceSettings({
                   </span>
                 </span>
               </span>
-              {draft.accentPreset === "custom" && (
-                <StatusPill label="Custom Active" variant="accent" size="xs" />
-              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_1fr] gap-2.5 sm:gap-3 items-center">
@@ -1196,6 +1193,29 @@ export function AppearanceSettings({
           }
         />
       </div>
+    </div>
+  );
+
+  /* 5. Custom Cursor Pack & Jumpscare Easter Egg FX Studio */
+  const interactiveFxSectionNode = (
+    <div
+      data-cascade
+      className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-5 sm:space-y-6"
+    >
+      <SectionHeader
+        eyebrow="Pointer & Easter Egg Studio"
+        title="Custom Cursor & Jumpscare FX"
+        size="sm"
+        tooltip={
+          <InfoTooltip
+            label="Full-viewport GPU cursor & recruiter-safe Easter egg"
+            content="Configure your uploaded full-viewport custom cursor pack and optional once-per-session jumpscare Easter egg. Both can be toggled off anytime without losing uploaded assets."
+          />
+        }
+        rightSlot={
+          <MousePointerClick className="w-5 h-5 text-(--text-accent)" />
+        }
+      />
 
       <CursorUploadSettings
         draft={draft}
@@ -1390,6 +1410,7 @@ export function AppearanceSettings({
     typographySectionNode,
     surfaceSectionNode,
     motionSectionNode,
+    interactiveFxSectionNode,
     localDeviceSectionNode,
   ];
 
@@ -1583,6 +1604,7 @@ export function AppearanceSettings({
           {typographySectionNode}
           {surfaceSectionNode}
           {motionSectionNode}
+          {interactiveFxSectionNode}
           {localDeviceSectionNode}
         </>
       )}
