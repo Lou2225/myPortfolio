@@ -669,41 +669,63 @@ html[data-motion="reduced"] *::after {
 
 /* ============================================================
    Native Hardware-Composited Custom Uploaded Cursor (Desktop Only)
-   Strictly scoped to public routes so /admin stays clean.
+   Active across the entire viewport, Brand Portal, Public site, and /admin layout.
    ============================================================ */
 @media (hover: hover) and (pointer: fine) {
-  html[data-route-scope="public"][data-custom-cursor="on"],
-  html[data-route-scope="public"][data-custom-cursor="on"] body {
+  html[data-custom-cursor="on"],
+  html[data-custom-cursor="on"] body,
+  html[data-custom-cursor="on"] *,
+  html[data-custom-cursor="on"] .cursor-default {
     cursor: var(--lou-cursor-default-fallback, auto);
     cursor: var(--lou-cursor-default, auto);
   }
 
-  html[data-route-scope="public"][data-custom-cursor="on"] a,
-  html[data-route-scope="public"][data-custom-cursor="on"] button,
-  html[data-route-scope="public"][data-custom-cursor="on"] summary,
-  html[data-route-scope="public"][data-custom-cursor="on"] label[for],
-  html[data-route-scope="public"][data-custom-cursor="on"] [role="button"],
-  html[data-route-scope="public"][data-custom-cursor="on"] [role="link"],
-  html[data-route-scope="public"][data-custom-cursor="on"] [role="tab"],
-  html[data-route-scope="public"][data-custom-cursor="on"] select,
-  html[data-route-scope="public"][data-custom-cursor="on"] input[type="checkbox"],
-  html[data-route-scope="public"][data-custom-cursor="on"] input[type="radio"],
-  html[data-route-scope="public"][data-custom-cursor="on"] input[type="submit"],
-  html[data-route-scope="public"][data-custom-cursor="on"] input[type="button"],
-  html[data-route-scope="public"][data-custom-cursor="on"] .cursor-pointer {
+  html[data-custom-cursor="on"]
+    :is(
+      a,
+      button:not(:disabled),
+      summary,
+      label[for],
+      [role="button"],
+      [role="link"],
+      [role="tab"],
+      select,
+      input[type="checkbox"]:not(:disabled),
+      input[type="radio"]:not(:disabled),
+      input[type="submit"]:not(:disabled),
+      input[type="button"]:not(:disabled),
+      .cursor-pointer
+    ),
+  html[data-custom-cursor="on"]
+    :is(
+      a,
+      button:not(:disabled),
+      summary,
+      label[for],
+      [role="button"],
+      [role="link"],
+      [role="tab"],
+      .cursor-pointer
+    )
+    * {
     cursor: var(--lou-cursor-pointer-fallback, pointer);
     cursor: var(--lou-cursor-pointer, pointer);
   }
 
-  html[data-route-scope="public"][data-custom-cursor="on"]
-    input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
-  html[data-route-scope="public"][data-custom-cursor="on"] textarea,
-  html[data-route-scope="public"][data-custom-cursor="on"] [contenteditable="true"] {
+  html[data-custom-cursor="on"] .cursor-crosshair,
+  html[data-custom-cursor="on"] .cursor-crosshair * {
+    cursor: crosshair;
+  }
+
+  html[data-custom-cursor="on"]
+    input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="range"]):not([type="file"]),
+  html[data-custom-cursor="on"] textarea,
+  html[data-custom-cursor="on"] [contenteditable="true"] {
     cursor: text;
   }
 
-  html[data-route-scope="public"][data-custom-cursor="on"] iframe,
-  html[data-route-scope="public"][data-custom-cursor="on"] [data-cursor="native"] {
+  html[data-custom-cursor="on"] iframe,
+  html[data-custom-cursor="on"] [data-cursor="native"] {
     cursor: auto;
   }
 }

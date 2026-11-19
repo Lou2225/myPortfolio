@@ -461,7 +461,19 @@ export function BrandPortalOrb({
               <div
                 ref={textSlotRef}
                 key={activeDisplayKey}
-                className="flex items-center gap-2 min-w-0"
+                onClick={
+                  canNavigate && !isAnimating
+                    ? () => {
+                        setFocused(false);
+                        setHovered(false);
+                        onOrbAction();
+                      }
+                    : undefined
+                }
+                className={cn(
+                  "flex items-center gap-2 min-w-0",
+                  canNavigate && !isAnimating && "cursor-pointer"
+                )}
               >
                 <StatusGlyph
                   tone={activeTone}
