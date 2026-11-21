@@ -942,7 +942,7 @@ export function AdminDashboardClient({
       {/* Main Responsive Content Workspace (full-width beside sidebar rail; floats on md, docks on lg+) */}
       <main
         className={cn(
-          "w-full px-3 sm:px-6 lg:px-8 pt-4 sm:pt-7 space-y-5 sm:space-y-6 transition-[padding] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "w-full px-3 sm:px-6 lg:px-8 pt-4 sm:pt-7 space-y-5 sm:space-y-6 transition-[padding] duration-420 ease-[cubic-bezier(0.22,1,0.36,1)]",
           sidebarExpanded
             ? "md:pl-22 lg:pl-64"
             : "md:pl-22 lg:pl-24"

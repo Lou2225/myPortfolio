@@ -162,14 +162,14 @@ export function Certificates({
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            className="relative w-full h-[520px] sm:h-[560px] md:h-[600px] flex items-center justify-center select-none outline-none focus-visible:ring-1 focus-visible:ring-brand/50 rounded-(--radius-card)"
+            className="relative w-full h-130 sm:h-140 md:h-150 flex items-center justify-center select-none outline-none focus-visible:ring-1 focus-visible:ring-brand/50 rounded-(--radius-card)"
             style={{
               perspective: "1200px",
               perspectiveOrigin: "center center",
             }}
           >
             {/* Ambient Background Glow behind active card */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[460px] h-[340px] sm:h-[460px] bg-brand/10 rounded-full blur-3xl pointer-events-none -z-10" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-85 sm:w-115 h-85 sm:h-115 bg-brand/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
             {/* Side Left & Right Navigation Arrows */}
             {total > 1 && (
@@ -262,7 +262,7 @@ export function Certificates({
                     }
                   }}
                   className={cn(
-                    "absolute top-1/2 left-1/2 -translate-y-1/2 w-[300px] sm:w-[380px] md:w-[420px] transition-all duration-500 ease-out cursor-pointer",
+                    "absolute top-1/2 left-1/2 -translate-y-1/2 w-75 sm:w-95 md:w-105 transition-all duration-500 ease-out cursor-pointer",
                     isActive
                       ? "ring-2 ring-brand/50 shadow-2xl rounded-(--radius-card)"
                       : "hover:opacity-90"

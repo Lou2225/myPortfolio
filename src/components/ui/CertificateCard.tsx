@@ -79,7 +79,7 @@ export function CertificateCard({
             className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-brand/5 via-(--bg-surface-2) to-brand/10">
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-linear-to-br from-brand/5 via-(--bg-surface-2) to-brand/10">
             <span className="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/25 flex items-center justify-center text-(--text-accent) mb-3 shadow-inner">
               <FileText className="w-7 h-7" />
             </span>

@@ -65,8 +65,8 @@ export function Button({
   };
 
   const sizeStyles = {
-    icon: "h-[2.125rem] w-[2.125rem] p-0 text-[0.75rem]",
-    sm: "h-[2.125rem] px-3.5 sm:px-4 text-[0.6875rem] gap-1.5",
+    icon: "h-8.5 w-8.5 p-0 text-[0.75rem]",
+    sm: "h-8.5 px-3.5 sm:px-4 text-[0.6875rem] gap-1.5",
     md: "h-[2.75rem] px-5 sm:px-6 text-[0.75rem] gap-2",
     lg: "h-[3rem] sm:h-[3.25rem] px-6 sm:px-8 text-[0.75rem] sm:text-[0.875rem] font-semibold gap-2.5",
   };

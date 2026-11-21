@@ -465,7 +465,7 @@ export function ImageUploadField({
               showCounter={false}
             >
               <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
-                <div className="relative flex-1 min-w-0 sm:min-w-[140px]">
+                <div className="relative flex-1 min-w-0 sm:min-w-35">
                   <div
                     className={getFieldControlClassName({
                       hasError: false,

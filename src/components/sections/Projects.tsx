@@ -279,7 +279,7 @@ export function Projects() {
             className={cn(
               "grid grid-cols-1 gap-5 sm:gap-6 w-full",
               totalProjects === 1
-                ? "max-w-[46rem] mx-auto"
+                ? "max-w-184 mx-auto"
                 : "md:grid-cols-2"
             )}
           >
@@ -437,7 +437,7 @@ export function Projects() {
                             key={tech}
                             label={tech}
                             size="sm"
-                            className="w-full h-[1.5rem] px-1.5 text-[0.5625rem] justify-center text-center"
+                            className="w-full h-6 px-1.5 text-[0.5625rem] justify-center text-center"
                           />
                         ))}
                       </div>
@@ -455,7 +455,7 @@ export function Projects() {
                     stepProject(-1);
                   }}
                   aria-label="Previous system"
-                  className="h-[2rem] px-3 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) hover:border-(--border-strong) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="h-8 px-3 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) hover:border-(--border-strong) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 text-(--text-accent)" />
                   <span>Prev</span>
@@ -476,7 +476,7 @@ export function Projects() {
                     stepProject(1);
                   }}
                   aria-label="Next system"
-                  className="h-[2rem] px-3 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) hover:border-(--border-strong) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="h-8 px-3 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) hover:border-(--border-strong) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <span>Next</span>
                   <ChevronRight className="w-3.5 h-3.5 text-(--text-accent)" />
@@ -525,7 +525,7 @@ export function Projects() {
                       stepProject(-1);
                     }}
                     aria-label="Previous system"
-                    className="h-[1.875rem] px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
+                    className="h-7.5 px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
                   >
                     <ChevronLeft className="w-3.5 h-3.5 text-(--text-accent)" />
                     <span>Prev</span>
@@ -546,7 +546,7 @@ export function Projects() {
                       stepProject(1);
                     }}
                     aria-label="Next system"
-                    className="h-[1.875rem] px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
+                    className="h-7.5 px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
                   >
                     <span>Next</span>
                     <ChevronRight className="w-3.5 h-3.5 text-(--text-accent)" />

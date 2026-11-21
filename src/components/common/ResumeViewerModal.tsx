@@ -240,7 +240,7 @@ export function ResumeViewerModal({
               imageUrl={monogramImageUrl}
               transform={monogramTransform}
               alt={`${fullName} monogram`}
-              className="w-[2.125rem] h-[2.125rem] sm:w-[2.25rem] sm:h-[2.25rem] rounded-full border border-(--border-strong) font-bold text-[0.75rem] tracking-wider shrink-0"
+              className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full border border-(--border-strong) font-bold text-[0.75rem] tracking-wider shrink-0"
             />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-[0.625rem] font-mono uppercase tracking-[0.18em] text-(--text-accent)">
@@ -265,7 +265,7 @@ export function ResumeViewerModal({
                 href={targets.downloadHref}
                 download={downloadFilename}
                 onClick={onDownload}
-                className="btn-primary bg-brand-solid text-brand-contrast hover:bg-brand-solid-hover hover:shadow-[0_6px_24px_var(--accent-glow)] active:scale-[0.98] rounded-full h-[2.125rem] px-3 sm:px-4 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] inline-flex items-center justify-center gap-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand whitespace-nowrap"
+                className="btn-primary bg-brand-solid text-brand-contrast hover:bg-brand-solid-hover hover:shadow-[0_6px_24px_var(--accent-glow)] active:scale-[0.98] rounded-full h-8.5 px-3 sm:px-4 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] inline-flex items-center justify-center gap-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand whitespace-nowrap"
               >
                 <FileDown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span className="hidden min-[440px]:inline">Download PDF</span>
@@ -279,7 +279,7 @@ export function ResumeViewerModal({
               rel="noopener noreferrer"
               aria-label="Open resume PDF in new tab"
               title="Open in new tab"
-              className="hidden sm:inline-flex items-center justify-center w-[2.125rem] h-[2.125rem] rounded-full border border-(--border-strong) bg-(--bg-surface-2)/70 text-(--text-secondary) hover:text-(--text-primary) hover:border-brand/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="hidden sm:inline-flex items-center justify-center w-8.5 h-8.5 rounded-full border border-(--border-strong) bg-(--bg-surface-2)/70 text-(--text-secondary) hover:text-(--text-primary) hover:border-brand/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
             </a>
@@ -429,7 +429,7 @@ export function ResumeViewerModal({
                 tabIndex={0}
                 aria-label={`${fullName} Resume Document Viewer`}
                 className={cn(
-                  "absolute inset-0 z-10 w-full h-full overflow-y-auto overflow-x-auto overscroll-contain [scrollbar-gutter:stable] focus:outline-none transition-opacity duration-200",
+                  "absolute inset-0 z-10 w-full h-full overflow-y-auto overflow-x-auto overscroll-contain scrollbar-gutter-stable focus:outline-none transition-opacity duration-200",
                   documentReady ? "opacity-100" : "opacity-0"
                 )}
               >

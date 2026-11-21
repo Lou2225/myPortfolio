@@ -179,8 +179,8 @@ export function TechBadge({
   className,
 }: TechBadgeProps) {
   const sizeStyles = {
-    sm: "h-[1.875rem] px-2.5 text-[calc(0.6875rem*var(--public-scale,1))]",
-    md: "h-[2.125rem] px-3 text-[calc(0.75rem*var(--public-scale,1))]",
+    sm: "h-7.5 px-2.5 text-[calc(0.6875rem*var(--public-scale,1))]",
+    md: "h-8.5 px-3 text-[calc(0.75rem*var(--public-scale,1))]",
   };
 
   return (

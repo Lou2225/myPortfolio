@@ -97,7 +97,7 @@ export function GitHubProofBar() {
               variant="outline"
               size="sm"
               magnetic={false}
-              className="sm:hidden h-[2rem] px-3 text-[0.6875rem] font-mono shrink-0"
+              className="sm:hidden h-8 px-3 text-[0.6875rem] font-mono shrink-0"
             >
               <span>Profile</span>
               <ExternalLink className="w-3 h-3" aria-hidden="true" />
@@ -134,7 +134,7 @@ export function GitHubProofBar() {
             {snapshot.topLanguages.slice(0, 4).map((lang) => (
               <span
                 key={lang.name}
-                className="h-[1.75rem] px-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) text-[0.6875rem] font-mono text-(--text-secondary) inline-flex items-center justify-between sm:justify-center gap-1.5 whitespace-nowrap"
+                className="h-7 px-2.5 rounded-(--radius-control) bg-(--bg-surface-2) border border-(--border-subtle) text-[0.6875rem] font-mono text-(--text-secondary) inline-flex items-center justify-between sm:justify-center gap-1.5 whitespace-nowrap"
               >
                 <span className="truncate">{lang.name}</span>
                 <span className="text-(--text-muted) tabular-nums">
@@ -153,7 +153,7 @@ export function GitHubProofBar() {
           variant="outline"
           size="sm"
           magnetic={false}
-          className="hidden sm:inline-flex h-[2.125rem] px-3.5 text-[0.75rem] font-mono shrink-0 self-center"
+          className="hidden sm:inline-flex h-8.5 px-3.5 text-[0.75rem] font-mono shrink-0 self-center"
         >
           <span>GitHub Profile</span>
           <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />

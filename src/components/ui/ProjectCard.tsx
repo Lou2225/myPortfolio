@@ -167,7 +167,7 @@ export function ProjectCard({
                 trackEvent("project_click", `${project.title} (Case Study)`)
               }
               aria-label={`Read full case study for ${project.title}`}
-              className="flex-1 h-[2rem]"
+              className="flex-1 h-8"
             >
               <span>Case Study</span>
               <ArrowRight className="w-3.5 h-3.5 text-(--text-accent)" />
@@ -185,7 +185,7 @@ export function ProjectCard({
                   trackEvent("project_click", `${project.title} (Live Demo)`)
                 }
                 aria-label={`Visit live demo for ${project.title}`}
-                className="flex-1 h-[2rem]"
+                className="flex-1 h-8"
               >
                 <span>Live Demo</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -204,7 +204,7 @@ export function ProjectCard({
                 }
                 aria-label={`View ${project.title} source code on GitHub`}
                 title="View Source on GitHub"
-                className="shrink-0 h-[2rem] w-[2rem]"
+                className="shrink-0 h-8 w-8"
               >
                 <Github className="w-3.5 h-3.5" />
               </Button>

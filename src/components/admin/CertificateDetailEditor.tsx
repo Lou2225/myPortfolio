@@ -109,7 +109,7 @@ export function CertificateDetailEditor({
             <span className="text-(--text-accent) font-mono text-xs font-semibold tabular-nums">
               #{String(index + 1).padStart(2, "0")} / {String(totalCount).padStart(2, "0")}
             </span>
-            <span className="text-(--text-primary) font-semibold text-xs sm:text-sm truncate max-w-[160px] sm:max-w-xs md:max-w-md">
+            <span className="text-(--text-primary) font-semibold text-xs sm:text-sm truncate max-w-40 sm:max-w-xs md:max-w-md">
               {certificate.title || "Untitled Credential"}
             </span>
             {isDirty && (

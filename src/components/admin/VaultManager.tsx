@@ -477,7 +477,7 @@ export function VaultManager() {
                   </div>
                   <div className="w-full h-2 rounded-full bg-(--bg-surface-2) overflow-hidden border border-(--border-subtle)">
                     <div
-                      className="h-full bg-gradient-to-r from-brand to-amber-500 transition-all duration-500 rounded-full"
+                      className="h-full bg-linear-to-r from-brand to-amber-500 transition-all duration-500 rounded-full"
                       style={{
                         width: `${Math.max(2, storageUsagePercent)}%`,
                       }}

@@ -240,7 +240,7 @@ export function TechBento({ skills, sectionHeaders }: TechBentoProps) {
                     stepLayer(-1);
                   }}
                   aria-label="Prev system layer"
-                  className="h-[1.875rem] px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
+                  className="h-7.5 px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 text-(--text-accent)" />
                   <span>Prev</span>
@@ -260,7 +260,7 @@ export function TechBento({ skills, sectionHeaders }: TechBentoProps) {
                     stepLayer(1);
                   }}
                   aria-label="Next system layer"
-                  className="h-[1.875rem] px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
+                  className="h-7.5 px-2.5 rounded-(--radius-control) border border-(--border-subtle) bg-(--bg-surface) text-[0.6875rem] font-mono uppercase tracking-wider text-(--text-secondary) hover:text-(--text-primary) inline-flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <span>Next</span>
                   <ChevronRight className="w-3.5 h-3.5 text-(--text-accent)" />

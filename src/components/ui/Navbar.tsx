@@ -197,13 +197,13 @@ export function Navbar() {
                 transform={profile.monogramTransform}
                 alt={`${profile.name} monogram logo`}
                 loading="eager"
-                className={`w-[2rem] h-[2rem] sm:w-[2.5rem] sm:h-[2.5rem] rounded-full border font-bold text-[0.75rem] tracking-wider transition-all duration-300 shrink-0 ${
+                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full border font-bold text-[0.75rem] tracking-wider transition-all duration-300 shrink-0 ${
                   currentSection === "top"
                     ? "border-brand text-(--text-accent) bg-(--bg-badge-highlight) shadow-[0_0_15px_var(--accent-glow)]"
                     : "border-(--border-strong) text-(--text-primary) group-hover:border-brand group-hover:text-(--text-accent)"
                 }`}
               />
-              <div className="flex flex-col min-w-0 max-w-[7.25rem] min-[420px]:max-w-[9.5rem] sm:max-w-none">
+              <div className="flex flex-col min-w-0 max-w-29 min-[420px]:max-w-38 sm:max-w-none">
                 <span className="text-[0.6875rem] sm:text-[0.75rem] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-(--text-primary) group-hover:text-(--text-accent) transition-colors leading-tight truncate">
                   {profile.name}
                 </span>
@@ -262,7 +262,7 @@ export function Navbar() {
           {/* Right Action & Mobile Active Chapter Indicator */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {!isOfflineRoute && (
-              <div className="flex lg:hidden items-center gap-1.5 px-2 sm:px-2.5 h-[1.75rem] sm:h-[1.875rem] rounded-full bg-(--bg-surface) border border-(--border-subtle) text-[0.5625rem] sm:text-[0.625rem] uppercase tracking-[0.11em] sm:tracking-[0.14em] whitespace-nowrap">
+              <div className="flex lg:hidden items-center gap-1.5 px-2 sm:px-2.5 h-7 sm:h-7.5 rounded-full bg-(--bg-surface) border border-(--border-subtle) text-[0.5625rem] sm:text-[0.625rem] uppercase tracking-[0.11em] sm:tracking-[0.14em] whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
                 <span className="font-mono text-(--text-accent) font-bold">
                   {activeItem.chapter}
@@ -317,7 +317,7 @@ export function Navbar() {
         {isHomeRoute && !isOfflineRoute && (
           <div
             aria-hidden="true"
-            className={`absolute inset-x-0 bottom-0 h-[2px] pointer-events-none transition-opacity duration-300 ${
+            className={`absolute inset-x-0 bottom-0 h-0.5 pointer-events-none transition-opacity duration-300 ${
               scrolled ? "opacity-100" : "opacity-0"
             }`}
           >
