@@ -71,33 +71,41 @@ export function verifyUploadMagicBytes(
     if (!reservedOk || !typeOk) {
       return { valid: false, error: "File header does not match a valid ICO icon." };
     }
+    if (buffer.length >= 6) {
+      const entryCount = buffer.readUInt16LE(4);
+      if (entryCount < 1) {
+        return { valid: false, error: "ICO file contains no image entries." };
+      }
+    }
     return { valid: true };
   }
 
   if (lowerExt === ".cur") {
-    if (buffer.length < 22) {
+    if (buffer.length < 4) {
       return { valid: false, error: "Invalid CUR cursor file header." };
     }
     const reservedOk = buffer[0] === 0x00 && buffer[1] === 0x00;
     const typeOk = buffer[2] === 0x02 && buffer[3] === 0x00;
-    const entryCount = buffer.readUInt16LE(4);
-    if (!reservedOk || !typeOk || entryCount < 1) {
+    if (!reservedOk || !typeOk) {
       return { valid: false, error: "File header does not match a valid Windows .cur cursor." };
+    }
+    if (buffer.length >= 6) {
+      const entryCount = buffer.readUInt16LE(4);
+      if (entryCount < 1) {
+        return { valid: false, error: "CUR file contains no cursor entries." };
+      }
     }
     return { valid: true };
   }
 
   if (lowerExt === ".mp3") {
-    const head = buffer.subarray(0, Math.min(buffer.length, 64));
-    const hasId3 = head.toString("ascii").includes("ID3");
-    let hasMpegSync = false;
-    for (let i = 0; i < head.length - 1; i++) {
-      if (head[i] === 0xff && (head[i + 1] & 0xe0) === 0xe0) {
-        hasMpegSync = true;
-        break;
-      }
-    }
-    if (!hasId3 && !hasMpegSync) {
+    const hasId3AtStart =
+      buffer.length >= 3 && buffer.subarray(0, 3).toString("ascii") === "ID3";
+    const hasMpegSyncAtStart =
+      buffer.length >= 2 &&
+      buffer[0] === 0xff &&
+      (buffer[1] & 0xe0) === 0xe0;
+    if (!hasId3AtStart && !hasMpegSyncAtStart) {
       return { valid: false, error: "File header does not match a valid MP3 audio clip." };
     }
     return { valid: true };

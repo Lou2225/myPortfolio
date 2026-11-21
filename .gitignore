@@ -44,6 +44,8 @@ yarn-error.log*
 /data/admin-credentials.json
 /data/admin-security.json
 /data/portfolio-snapshots.json
+/data/vault/
+/data/vault-documents.json
 
 # typescript
 *.tsbuildinfo

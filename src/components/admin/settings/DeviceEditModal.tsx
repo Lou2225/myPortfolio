@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Cpu,
   Laptop,
@@ -11,7 +11,6 @@ import {
 import { ModalShell } from "@/components/ui/ModalShell";
 import { TextField } from "@/components/ui/fields";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { sanitizeDeviceLabel } from "@/lib/validation";
 import type { ClientDeviceTelemetry, TrustedDevice } from "@/types/security";
 
@@ -39,18 +38,17 @@ export function DeviceEditModal({
   onSubmit,
 }: DeviceEditModalProps) {
   const [name, setName] = useState("");
+  const [prevOpen, setPrevOpen] = useState(false);
+  const [prevTargetId, setPrevTargetId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const raf = requestAnimationFrame(() => {
-      if (targetDevice) {
-        setName(targetDevice.name);
-      } else if (liveTelemetry) {
-        setName(liveTelemetry.suggestedName);
-      }
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [open, targetDevice, liveTelemetry]);
+  // Store information from previous renders to initialize form when opened or target changes
+  if (open && (!prevOpen || (targetDevice?.id ?? null) !== prevTargetId)) {
+    setPrevOpen(true);
+    setPrevTargetId(targetDevice?.id ?? null);
+    setName(targetDevice?.name || liveTelemetry?.suggestedName || "");
+  } else if (!open && prevOpen) {
+    setPrevOpen(false);
+  }
 
   const model = targetDevice?.model || liveTelemetry?.model || "Browser Device";
   const platform =
@@ -139,11 +137,13 @@ export function DeviceEditModal({
                 <Cpu className="w-3.5 h-3.5 text-(--text-accent)" />
                 Detected Hardware &amp; Key Proof
               </span>
-              <StatusPill
-                label={thumbprint ? "ECDSA P-256 Bound" : "HTTP Fallback"}
-                variant={thumbprint ? "success" : "warning"}
-                size="xs"
-              />
+              <span
+                className={`text-[10px] font-mono uppercase tracking-[0.14em] ${
+                  thumbprint ? "text-emerald-400" : "text-amber-400"
+                }`}
+              >
+                {thumbprint ? "ECDSA P-256 Bound" : "HTTP Fallback"}
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">

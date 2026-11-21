@@ -8,6 +8,7 @@ import {
   StorageWriteError,
 } from "@/lib/db";
 import { sanitizeAppearanceConfig } from "@/lib/appearance";
+import { canonicalJsonStringify } from "@/lib/canonicalJson";
 import type { PortfolioDatabase } from "@/types/portfolio";
 import type { RestoreSectionFlags } from "@/lib/validation";
 
@@ -90,11 +91,32 @@ export interface MediaAuditReport {
 }
 
 /**
- * Computes a deterministic lowercase hex SHA-256 checksum over JSON-serialized data.
+ * Computes a deterministic lowercase hex SHA-256 checksum over canonical key-sorted JSON.
+ * Immune to PostgreSQL JSONB object-key reordering.
  */
 export function computeObjectSha256(payload: unknown): string {
-  const canonical = JSON.stringify(payload);
+  const canonical = canonicalJsonStringify(payload);
   return crypto.createHash("sha256").update(canonical, "utf-8").digest("hex");
+}
+
+/**
+ * Verifies a backup payload's SHA-256 digest against canonical key-sorted JSON,
+ * with read-only compatibility fallback for legacy pre-canonical JSON exports.
+ */
+export function verifyBackupSha256(
+  payload: unknown,
+  expectedSha256: string
+): boolean {
+  const normalizedExpected = expectedSha256.trim().toLowerCase();
+  if (!normalizedExpected) return false;
+  if (computeObjectSha256(payload) === normalizedExpected) {
+    return true;
+  }
+  const legacyDigest = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(payload), "utf-8")
+    .digest("hex");
+  return legacyDigest === normalizedExpected;
 }
 
 /**
@@ -207,18 +229,24 @@ function normalizeSnapshotArray(raw: unknown): PortfolioSnapshotRecord[] {
     .slice(0, MAX_SNAPSHOTS);
 }
 
-async function readSnapshotsStore(): Promise<PortfolioSnapshotRecord[]> {
+async function readSnapshotsStore(options?: {
+  strictForWrite?: boolean;
+}): Promise<PortfolioSnapshotRecord[]> {
   if (getStorageMode() === "supabase") {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (url && key) {
+    if (!url || !key) {
+      if (options?.strictForWrite) {
+        throw new StorageWriteError("Supabase credentials not configured.");
+      }
+    } else {
       try {
         const res = await fetch(
           `${url}/rest/v1/portfolio_store?id=eq.${SUPABASE_SNAPSHOTS_ROW_ID}&select=payload`,
           {
             headers: buildSupabaseHeaders(key),
             cache: "no-store",
-            signal: AbortSignal.timeout(4500),
+            signal: AbortSignal.timeout(8000),
           }
         );
         if (res.ok) {
@@ -230,8 +258,21 @@ async function readSnapshotsStore(): Promise<PortfolioSnapshotRecord[]> {
           }
           return [];
         }
-      } catch {
-        // Fallback to local snapshot vault file
+        if (options?.strictForWrite) {
+          throw new StorageWriteError(
+            `Unable to read existing snapshot vault from Supabase (HTTP ${res.status}). Write aborted to protect existing checkpoints.`
+          );
+        }
+      } catch (err) {
+        if (options?.strictForWrite) {
+          if (err instanceof StorageWriteError) throw err;
+          const detail =
+            err instanceof Error ? err.message : "Network request failed";
+          throw new StorageWriteError(
+            `Unable to verify existing snapshot vault in Supabase (${detail}). Write aborted to protect existing checkpoints.`
+          );
+        }
+        // Read-only fallback to local snapshot vault file
       }
     }
   }
@@ -240,7 +281,13 @@ async function readSnapshotsStore(): Promise<PortfolioSnapshotRecord[]> {
     const raw = await fs.readFile(getLocalSnapshotsFile(), "utf-8");
     const parsed = JSON.parse(raw) as { snapshots?: unknown };
     return normalizeSnapshotArray(parsed?.snapshots);
-  } catch {
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (options?.strictForWrite && code && code !== "ENOENT") {
+      throw new StorageWriteError(
+        "Unable to read local snapshot vault before writing. Write aborted to protect checkpoints."
+      );
+    }
     return [];
   }
 }
@@ -262,18 +309,28 @@ async function writeSnapshotsStore(
       throw new StorageWriteError("Supabase credentials not configured.");
     }
 
-    const res = await fetch(`${url}/rest/v1/portfolio_store`, {
-      method: "POST",
-      headers: buildSupabaseHeaders(key, {
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates",
-      }),
-      body: JSON.stringify({
-        id: SUPABASE_SNAPSHOTS_ROW_ID,
-        payload,
-        updated_at: new Date().toISOString(),
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${url}/rest/v1/portfolio_store`, {
+        method: "POST",
+        headers: buildSupabaseHeaders(key, {
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates",
+        }),
+        body: JSON.stringify({
+          id: SUPABASE_SNAPSHOTS_ROW_ID,
+          payload,
+          updated_at: new Date().toISOString(),
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (err) {
+      const detail =
+        err instanceof Error ? err.message : "Network request failed";
+      throw new StorageWriteError(
+        `Unable to reach Supabase while saving snapshot vault (${detail}).`
+      );
+    }
 
     if (!res.ok) {
       throw new StorageWriteError(
@@ -283,12 +340,16 @@ async function writeSnapshotsStore(
   }
 
   try {
+    const targetFile = getLocalSnapshotsFile();
+    const tmpFile = `${targetFile}.${crypto.randomBytes(6).toString("hex")}.tmp`;
     await fs.mkdir(resolveLocalDataDir(), { recursive: true });
-    await fs.writeFile(
-      getLocalSnapshotsFile(),
-      JSON.stringify(payload, null, 2),
-      "utf-8"
-    );
+    await fs.writeFile(tmpFile, JSON.stringify(payload, null, 2), "utf-8");
+    try {
+      await fs.rename(tmpFile, targetFile);
+    } catch {
+      await fs.writeFile(targetFile, JSON.stringify(payload, null, 2), "utf-8");
+      await fs.unlink(tmpFile).catch(() => undefined);
+    }
   } catch (err) {
     if (mode === "local-json") {
       const detail =
@@ -322,8 +383,8 @@ export async function createPortfolioSnapshot(params: {
   trigger: SnapshotTrigger;
   db: PortfolioDatabase;
 }): Promise<PortfolioSnapshotMeta> {
-  const existing = await readSnapshotsStore();
-  const serialized = JSON.stringify(params.db);
+  const existing = await readSnapshotsStore({ strictForWrite: true });
+  const serialized = canonicalJsonStringify(params.db);
   const sizeBytes = Buffer.byteLength(serialized, "utf-8");
   const sha256 = computeObjectSha256(params.db);
   const totalSkills = params.db.skills.reduce(
@@ -357,7 +418,7 @@ export async function createPortfolioSnapshot(params: {
 export async function deletePortfolioSnapshot(
   snapshotId: string
 ): Promise<PortfolioSnapshotMeta[]> {
-  const existing = await readSnapshotsStore();
+  const existing = await readSnapshotsStore({ strictForWrite: true });
   const next = existing.filter((s) => s.id !== snapshotId);
   if (next.length !== existing.length) {
     await writeSnapshotsStore(next);
@@ -486,67 +547,101 @@ export async function auditOrphanedMedia(
     const bucket = (process.env.SUPABASE_STORAGE_BUCKET || "myPortfolio").trim();
 
     if (supabaseUrl && supabaseKey) {
+      const encodedBucket = encodeURIComponent(bucket);
+      const folderResults = await Promise.all(
+        UPLOAD_SUBFOLDERS.map(async (folder) => {
+          const folderOrphans: MediaOrphanFile[] = [];
+          let folderFiles = 0;
+          let folderBytes = 0;
+          let folderWarning: string | null = null;
+
+          try {
+            let offset = 0;
+            const pageSize = 200;
+            for (let page = 0; page < 10; page += 1) {
+              const res = await fetch(
+                `${supabaseUrl}/storage/v1/object/list/${encodedBucket}`,
+                {
+                  method: "POST",
+                  headers: buildSupabaseHeaders(supabaseKey, {
+                    "Content-Type": "application/json",
+                  }),
+                  body: JSON.stringify({
+                    prefix: folder,
+                    limit: pageSize,
+                    offset,
+                  }),
+                  signal: AbortSignal.timeout(4500),
+                }
+              );
+
+              if (!res.ok) {
+                folderWarning = `Supabase Storage list returned HTTP ${res.status} on "${folder}".`;
+                break;
+              }
+
+              const items = (await res.json()) as Array<{
+                id?: string | null;
+                name?: string;
+                updated_at?: string;
+                metadata?: { size?: number } | null;
+              }>;
+
+              if (!Array.isArray(items) || items.length === 0) break;
+
+              for (const item of items) {
+                if (
+                  !item.name ||
+                  !item.id ||
+                  item.name === ".emptyFolderPlaceholder"
+                ) {
+                  continue;
+                }
+                const storagePath = `${folder}/${item.name}`;
+                const publicUrl = `${supabaseUrl}/storage/v1/object/public/${encodedBucket}/${storagePath}`;
+                const sizeBytes = Number(item.metadata?.size || 0);
+                folderFiles += 1;
+                folderBytes += sizeBytes;
+
+                const normalizedPath = `/storage/v1/object/public/${bucket}/${storagePath}`;
+                if (
+                  !referenced.has(storagePath) &&
+                  !referenced.has(normalizedPath)
+                ) {
+                  folderOrphans.push({
+                    id: storagePath,
+                    storagePath,
+                    publicUrl,
+                    folder,
+                    name: item.name,
+                    sizeBytes,
+                    updatedAt: item.updated_at || null,
+                  });
+                }
+              }
+
+              if (items.length < pageSize) break;
+              offset += pageSize;
+            }
+          } catch (err) {
+            folderWarning = `Supabase Storage audit interrupted (${
+              err instanceof Error ? err.message : "network error"
+            }).`;
+          }
+
+          return { folderOrphans, folderFiles, folderBytes, folderWarning };
+        })
+      );
+
       const orphans: MediaOrphanFile[] = [];
       let totalFiles = 0;
       let totalBytes = 0;
       let warning: string | null = null;
-
-      for (const folder of UPLOAD_SUBFOLDERS) {
-        try {
-          const res = await fetch(
-            `${supabaseUrl}/storage/v1/object/list/${bucket}`,
-            {
-              method: "POST",
-              headers: buildSupabaseHeaders(supabaseKey, {
-                "Content-Type": "application/json",
-              }),
-              body: JSON.stringify({
-                prefix: folder,
-                limit: 200,
-                offset: 0,
-              }),
-              signal: AbortSignal.timeout(4500),
-            }
-          );
-
-          if (!res.ok) {
-            warning = `Supabase Storage list returned HTTP ${res.status} on "${folder}".`;
-            continue;
-          }
-
-          const items = (await res.json()) as Array<{
-            id?: string | null;
-            name?: string;
-            updated_at?: string;
-            metadata?: { size?: number } | null;
-          }>;
-
-          for (const item of items) {
-            if (!item.name || !item.id) continue;
-            const storagePath = `${folder}/${item.name}`;
-            const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
-            const sizeBytes = Number(item.metadata?.size || 0);
-            totalFiles += 1;
-            totalBytes += sizeBytes;
-
-            const normalizedPath = `/storage/v1/object/public/${bucket}/${storagePath}`;
-            if (!referenced.has(storagePath) && !referenced.has(normalizedPath)) {
-              orphans.push({
-                id: storagePath,
-                storagePath,
-                publicUrl,
-                folder,
-                name: item.name,
-                sizeBytes,
-                updatedAt: item.updated_at || null,
-              });
-            }
-          }
-        } catch (err) {
-          warning = `Supabase Storage audit interrupted (${
-            err instanceof Error ? err.message : "network error"
-          }).`;
-        }
+      for (const r of folderResults) {
+        orphans.push(...r.folderOrphans);
+        totalFiles += r.folderFiles;
+        totalBytes += r.folderBytes;
+        if (r.folderWarning && !warning) warning = r.folderWarning;
       }
 
       return {

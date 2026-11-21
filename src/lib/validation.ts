@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  Certificate,
   Metric,
   Pillar,
   Profile,
@@ -59,6 +60,7 @@ export const contactFormSchema = z.object({
   email: z
     .string()
     .trim()
+    .max(254, "Email address cannot exceed 254 characters.")
     .toLowerCase()
     .refine((val) => validateEmail(val).valid, {
       message: "Please enter a valid email address.",
@@ -515,6 +517,28 @@ export const SECTION_HEADER_FIELD_RULES: readonly SectionHeaderFieldRule[] = [
     placeholder: "Bridging database infrastructure with modern engineering...",
   },
   {
+    key: "certificatesEyebrow",
+    label: "Certificates Section Eyebrow",
+    minLength: 3,
+    maxLength: 60,
+    placeholder: "CH // 03 · Certified Competence",
+    mono: true,
+  },
+  {
+    key: "certificatesHeading",
+    label: "Certificates Main Heading",
+    minLength: 4,
+    maxLength: 100,
+    placeholder: "CREDENTIALS & RECOGNITIONS.",
+  },
+  {
+    key: "certificatesSubtitle",
+    label: "Certificates Subtitle",
+    minLength: 10,
+    maxLength: 220,
+    placeholder: "Academic honors, applied business analytics credentials, and verified engineering certifications.",
+  },
+  {
     key: "projectsEyebrow",
     label: "Projects Section Eyebrow",
     minLength: 3,
@@ -925,6 +949,102 @@ export function validateProjectsDraft(
   };
 }
 
+export function validateCertificate(
+  cert: Certificate,
+  options?: { index?: number; hasPendingFile?: boolean }
+): string[] {
+  const errors: string[] = [];
+  const prefix =
+    typeof options?.index === "number"
+      ? `Certificate #${options.index + 1}`
+      : `Certificate "${cert.title.trim() || "Untitled"}"`;
+
+  const textChecks = [
+    validateSubject(cert.title, {
+      label: `${prefix} Title`,
+      minLength: 3,
+      maxLength: 120,
+      required: true,
+    }),
+    validateSubject(cert.issuer, {
+      label: `${prefix} Issuer`,
+      minLength: 2,
+      maxLength: 100,
+      required: true,
+    }),
+    validateProjectYear(cert.issueDate, `${prefix} Issue Date`),
+  ];
+
+  if (!options?.hasPendingFile) {
+    textChecks.push(
+      validateUrl(cert.fileUrl || "", {
+        label: `${prefix} File/Preview URL`,
+        required: true,
+        allowRelativePath: true,
+      })
+    );
+  }
+
+  for (const check of textChecks) {
+    if (!check.valid && check.error) {
+      errors.push(check.error);
+    }
+  }
+
+  return errors;
+}
+
+export function validateCertificatesDraft(
+  certificates: Certificate[],
+  pendingFileIds?: ReadonlySet<string>
+): {
+  valid: boolean;
+  errors: string[];
+  errorsByCert: Record<string, string[]>;
+} {
+  const errors: string[] = [];
+  const errorsByCert: Record<string, string[]> = {};
+
+  if (!Array.isArray(certificates)) {
+    return { valid: true, errors: [], errorsByCert: {} };
+  }
+
+  certificates.forEach((cert, idx) => {
+    const certErrors = validateCertificate(cert, {
+      index: idx,
+      hasPendingFile: pendingFileIds?.has(cert.id),
+    });
+    if (certErrors.length > 0) {
+      errorsByCert[cert.id] = certErrors;
+      errors.push(...certErrors);
+    }
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    errorsByCert,
+  };
+}
+
+export const vaultDocumentMetadataSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(2, "Document title must be at least 2 characters.")
+    .max(120, "Document title must be 120 characters or fewer."),
+  category: z.enum([
+    "academic",
+    "government",
+    "career",
+    "legal",
+    "personal",
+  ]),
+  tags: z.array(z.string().trim().max(40)).default([]),
+  notes: z.string().max(1000).optional(),
+  pinned: z.boolean().default(false),
+});
+
 export function sanitizeDeviceLabel(raw: string, maxLength = 60): string {
   return raw
     .replace(/[\r\n\t\x00-\x1f]/g, " ")
@@ -974,9 +1094,9 @@ export const pairVerifySchema = z.object({
 
 const restoreImageTransformSchema = z
   .object({
-    zoom: z.number().min(0.5).max(4).optional(),
-    offsetXPercent: z.number().min(-100).max(100).optional(),
-    offsetYPercent: z.number().min(-100).max(100).optional(),
+    zoom: z.number().min(0.4).max(3).optional(),
+    offsetXPercent: z.number().min(-120).max(120).optional(),
+    offsetYPercent: z.number().min(-120).max(120).optional(),
     rotation: z.number().min(-360).max(360).optional(),
     fit: z.enum(["cover", "contain"]).optional(),
     aspect: z.enum(["1:1", "3:4", "4:3", "16:9", "original"]).optional(),
@@ -986,9 +1106,9 @@ const restoreImageTransformSchema = z
 
 const fullImageTransformSchema = z
   .object({
-    zoom: z.number().min(0.5).max(4).default(1),
-    offsetXPercent: z.number().min(-100).max(100).default(0),
-    offsetYPercent: z.number().min(-100).max(100).default(0),
+    zoom: z.number().min(0.4).max(3).default(1),
+    offsetXPercent: z.number().min(-120).max(120).default(0),
+    offsetYPercent: z.number().min(-120).max(120).default(0),
     rotation: z.number().min(-360).max(360).default(0),
     fit: z.enum(["cover", "contain"]).default("contain"),
     aspect: z
@@ -1011,19 +1131,44 @@ const restorePsgcAddressSchema = z
   })
   .optional();
 
+const safeRelativeOrHttpUrl = (maxLen: number) =>
+  z
+    .string()
+    .max(maxLen)
+    .refine(
+      (v) => !v.trim() || validateUrl(v, { allowRelativePath: true }).valid,
+      { message: "URL must use https://, http://, or a safe relative path." }
+    );
+
+const safeHttpOnlyUrl = (maxLen: number) =>
+  z
+    .string()
+    .max(maxLen)
+    .refine(
+      (v) => !v.trim() || validateUrl(v, { allowRelativePath: false }).valid,
+      { message: "URL must start with https:// or http://." }
+    );
+
+const validIsoTimestampString = z
+  .string()
+  .max(64)
+  .refine((v) => !Number.isNaN(Date.parse(v)), {
+    message: "Invalid ISO timestamp.",
+  });
+
 const restoreProfileSchema = z.object({
   name: z.string().min(1).max(80),
   lastName: z.string().min(1).max(80),
   middleName: z.string().max(80).default(""),
   fullName: z.string().min(2).max(140),
   monogram: z.string().min(1).max(8),
-  monogramImageUrl: z.string().max(600).optional(),
+  monogramImageUrl: safeRelativeOrHttpUrl(600).optional(),
   monogramTransform: restoreImageTransformSchema,
   birthDate: z.string().max(24).optional().default("2003-09-12"),
   age: z.number().int().min(15).max(120).optional(),
-  avatarUrl: z.string().max(600),
+  avatarUrl: safeRelativeOrHttpUrl(600),
   avatarTransform: restoreImageTransformSchema,
-  resumeUrl: z.string().max(600).default(""),
+  resumeUrl: safeRelativeOrHttpUrl(600).default(""),
   education: z.object({
     degree: z.string().max(160),
     major: z.string().max(160),
@@ -1039,9 +1184,9 @@ const restoreProfileSchema = z.object({
   storyHeading: z.string().max(200),
   storyBody: z.array(z.string().max(2000)).max(20),
   contact: z.object({
-    email: z.string().max(160),
-    github: z.string().max(300),
-    linkedin: z.string().max(300),
+    email: z.string().max(254),
+    github: safeHttpOnlyUrl(300),
+    linkedin: safeHttpOnlyUrl(300),
     location: z.string().max(200),
     address: restorePsgcAddressSchema,
     status: z.string().max(120),
@@ -1111,10 +1256,10 @@ export const restoreProjectsSchema = z
       problem: z.string().max(2000),
       solution: z.string().max(2000),
       stack: z.array(z.string().max(80)).max(30),
-      image: z.string().max(600),
+      image: safeRelativeOrHttpUrl(600),
       metrics: z.string().max(300),
-      githubUrl: z.string().max(400).optional(),
-      liveUrl: z.string().max(400).optional(),
+      githubUrl: safeHttpOnlyUrl(400).optional(),
+      liveUrl: safeHttpOnlyUrl(400).optional(),
       featured: z.boolean(),
       published: z.boolean().optional(),
     })
@@ -1146,16 +1291,16 @@ export const portfolioRestoreSchema = z.object({
       z.object({
         id: z.string().max(120),
         name: z.string().max(140),
-        email: z.string().max(200),
+        email: z.string().max(254),
         subject: z.string().max(240),
         message: z.string().max(4000),
         isRead: z.boolean(),
         isStarred: z.boolean(),
         emailDispatchStatus: z.enum(["sent", "skipped", "failed"]).optional(),
-        repliedAt: z.string().max(64).nullable().optional(),
+        repliedAt: validIsoTimestampString.nullable().optional(),
         replyCount: z.number().int().min(0).max(1000).optional(),
         lastReplySubject: z.string().max(240).nullable().optional(),
-        createdAt: z.string().max(64),
+        createdAt: validIsoTimestampString,
       })
     )
     .max(5000)
@@ -1172,7 +1317,7 @@ export const portfolioRestoreSchema = z.object({
           "cv_download",
         ]),
         target: z.string().max(240),
-        createdAt: z.string().max(64),
+        createdAt: validIsoTimestampString,
         sessionId: z.string().max(64).optional(),
         device: z.enum(["desktop", "tablet", "mobile"]).optional(),
         referrer: z.string().max(120).optional(),

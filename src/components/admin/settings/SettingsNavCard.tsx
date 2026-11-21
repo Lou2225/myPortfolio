@@ -2,15 +2,12 @@
 
 import React from "react";
 import { ChevronRight } from "lucide-react";
-import { StatusPill, type StatusPillProps } from "@/components/ui/StatusPill";
 import { cn } from "@/lib/utils";
 
 export interface SettingsNavCardProps {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
-  statusLabel?: string;
-  statusVariant?: StatusPillProps["variant"];
   detailText?: string;
   tone?: "default" | "danger";
   onClick: () => void;
@@ -19,14 +16,12 @@ export interface SettingsNavCardProps {
 
 /**
  * Windows 11-inspired full-width settings navigation card row.
- * Displays icon badge, title/subtitle stack, contextual telemetry pill, and disclosure arrow.
+ * Displays icon badge, title/subtitle stack, optional metadata text, and disclosure arrow.
  */
 export function SettingsNavCard({
   icon,
   title,
   subtitle,
-  statusLabel,
-  statusVariant = "neutral",
   detailText,
   tone = "default",
   onClick,
@@ -63,20 +58,11 @@ export function SettingsNavCard({
           <p className="text-xs text-(--text-muted) mt-0.5 line-clamp-2 sm:line-clamp-1">
             {subtitle}
           </p>
-          {(statusLabel || detailText) && (
+          {detailText && (
             <div className="flex sm:hidden flex-wrap items-center gap-2 mt-1.5">
-              {statusLabel && (
-                <StatusPill
-                  label={statusLabel}
-                  variant={statusVariant}
-                  size="xs"
-                />
-              )}
-              {detailText && (
-                <span className="text-[10px] font-mono text-(--text-muted) truncate">
-                  {detailText}
-                </span>
-              )}
+              <span className="text-[10px] font-mono text-(--text-muted) truncate">
+                {detailText}
+              </span>
             </div>
           )}
         </div>
@@ -87,14 +73,6 @@ export function SettingsNavCard({
           <span className="hidden md:inline-block text-[11px] font-mono text-(--text-muted)">
             {detailText}
           </span>
-        )}
-        {statusLabel && (
-          <StatusPill
-            label={statusLabel}
-            variant={statusVariant}
-            size="xs"
-            className="hidden sm:inline-flex"
-          />
         )}
         <ChevronRight
           className="w-4 h-4 text-(--text-muted) group-hover:text-(--text-primary) group-hover:translate-x-0.5 transition-all"

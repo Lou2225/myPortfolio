@@ -189,13 +189,6 @@ html {
   transition: background-color 0.35s ease, color 0.35s ease;
 }
 
-/* Defer layout and paint cost for below-the-fold public sections until scrolled into view */
-.lou-public-root > section:nth-of-type(n + 3),
-.lou-public-footer {
-  content-visibility: auto;
-  contain-intrinsic-size: 1px 720px;
-}
-
 body {
   background-color: var(--bg-canvas);
   color: var(--text-primary);

@@ -5,9 +5,8 @@ import { Clock, ExternalLink, Mail, Send, X } from "lucide-react";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { MessageField, SubjectField } from "@/components/ui/fields";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import { useOfflineStatus } from "@/components/pwa/OfflineManager";
+import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
 import { contactReplySchema } from "@/lib/validation";
 import type { ContactMessage } from "@/types/portfolio";
 
@@ -121,18 +120,28 @@ export function MessageReplyModal({
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setSubmitError(
-          data.error || `Failed to send reply (HTTP ${res.status}).`
-        );
+        const msg =
+          data.error || `Failed to send reply (HTTP ${res.status}).`;
+        setSubmitError(msg);
+        announceBrandPortalStatus({
+          tone: "error",
+          label: "Reply Failed",
+          detail: msg,
+        });
         return;
       }
 
       await onRepliedSuccess();
       onClose();
     } catch {
-      setSubmitError(
-        "Network error while dispatching reply. Your draft has not been lost."
-      );
+      const msg =
+        "Network error while dispatching reply. Your draft has not been lost.";
+      setSubmitError(msg);
+      announceBrandPortalStatus({
+        tone: "error",
+        label: "Reply Failed",
+        detail: msg,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -165,18 +174,6 @@ export function MessageReplyModal({
                 >
                   Reply To Inquiry
                 </h3>
-                <StatusPill
-                  label={emailConfigured ? "Resend Active" : "Mailto Fallback"}
-                  variant={emailConfigured ? "success" : "warning"}
-                  size="xs"
-                />
-                {(activeMessage.replyCount ?? 0) > 0 && (
-                  <StatusPill
-                    label={`Replied (${activeMessage.replyCount})`}
-                    variant="accent"
-                    size="xs"
-                  />
-                )}
               </div>
               <p
                 id="reply-modal-recipient"
@@ -187,6 +184,12 @@ export function MessageReplyModal({
                   {activeMessage.name}
                 </span>{" "}
                 &lt;{activeMessage.email}&gt;
+                {(activeMessage.replyCount ?? 0) > 0 && (
+                  <span className="text-(--text-accent)">
+                    {" "}
+                    · Replied ({activeMessage.replyCount})
+                  </span>
+                )}
               </p>
             </div>
 
@@ -205,20 +208,18 @@ export function MessageReplyModal({
           {/* Scrollable Body */}
           <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 lou-scrollarea">
             {!emailConfigured && (
-              <AdminAlertBanner
-                variant="offline"
-                message="Transactional Email Not Configured."
-                detail="Set RESEND_API_KEY and RESEND_FROM_EMAIL to send replies directly from this inbox, or use Open Mail Client below."
-              />
+              <p className="text-xs font-mono text-(--text-muted) leading-relaxed">
+                Transactional email is not configured on this server (RESEND_API_KEY / RESEND_FROM_EMAIL). Use Open Mail Client below to send your reply.
+              </p>
             )}
 
             {submitError && (
-              <AdminAlertBanner
-                variant="error"
-                message="Reply Not Sent."
-                detail={submitError}
-                onDismiss={() => setSubmitError(null)}
-              />
+              <p
+                role="alert"
+                className="text-xs font-mono text-red-400 leading-relaxed"
+              >
+                {submitError}
+              </p>
             )}
 
             {/* Original Inquiry Preview */}

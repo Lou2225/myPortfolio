@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback } from "react";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import type { PortfolioDatabase } from "@/types/portfolio";
 import type { AdminPasswordSource } from "@/lib/auth";
 import type { SettingsSectionId } from "@/components/admin/layout/types";
 import { AdminSlideView } from "@/components/motion/AdminMotion";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import { Button } from "@/components/ui/Button";
+import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
 import { SettingsHub } from "./settings/SettingsHub";
 import { PasswordCredentialsSettings } from "./settings/PasswordCredentialsSettings";
 import { AppearanceSettings } from "./settings/AppearanceSettings";
@@ -66,14 +66,29 @@ export function SettingsManager({
   onLogout,
   onSyncAuth,
 }: SettingsManagerProps) {
-  const [feedback, setFeedback] = useState<SettingsFeedback | null>(null);
+  const handleFeedback = useCallback((next: SettingsFeedback | null) => {
+    if (!next) return;
+    if (next.type === "error") {
+      announceBrandPortalStatus({
+        tone: "error",
+        label: "Action Failed",
+        detail: next.message,
+      });
+    } else {
+      announceBrandPortalStatus({
+        tone: "live",
+        label: "Updated",
+        detail: next.message,
+        durationMs: 2800,
+      });
+    }
+  }, []);
 
   const activeMeta = SETTINGS_SECTIONS_META.find(
     (s) => s.id === activeSection
   );
 
   const handleNavigate = (nextSection: SettingsSectionId) => {
-    setFeedback(null);
     onSelectSection(nextSection);
   };
 
@@ -82,14 +97,6 @@ export function SettingsManager({
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {feedback && feedback.type === "error" && (
-        <AdminAlertBanner
-          variant="error"
-          message={feedback.message}
-          onDismiss={() => setFeedback(null)}
-        />
-      )}
-
       <div className="overflow-x-clip">
         <AdminSlideView
           activeKey={activeSection}
@@ -134,9 +141,6 @@ export function SettingsManager({
         {activeSection === "hub" && (
           <SettingsHub
             db={db}
-            storageMode={storageMode}
-            deviceRegistered={deviceRegistered}
-            passwordSource={passwordSource}
             onNavigateSection={(sec) => handleNavigate(sec)}
           />
         )}
@@ -148,7 +152,7 @@ export function SettingsManager({
             envConfigured={envConfigured}
             overrideUpdatedAt={overrideUpdatedAt}
             onPasswordMetaChange={onPasswordMetaChange}
-            onFeedback={setFeedback}
+            onFeedback={handleFeedback}
           />
         )}
 
@@ -158,7 +162,7 @@ export function SettingsManager({
             onDatabaseSync={async (nextDb) => {
               await onDatabaseSync(nextDb);
             }}
-            onFeedback={setFeedback}
+            onFeedback={handleFeedback}
           />
         )}
 
@@ -168,7 +172,7 @@ export function SettingsManager({
             togglingDevice={togglingDevice}
             onToggleDevice={onToggleDevice}
             onLogout={onLogout}
-            onFeedback={setFeedback}
+            onFeedback={handleFeedback}
             onSyncAuth={onSyncAuth}
           />
         )}
@@ -180,12 +184,12 @@ export function SettingsManager({
             onDatabaseSync={async (nextDb) => {
               await onDatabaseSync(nextDb);
             }}
-            onFeedback={setFeedback}
+            onFeedback={handleFeedback}
           />
         )}
 
         {activeSection === "pwa" && (
-          <OfflinePwaSettings onFeedback={setFeedback} />
+          <OfflinePwaSettings onFeedback={handleFeedback} />
         )}
 
         {activeSection === "maintenance" && (
@@ -196,7 +200,7 @@ export function SettingsManager({
               await onDatabaseSync(nextDb);
             }}
             onResetSeed={onResetSeed}
-            onFeedback={setFeedback}
+            onFeedback={handleFeedback}
           />
         )}
         </AdminSlideView>

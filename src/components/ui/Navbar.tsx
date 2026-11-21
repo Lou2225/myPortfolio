@@ -23,9 +23,10 @@ const navLinks: NavItem[] = [
   { id: "top", chapter: "00", label: "Intro", href: "#top" },
   { id: "story", chapter: "01", label: "Story", href: "#story" },
   { id: "skills", chapter: "02", label: "Skills", href: "#skills" },
-  { id: "projects", chapter: "03", label: "Projects", href: "#projects" },
-  { id: "impact", chapter: "04", label: "Impact", href: "#impact" },
-  { id: "contact", chapter: "05", label: "Contact", href: "#contact" },
+  { id: "certificates", chapter: "03", label: "Certificates", href: "#certificates" },
+  { id: "projects", chapter: "04", label: "Projects", href: "#projects" },
+  { id: "impact", chapter: "05", label: "Impact", href: "#impact" },
+  { id: "contact", chapter: "06", label: "Contact", href: "#contact" },
 ];
 
 export function Navbar() {
@@ -296,7 +297,8 @@ export function Navbar() {
                   type="button"
                   variant="outline"
                   size="icon"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  magnetic={false}
+                  onClick={() => setMobileMenuOpen((prev) => !prev)}
                   aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
                   aria-expanded={mobileMenuOpen}
                 >

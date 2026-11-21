@@ -5,11 +5,10 @@ import { AdminTab } from "./types";
 import { DropdownPopover } from "@/components/ui/DropdownPopover";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { BadgeCounter } from "@/components/ui/BadgeCounter";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { Tooltip, TruncatedText } from "@/components/ui/Tooltip";
-import { Bell, Mail, Activity, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Bell, Mail, Activity, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface NotificationPopoverProps {
@@ -75,20 +74,16 @@ export function NotificationPopover({
                 Inbox inquiries & live telemetry
               </span>
             </div>
-            {unreadCount > 0 ? (
-              <StatusPill
-                label={`${unreadCount} unread`}
-                variant="accent"
-                size="xs"
-              />
-            ) : (
-              <StatusPill
-                label="All caught up"
-                variant="success"
-                size="xs"
-                icon={<CheckCircle2 className="w-3 h-3" />}
-              />
-            )}
+            <span
+              className={cn(
+                "text-[10px] font-mono uppercase tracking-[0.14em] shrink-0",
+                unreadCount > 0
+                  ? "text-(--text-accent) font-semibold"
+                  : "text-(--text-muted)"
+              )}
+            >
+              {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
+            </span>
           </div>
 
           {/* Scrollable Notification Feed */}

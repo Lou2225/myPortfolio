@@ -9,7 +9,6 @@ import {
   buildDeviceFromTelemetry,
   extractRequestNetworkInfo,
   mutateAdminSecurityStore,
-  readAdminSecurityStore,
   sha256Hex,
   upsertTrustedDevice,
 } from "@/lib/security";
@@ -58,14 +57,25 @@ function resolveRequestOrigin(request: Request): string {
     .toLowerCase();
 
   if (forwardedHostRaw) {
-    const forwardedHostname = forwardedHostRaw.split(":")[0]?.toLowerCase() || "";
-    if (allowedHosts.has(forwardedHostname)) {
-      const fallbackProto = requestUrl.protocol.replace(":", "") || "https";
-      const proto =
-        forwardedProtoRaw === "http" || forwardedProtoRaw === "https"
-          ? forwardedProtoRaw
-          : fallbackProto;
-      return `${proto}://${forwardedHostRaw}`;
+    const fallbackProto = requestUrl.protocol.replace(":", "") || "https";
+    const proto =
+      forwardedProtoRaw === "http" || forwardedProtoRaw === "https"
+        ? forwardedProtoRaw
+        : fallbackProto;
+    try {
+      const candidate = new URL(`${proto}://${forwardedHostRaw}`);
+      if (
+        !candidate.username &&
+        !candidate.password &&
+        candidate.pathname === "/" &&
+        !candidate.search &&
+        !candidate.hash &&
+        allowedHosts.has(candidate.hostname.toLowerCase())
+      ) {
+        return candidate.origin;
+      }
+    } catch {
+      // Ignore malformed forwarded host header
     }
   }
 
@@ -83,17 +93,14 @@ export async function GET(request: Request) {
       );
     }
 
-    const [ctx, store] = await Promise.all([
-      getSessionAndDeviceContext(),
-      readAdminSecurityStore(),
-    ]);
-
-    if (ctx.storageUnavailable) {
+    const ctx = await getSessionAndDeviceContext();
+    if (ctx.storageUnavailable || !ctx.securityStore) {
       return NextResponse.json(
         { error: "Security storage temporarily unavailable." },
         { status: 503 }
       );
     }
+    const store = ctx.securityStore;
 
     const challenge = store.pairings.find((p) => p.id === challengeId);
     if (!challenge) {
@@ -245,40 +252,89 @@ export async function PATCH(request: Request) {
   const reqInfo = extractRequestNetworkInfo(request.headers);
 
   try {
-    const body = (await request.json()) as {
-      challengeId: string;
-      action: "approve" | "reject";
+    let body: {
+      challengeId?: string;
+      action?: "approve" | "reject";
     };
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as typeof body;
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
-    if (!body.challengeId) {
+    const challengeId =
+      typeof body.challengeId === "string" ? body.challengeId.trim() : "";
+    if (!challengeId) {
       return NextResponse.json(
         { error: "Challenge ID is required." },
         { status: 400 }
       );
     }
 
+    if (body.action !== "approve" && body.action !== "reject") {
+      return NextResponse.json(
+        { error: "Action must explicitly be 'approve' or 'reject'." },
+        { status: 400 }
+      );
+    }
+
+    let outcome: { ok: true } | { ok: false; status: number; error: string } = {
+      ok: false,
+      status: 404,
+      error: "Pairing challenge not found.",
+    };
+
     const updatedStore = await mutateAdminSecurityStore((store) => {
-      const challenge = store.pairings.find((p) => p.id === body.challengeId);
-      if (!challenge || challenge.status !== "awaiting_approval") {
+      outcome = {
+        ok: false,
+        status: 404,
+        error: "Pairing challenge not found.",
+      };
+      const challenge = store.pairings.find((p) => p.id === challengeId);
+      if (!challenge) {
+        return store;
+      }
+      if (challenge.status !== "awaiting_approval") {
+        outcome = {
+          ok: false,
+          status: 409,
+          error: `Pairing challenge is not awaiting approval (status: ${challenge.status}).`,
+        };
         return store;
       }
 
       if (new Date(challenge.expiresAt).getTime() <= Date.now()) {
+        outcome = {
+          ok: false,
+          status: 410,
+          error: "Pairing challenge has expired.",
+        };
         return {
           ...store,
           pairings: store.pairings.map((p) =>
-            p.id === body.challengeId ? { ...p, status: "expired" as const } : p
+            p.id === challengeId ? { ...p, status: "expired" as const } : p
           ),
         };
       }
 
       if (body.action === "reject") {
+        outcome = { ok: true };
         // Keep claimTokenHash temporarily so mobile PUT polls verify claimToken and exit cleanly
         return appendSecurityAudit(
           {
             ...store,
             pairings: store.pairings.map((p) =>
-              p.id === body.challengeId
+              p.id === challengeId
                 ? {
                     ...p,
                     status: "cancelled",
@@ -302,8 +358,16 @@ export async function PATCH(request: Request) {
 
       // Approve incoming mobile device and finalize registry record
       const preview = challenge.pendingDevice;
-      if (!preview) return store;
+      if (!preview) {
+        outcome = {
+          ok: false,
+          status: 409,
+          error: "Pending device metadata is missing.",
+        };
+        return store;
+      }
 
+      outcome = { ok: true };
       const built = buildDeviceFromTelemetry({
         telemetry: {
           suggestedName: preview.name,
@@ -330,7 +394,7 @@ export async function PATCH(request: Request) {
 
       const upserted = upsertTrustedDevice(store, built);
       const nextPairings = upserted.store.pairings.map((p) =>
-        p.id === body.challengeId
+        p.id === challengeId
           ? {
               ...p,
               status: "approved" as const,
@@ -353,14 +417,24 @@ export async function PATCH(request: Request) {
       );
     });
 
+    if (!outcome.ok) {
+      return NextResponse.json(
+        { error: outcome.error },
+        { status: outcome.status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     const resultingChallenge = updatedStore.pairings.find(
-      (p) => p.id === body.challengeId
+      (p) => p.id === challengeId
     );
-    return NextResponse.json({
-      success: true,
-      status: resultingChallenge?.status ?? "cancelled",
-      pairedDeviceId: resultingChallenge?.pairedDeviceId ?? null,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        status: resultingChallenge?.status ?? "cancelled",
+        pairedDeviceId: resultingChallenge?.pairedDeviceId ?? null,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     if (err instanceof StorageWriteError) {
       return NextResponse.json({ error: err.message }, { status: 503 });

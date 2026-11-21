@@ -277,7 +277,7 @@ export function CursorUploadSettings({
             onUploadError={(message) =>
               onFeedback({ type: "error", message })
             }
-            removeDescription="This clears your uploaded Default Cursor path from the draft until you click Save & Publish."
+            removeDescription="This clears your uploaded Default Cursor path from the draft until saved via the Brand Portal."
             placeholder="/uploads/cursors/default.png"
             previewShape="squircle"
             previewSize="md"

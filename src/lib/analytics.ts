@@ -597,11 +597,16 @@ function parseProjectTarget(rawTarget: string): {
   channel: "demo" | "github" | "other";
 } {
   const trimmed = rawTarget.trim();
-  const match = trimmed.match(/^(.*?)\s*\((Live Demo|GitHub)\)$/i);
+  const match = trimmed.match(/^(.*?)\s*\((Live Demo|GitHub|Case Study)\)$/i);
   if (!match) {
     return { title: trimmed || "Unspecified Project", channel: "other" };
   }
-  const channel = match[2].toLowerCase() === "live demo" ? "demo" : "github";
+  const channel =
+    match[2].toLowerCase() === "live demo"
+      ? "demo"
+      : match[2].toLowerCase() === "github"
+        ? "github"
+        : "other";
   return {
     title: match[1].trim() || trimmed,
     channel,
@@ -820,14 +825,17 @@ export function buildAnalyticsSnapshot(
     (e) => e.type === "cv_download"
   ).length;
   const curDirectContacts = eventsInWindow.filter(
-    (e) => e.type === "contact_click"
+    (e) => e.type === "contact_click" && e.target !== "Contact Form Submission"
   ).length;
   const curConversions = curCvDownloads + curDirectContacts;
   const priorConversions =
     priorStartMs === null
       ? null
       : eventsInPrior.filter(
-          (e) => e.type === "cv_download" || e.type === "contact_click"
+          (e) =>
+            e.type === "cv_download" ||
+            (e.type === "contact_click" &&
+              e.target !== "Contact Form Submission")
         ).length;
 
   const unreadInbox = db.messages.filter((m) => !m.isRead).length;
@@ -904,9 +912,12 @@ export function buildAnalyticsSnapshot(
 
   const projectCtrPct =
     Math.max(projectsReached, curViews) > 0
-      ? Math.round(
-          (curProjectClicks / Math.max(projectsReached || curViews, 1)) * 1000
-        ) / 10
+      ? Math.min(
+          100,
+          Math.round(
+            (curProjectClicks / Math.max(projectsReached || curViews, 1)) * 1000
+          ) / 10
+        )
       : 0;
   const scrollCompletionPct =
     curViews > 0
@@ -914,7 +925,7 @@ export function buildAnalyticsSnapshot(
       : 0;
   const conversionRatePct =
     curViews > 0
-      ? Math.round((goalActions / curViews) * 1000) / 10
+      ? Math.min(100, Math.round((goalActions / curViews) * 1000) / 10)
       : 0;
 
   // Grouped Project Performance (reconciles 100% of `curProjectClicks` + surfaces 0-click published systems)

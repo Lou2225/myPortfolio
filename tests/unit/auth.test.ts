@@ -430,23 +430,27 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
       namedCurve: "prime256v1",
     });
     const spkiDer = publicKey.export({ type: "spki", format: "der" });
-    const credentialId = "cred_win_hello_lou_01";
+    const credIdBytes = crypto.randomBytes(16);
+    const credentialId = credIdBytes.toString("base64url");
 
     const rpIdHash = crypto.createHash("sha256").update(rpId).digest();
     const flags = Buffer.from([0x01 | 0x04 | 0x40]); // UP + UV + AT (Hardware-Bound: BS=0)
     const signCountBuf = Buffer.alloc(4);
     signCountBuf.writeUInt32BE(1, 0);
-    // Windows Hello AAGUID: 08987058-cadc-4b81-b6e1-30de50dcbe96
+    // Windows Hello AAGUID: 08987058-cadc-4b81-b6e1-30de50dcbe96 + attested credentialId bytes
     const winHelloAaguid = Buffer.from(
       "08987058cadc4b81b6e130de50dcbe96",
       "hex"
     );
+    const credIdLenBuf = Buffer.alloc(2);
+    credIdLenBuf.writeUInt16BE(credIdBytes.length, 0);
     const regAuthData = Buffer.concat([
       rpIdHash,
       flags,
       signCountBuf,
       winHelloAaguid,
-      Buffer.alloc(2),
+      credIdLenBuf,
+      credIdBytes,
     ]);
 
     const regClientData = Buffer.from(
@@ -667,7 +671,7 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
     expect(delData.summary.passkeys).toHaveLength(0);
   });
 
-  it("automatically recognizes a second browser (e.g. Chrome after registering Brave) on the same physical laptop & network via recognize-physical-device", async () => {
+  it("blocks unauthenticated recognize-physical-device trust elevation (403) and protects against open redirect + multi-byte token crash", async () => {
     const braveDevice = buildDeviceFromTelemetry({
       ipMasked: "198.51.100.*",
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Brave/131.0",
@@ -696,25 +700,8 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
       devices: [braveDevice],
     }));
 
-    // Simulate opening Chrome on the exact same laptop (empty cookie jar)
     cookieMap.clear();
     const challenge = createDeviceChallengeToken()!;
-
-    // Generate Chrome's own WebCrypto ECDSA P-256 keypair
-    const subtle = crypto.webcrypto.subtle;
-    const chromeKeyPair = await subtle.generateKey(
-      { name: "ECDSA", namedCurve: "P-256" },
-      false,
-      ["sign", "verify"]
-    );
-    const spkiBuf = await subtle.exportKey("spki", chromeKeyPair.publicKey);
-    const chromeSpkiBase64 = Buffer.from(spkiBuf).toString("base64");
-    const sigBuf = await subtle.sign(
-      { name: "ECDSA", hash: "SHA-256" },
-      chromeKeyPair.privateKey,
-      new TextEncoder().encode(challenge)
-    );
-    const chromeSignature = Buffer.from(sigBuf).toString("base64url");
 
     const recogRes = await authPost(
       new Request("https://louvaldellon.vercel.app/api/admin/auth", {
@@ -726,7 +713,6 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
         body: JSON.stringify({
           action: "recognize-physical-device",
           challenge,
-          signature: chromeSignature,
           telemetry: {
             suggestedName: "Windows 11 · Chrome",
             model: "Windows PC",
@@ -738,27 +724,43 @@ describe("Admin Auth, Session Tokens & Device Epoch Invalidation", () => {
             cpuCores: 8,
             timezone: "Asia/Manila",
             keyThumbprint: "DEV-CHRM-7777-8888",
-            publicKeySpki: chromeSpkiBase64,
+            publicKeySpki: "injected-attacker-key",
             secureContext: true,
           },
         }),
       })
     );
 
-    expect(recogRes.status).toBe(200);
-    const recogData = (await recogRes.json()) as {
-      success: boolean;
-      deviceRegistered: boolean;
-      currentDeviceId: string;
-    };
-    expect(recogData.success).toBe(true);
-    expect(recogData.deviceRegistered).toBe(true);
-    expect(recogData.currentDeviceId).toBe(braveDevice.id);
-    expect(cookieMap.get(REGISTERED_DEVICE_COOKIE)?.value).toBeTruthy();
+    expect(recogRes.status).toBe(403);
+    expect(cookieMap.get(REGISTERED_DEVICE_COOKIE)).toBeUndefined();
 
-    // Chrome is now recognized as a registered device and passes the Stealth Gate!
-    const chromeCtx = await getSessionAndDeviceContext();
-    expect(chromeCtx.deviceRegistered).toBe(true);
-    expect(chromeCtx.currentDeviceId).toBe(braveDevice.id);
+    // Verify attacker key was NOT injected into the device registry
+    const storeAfter = await readAdminSecurityStore();
+    const savedDevice = storeAfter.devices.find((d) => d.id === braveDevice.id);
+    expect(savedDevice?.browserKeys?.["DEV-CHRM-7777-8888"]).toBeUndefined();
+
+    // Open redirect guard: protocol-relative path `//evil.com/x` must stay on canonical origin
+    expect(
+      resolveCanonicalRedirectUrl(
+        "https://www.louvaldellon.vercel.app//evil.com/steal?x=1",
+        new Headers({ host: "www.louvaldellon.vercel.app" }),
+        {
+          NODE_ENV: "production",
+          VERCEL_ENV: "production",
+          NEXT_PUBLIC_SITE_URL: "https://louvaldellon.vercel.app",
+        }
+      )
+    ).toBe("https://louvaldellon.vercel.app/evil.com/steal?x=1");
+
+    // Multi-byte UTF-8 signature with 43 UTF-16 code units must not throw RangeError
+    const multiByteToken = `eyJleHAiOjk5OTk5OTk5OTk5OTl9.${"é".repeat(43)}`;
+    expect(verifyDeviceChallengeToken(multiByteToken)).toBe(false);
+
+    // Removing the last trusted device must invalidate any session bound to that deviceId
+    const boundToken = createAdminToken({ epoch: 1, deviceId: braveDevice.id });
+    cookieMap.set(ADMIN_COOKIE_NAME, { name: ADMIN_COOKIE_NAME, value: boundToken });
+    await mutateAdminSecurityStore((store) => ({ ...store, devices: [] }));
+    const ctxAfterRemoval = await getSessionAndDeviceContext();
+    expect(ctxAfterRemoval.authenticated).toBe(false);
   });
 });

@@ -10,6 +10,7 @@ export const queryKeys = {
   adminAuth: ["admin", "auth"] as const,
   adminPortfolio: ["admin", "portfolio"] as const,
   adminSecurity: ["admin-security-registry"] as const,
+  adminVault: ["admin", "vault"] as const,
 };
 
 export const PUBLIC_CACHE_STORAGE_KEY = "lou_query_cache_public_v1";
@@ -134,7 +135,7 @@ export function getQueryClient(): QueryClient {
           refetchOnReconnect: true,
         },
         mutations: {
-          retry: 1,
+          retry: 0,
         },
       },
     });

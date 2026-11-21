@@ -49,14 +49,7 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
                     : "pr-4 sm:pr-6 lg:pr-4"
                 } group`}
               >
-                <dd className="font-display text-[calc(clamp(2.125rem,1.35rem+3.4vw,4.5rem)*var(--public-scale,1))] leading-[0.95] uppercase tracking-tight text-(--text-primary) group-hover:text-(--text-accent) transition-colors duration-300 tabular-nums">
-                  {stat.prefix}
-                  <CountUpMetric value={stat.value} />
-                  <span className="text-(--text-accent)">
-                    {stat.suffix}
-                  </span>
-                </dd>
-                <dt className="mt-2.5 sm:mt-4">
+                <dt className="order-2 mt-2.5 sm:mt-4">
                   <DisplayHeading as="span" size="sm" className="block">
                     {stat.label}
                   </DisplayHeading>
@@ -64,6 +57,13 @@ export function Impact({ impactMetrics, sectionHeaders }: ImpactProps) {
                     {stat.description}
                   </BodyText>
                 </dt>
+                <dd className="order-1 font-display text-[calc(clamp(2.125rem,1.35rem+3.4vw,4.5rem)*var(--public-scale,1))] leading-[0.95] uppercase tracking-tight text-(--text-primary) group-hover:text-(--text-accent) transition-colors duration-300 tabular-nums">
+                  {stat.prefix}
+                  <CountUpMetric value={stat.value} />
+                  <span className="text-(--text-accent)">
+                    {stat.suffix}
+                  </span>
+                </dd>
               </ScrollReveal>
             ))}
           </dl>

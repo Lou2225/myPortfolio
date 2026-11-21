@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PortfolioDatabase } from "@/types/portfolio";
 import type { SafeSecuritySummary } from "@/types/security";
-import { usePortfolio, PublicPortfolioData } from "@/context/PortfolioContext";
+import { usePortfolio } from "@/context/PortfolioContext";
+import { toPublicPortfolioPayload } from "@/lib/portfolioPublic";
 import { useSmoothScroll } from "@/components/motion/SmoothScroll";
 import {
   useOfflineStatus,
   isNetworkOffline,
 } from "@/components/pwa/OfflineManager";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import {
   queryKeys,
   AdminPortfolioPayload,
@@ -31,6 +31,7 @@ import {
   announceBrandPortalStatus,
   DEVICE_STORAGE_KEY,
   DEVICE_SYNC_EVENT,
+  getActiveBrandPortalDraft,
   setBrandPortalMeta,
 } from "@/lib/brandPortalStatus";
 import { AdminLogin } from "@/components/admin/AdminLogin";
@@ -50,9 +51,12 @@ import { AnalyticsOverview } from "@/components/admin/AnalyticsOverview";
 import { ProfileHeroManager } from "@/components/admin/ProfileHeroManager";
 import { StoryMarqueeManager } from "@/components/admin/StoryMarqueeManager";
 import { SkillsImpactManager } from "@/components/admin/SkillsImpactManager";
+import { CertificatesManager } from "@/components/admin/CertificatesManager";
 import { ProjectsManager } from "@/components/admin/ProjectsManager";
 import { InboxManager } from "@/components/admin/InboxManager";
+import { VaultManager } from "@/components/admin/VaultManager";
 import { SettingsManager } from "@/components/admin/SettingsManager";
+import { VaultDocument, VaultStats } from "@/types/vault";
 import {
   clearStoredClientDeviceKey,
   collectClientDeviceTelemetry,
@@ -104,8 +108,11 @@ export function AdminDashboardClient({
     initialSettingsSection
   );
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [mutationError, setMutationError] = useState<string | null>(null);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    moduleLabel: string;
+    proceed: () => void;
+  } | null>(null);
   const prevTabRef = useRef<AdminTab>(initialTab);
 
   // Ensure all Admin Appearance typography pairings remain available for live previewing
@@ -131,9 +138,42 @@ export function AdminDashboardClient({
 
   const OFFLINE_GUARD_MESSAGE = "Offline — Reconnect to save changes";
 
+  // Guard against accidental tab closure, page refresh, or link drops when changes are unsaved
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const draftState = getActiveBrandPortalDraft();
+      if (draftState.hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   // Listen to browser Back/Forward navigation so `?tab=` and `?section=` stay synchronized
   useEffect(() => {
     const handlePopState = () => {
+      const draftState = getActiveBrandPortalDraft();
+      if (draftState.hasUnsavedChanges) {
+        // Keep current URL and prompt before navigating away
+        window.history.pushState(null, "", window.location.href);
+        setPendingNavigation({
+          moduleLabel: draftState.moduleLabel || "current section",
+          proceed: () => {
+            const params = new URLSearchParams(window.location.search);
+            const nextTab = parseAdminTab(params.get("tab"));
+            const currentTab = prevTabRef.current;
+            if (nextTab !== currentTab) {
+              setNavDirection(getAdminTabDirection(currentTab, nextTab));
+              resetScrollImmediate();
+            }
+            setActiveTab(nextTab);
+            setSettingsSection(parseSettingsSection(params.get("section")));
+          },
+        });
+        return;
+      }
       const params = new URLSearchParams(window.location.search);
       const nextTab = parseAdminTab(params.get("tab"));
       const currentTab = prevTabRef.current;
@@ -148,8 +188,7 @@ export function AdminDashboardClient({
     return () => window.removeEventListener("popstate", handlePopState);
   }, [resetScrollImmediate]);
 
-  /** Switch module and persist in URL `?tab=<module>` so hard refresh preserves exact location */
-  const handleSelectTab = useCallback(
+  const commitSelectTab = useCallback(
     (nextTab: AdminTab) => {
       const currentTab = prevTabRef.current;
       if (nextTab !== currentTab) {
@@ -158,7 +197,6 @@ export function AdminDashboardClient({
       }
       setActiveTab(nextTab);
       setSettingsSection("hub");
-      setMutationError(null);
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
         url.searchParams.set("tab", nextTab);
@@ -173,8 +211,26 @@ export function AdminDashboardClient({
     [resetScrollImmediate]
   );
 
-  /** Drill into or return from a Settings sub-page while pushing browser history for smooth Back support */
-  const handleSelectSettingsSection = useCallback(
+  /** Switch module and persist in URL `?tab=<module>` with unsaved-draft navigation guard */
+  const handleSelectTab = useCallback(
+    (nextTab: AdminTab) => {
+      if (nextTab === prevTabRef.current && settingsSection === "hub") {
+        return;
+      }
+      const draftState = getActiveBrandPortalDraft();
+      if (draftState.hasUnsavedChanges) {
+        setPendingNavigation({
+          moduleLabel: draftState.moduleLabel || "current module",
+          proceed: () => commitSelectTab(nextTab),
+        });
+        return;
+      }
+      commitSelectTab(nextTab);
+    },
+    [commitSelectTab, settingsSection]
+  );
+
+  const commitSelectSettingsSection = useCallback(
     (nextSection: SettingsSectionId) => {
       const currentTab = prevTabRef.current;
       if (currentTab !== "settings") {
@@ -200,6 +256,25 @@ export function AdminDashboardClient({
       }
     },
     [scrollTo]
+  );
+
+  /** Drill into or return from a Settings sub-page with unsaved-draft navigation guard */
+  const handleSelectSettingsSection = useCallback(
+    (nextSection: SettingsSectionId) => {
+      if (prevTabRef.current === "settings" && nextSection === settingsSection) {
+        return;
+      }
+      const draftState = getActiveBrandPortalDraft();
+      if (draftState.hasUnsavedChanges) {
+        setPendingNavigation({
+          moduleLabel: draftState.moduleLabel || "current section",
+          proceed: () => commitSelectSettingsSection(nextSection),
+        });
+        return;
+      }
+      commitSelectSettingsSection(nextSection);
+    },
+    [commitSelectSettingsSection, settingsSection]
   );
 
   // 1. Admin Auth & Device Registration Query (Hydrated cleanly from SSR)
@@ -322,6 +397,20 @@ export function AdminDashboardClient({
     staleTime: 30 * 1000,
   });
 
+  // 2c. Query Vault Documents & Stats for nav badge
+  const vaultQuery = useQuery({
+    queryKey: queryKeys.adminVault,
+    queryFn: async (): Promise<{ documents: VaultDocument[]; stats: VaultStats }> => {
+      const res = await fetch("/api/admin/vault", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("Failed to load vault documents.");
+      }
+      return res.json();
+    },
+    enabled: authenticated,
+    staleTime: 30 * 1000,
+  });
+
   // Notify BrandPortal slide curtain as soon as /admin is ready to reveal (both initial & cached revisit checks)
   const announceAdminReady = useCallback(() => {
     if (!authQuery.isPending && (!authenticated || portfolioQuery.data)) {
@@ -396,7 +485,6 @@ export function AdminDashboardClient({
       };
     },
     onMutate: async (updates) => {
-      setMutationError(null);
       await queryClient.cancelQueries({ queryKey: queryKeys.adminPortfolio });
       const previous = queryClient.getQueryData<AdminPortfolioPayload>(
         queryKeys.adminPortfolio
@@ -421,17 +509,7 @@ export function AdminDashboardClient({
         queryClient.setQueryData(queryKeys.adminPortfolio, optimistic);
         writePersistedAdminCache(optimistic);
 
-        const publicOptimistic: PublicPortfolioData = {
-          profile: nextDb.profile,
-          sectionHeaders: nextDb.sectionHeaders,
-          marqueePrinciples: nextDb.marqueePrinciples,
-          pillars: nextDb.pillars,
-          skills: nextDb.skills,
-          projects: nextDb.projects,
-          impactMetrics: nextDb.impactMetrics,
-          appearance: nextDb.appearance,
-          updatedAt: nextDb.updatedAt,
-        };
+        const publicOptimistic = toPublicPortfolioPayload(nextDb);
         queryClient.setQueryData(queryKeys.publicPortfolio, publicOptimistic);
         writePersistedPublicCache(publicOptimistic);
       }
@@ -442,24 +520,12 @@ export function AdminDashboardClient({
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.adminPortfolio, context.previous);
         writePersistedAdminCache(context.previous);
-        const prevDb = context.previous.data;
-        const publicRollback: PublicPortfolioData = {
-          profile: prevDb.profile,
-          sectionHeaders: prevDb.sectionHeaders,
-          marqueePrinciples: prevDb.marqueePrinciples,
-          pillars: prevDb.pillars,
-          skills: prevDb.skills,
-          projects: prevDb.projects,
-          impactMetrics: prevDb.impactMetrics,
-          appearance: prevDb.appearance,
-          updatedAt: prevDb.updatedAt,
-        };
+        const publicRollback = toPublicPortfolioPayload(context.previous.data);
         queryClient.setQueryData(queryKeys.publicPortfolio, publicRollback);
         writePersistedPublicCache(publicRollback);
       }
       const message =
         err instanceof Error ? err.message : "Failed to save portfolio changes";
-      setMutationError(message);
       announceBrandPortalStatus({
         tone: "error",
         label: "Save Failed",
@@ -467,21 +533,9 @@ export function AdminDashboardClient({
       });
     },
     onSuccess: async (payload) => {
-      setMutationError(null);
       queryClient.setQueryData(queryKeys.adminPortfolio, payload);
       writePersistedAdminCache(payload);
-      const nextDb = payload.data;
-      const publicFresh: PublicPortfolioData = {
-        profile: nextDb.profile,
-        sectionHeaders: nextDb.sectionHeaders,
-        marqueePrinciples: nextDb.marqueePrinciples,
-        pillars: nextDb.pillars,
-        skills: nextDb.skills,
-        projects: nextDb.projects,
-        impactMetrics: nextDb.impactMetrics,
-        appearance: nextDb.appearance,
-        updatedAt: nextDb.updatedAt,
-      };
+      const publicFresh = toPublicPortfolioPayload(payload.data);
       queryClient.setQueryData(queryKeys.publicPortfolio, publicFresh);
       writePersistedPublicCache(publicFresh);
       await refreshPortfolio();
@@ -505,7 +559,6 @@ export function AdminDashboardClient({
       return json;
     },
     onMutate: async () => {
-      setMutationError(null);
       const previous = queryClient.getQueryData<AdminPortfolioPayload>(
         queryKeys.adminPortfolio
       );
@@ -522,12 +575,14 @@ export function AdminDashboardClient({
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.adminPortfolio, context.previous);
       }
-      setMutationError(
-        err instanceof Error ? err.message : "Failed to clear analytics"
-      );
+      announceBrandPortalStatus({
+        tone: "error",
+        label: "Action Failed",
+        detail:
+          err instanceof Error ? err.message : "Failed to clear analytics",
+      });
     },
     onSuccess: (json) => {
-      setMutationError(null);
       if (json?.data && portfolioQuery.data) {
         const updated: AdminPortfolioPayload = {
           ...portfolioQuery.data,
@@ -560,12 +615,16 @@ export function AdminDashboardClient({
       return json;
     },
     onError: (err) => {
-      setMutationError(
-        err instanceof Error ? err.message : "Failed to reset seed defaults"
-      );
+      announceBrandPortalStatus({
+        tone: "error",
+        label: "Reset Failed",
+        detail:
+          err instanceof Error
+            ? err.message
+            : "Failed to reset seed defaults",
+      });
     },
     onSuccess: async (json) => {
-      setMutationError(null);
       if (json?.data) {
         const nextDb = json.data as PortfolioDatabase;
         const updated: AdminPortfolioPayload = {
@@ -577,17 +636,7 @@ export function AdminDashboardClient({
         };
         queryClient.setQueryData(queryKeys.adminPortfolio, updated);
         writePersistedAdminCache(updated);
-        const publicFresh: PublicPortfolioData = {
-          profile: nextDb.profile,
-          sectionHeaders: nextDb.sectionHeaders,
-          marqueePrinciples: nextDb.marqueePrinciples,
-          pillars: nextDb.pillars,
-          skills: nextDb.skills,
-          projects: nextDb.projects,
-          impactMetrics: nextDb.impactMetrics,
-          appearance: nextDb.appearance,
-          updatedAt: nextDb.updatedAt,
-        };
+        const publicFresh = toPublicPortfolioPayload(nextDb);
         queryClient.setQueryData(queryKeys.publicPortfolio, publicFresh);
         writePersistedPublicCache(publicFresh);
         if (nextDb.appearance) {
@@ -632,7 +681,6 @@ export function AdminDashboardClient({
       return nextState;
     },
     onMutate: async (nextState) => {
-      setMutationError(null);
       const previous = queryClient.getQueryData<AdminAuthStatus>(
         queryKeys.adminAuth
       );
@@ -664,11 +712,14 @@ export function AdminDashboardClient({
           localStorage.removeItem(DEVICE_STORAGE_KEY);
         }
       }
-      setMutationError(
-        err instanceof Error
-          ? err.message
-          : "Failed to toggle device registration"
-      );
+      announceBrandPortalStatus({
+        tone: "error",
+        label: "Device Sync Failed",
+        detail:
+          err instanceof Error
+            ? err.message
+            : "Failed to toggle device registration",
+      });
     },
     onSuccess: (nextState) => {
       void queryClient.invalidateQueries({
@@ -686,7 +737,11 @@ export function AdminDashboardClient({
 
   const requireOnlineOrThrow = () => {
     if (isNetworkOffline(isOnline)) {
-      setMutationError(OFFLINE_GUARD_MESSAGE);
+      announceBrandPortalStatus({
+        tone: "offline",
+        label: "Offline Mode",
+        detail: "Reconnect to save changes",
+      });
       throw new Error(OFFLINE_GUARD_MESSAGE);
     }
   };
@@ -708,17 +763,7 @@ export function AdminDashboardClient({
     queryClient.setQueryData(queryKeys.adminPortfolio, updatedPayload);
     writePersistedAdminCache(updatedPayload);
 
-    const publicFresh: PublicPortfolioData = {
-      profile: nextDb.profile,
-      sectionHeaders: nextDb.sectionHeaders,
-      marqueePrinciples: nextDb.marqueePrinciples,
-      pillars: nextDb.pillars,
-      skills: nextDb.skills,
-      projects: nextDb.projects,
-      impactMetrics: nextDb.impactMetrics,
-      appearance: nextDb.appearance,
-      updatedAt: nextDb.updatedAt,
-    };
+    const publicFresh = toPublicPortfolioPayload(nextDb);
     queryClient.setQueryData(queryKeys.publicPortfolio, publicFresh);
     writePersistedPublicCache(publicFresh);
     if (nextDb.appearance) {
@@ -735,7 +780,11 @@ export function AdminDashboardClient({
 
   const handleResetToSeed = async () => {
     if (isNetworkOffline(isOnline)) {
-      setMutationError(OFFLINE_GUARD_MESSAGE);
+      announceBrandPortalStatus({
+        tone: "offline",
+        label: "Offline Mode",
+        detail: "Reconnect to save changes",
+      });
       return;
     }
     setConfirmResetOpen(true);
@@ -743,7 +792,11 @@ export function AdminDashboardClient({
 
   const confirmResetToSeed = async () => {
     if (isNetworkOffline(isOnline)) {
-      setMutationError(OFFLINE_GUARD_MESSAGE);
+      announceBrandPortalStatus({
+        tone: "offline",
+        label: "Offline Mode",
+        detail: "Reconnect to save changes",
+      });
       setConfirmResetOpen(false);
       return;
     }
@@ -754,7 +807,7 @@ export function AdminDashboardClient({
     }
   };
 
-  const handleLogout = async (unregisterDevice = false) => {
+  const executeLogout = async (unregisterDevice = false) => {
     if (unregisterDevice) {
       await clearStoredClientDeviceKey();
       localStorage.removeItem(DEVICE_STORAGE_KEY);
@@ -780,6 +833,18 @@ export function AdminDashboardClient({
     router.refresh();
   };
 
+  const handleLogout = async (unregisterDevice = false) => {
+    const draftState = getActiveBrandPortalDraft();
+    if (draftState.hasUnsavedChanges) {
+      setPendingNavigation({
+        moduleLabel: draftState.moduleLabel || "current section",
+        proceed: () => void executeLogout(unregisterDevice),
+      });
+      return;
+    }
+    await executeLogout(unregisterDevice);
+  };
+
   const handlePasswordMetaChange = (meta: {
     passwordSource: AdminPasswordSource;
     envConfigured: boolean;
@@ -800,13 +865,17 @@ export function AdminDashboardClient({
   const db = portfolioQuery.data?.data;
   const projectsCount = db?.projects.length ?? 0;
   const unreadMessages = db?.messages.filter((m) => !m.isRead).length ?? 0;
+  const certificatesCount = db?.certificates?.length ?? 0;
+  const vaultFilesCount = vaultQuery.data?.stats?.totalDocuments ?? 0;
   const navItems = useMemo(
     () =>
       getAdminNavItems({
         projectsCount,
         unreadMessagesCount: unreadMessages,
+        certificatesCount,
+        vaultFilesCount,
       }),
-    [projectsCount, unreadMessages]
+    [projectsCount, unreadMessages, certificatesCount, vaultFilesCount]
   );
 
   const storageMode =
@@ -879,23 +948,6 @@ export function AdminDashboardClient({
             : "md:pl-22 lg:pl-24"
         )}
       >
-        {/* Online-Only Offline Safety Guard & Server Write-Error Alert */}
-        {!isOnline && (
-          <AdminAlertBanner
-            variant="offline"
-            message={`${OFFLINE_GUARD_MESSAGE}.`}
-            detail="Read-only preview remains available, while database mutations stay paused until you reconnect."
-          />
-        )}
-
-        {isOnline && mutationError && (
-          <AdminAlertBanner
-            variant="error"
-            message={mutationError}
-            onDismiss={() => setMutationError(null)}
-          />
-        )}
-
         {/* Active Module Header + Partial with Reusable Smooth Directional Slide Transition */}
         <div className="overflow-x-clip">
           <AdminSlideView
@@ -955,6 +1007,16 @@ export function AdminDashboardClient({
             />
           )}
 
+          {activeTab === "certificates" && (
+            <CertificatesManager
+              certificates={db.certificates || []}
+              sectionHeaders={db.sectionHeaders}
+              onSave={async (payload) => {
+                await handleSavePartial(payload);
+              }}
+            />
+          )}
+
           {activeTab === "projects" && (
             <ProjectsManager
               projects={db.projects}
@@ -967,6 +1029,8 @@ export function AdminDashboardClient({
           {activeTab === "inbox" && (
             <InboxManager messages={db.messages} onRefresh={reloadAdminData} />
           )}
+
+          {activeTab === "vault" && <VaultManager />}
 
           {activeTab === "settings" && (
             <SettingsManager
@@ -1009,6 +1073,21 @@ export function AdminDashboardClient({
             setConfirmResetOpen(false);
           }
         }}
+      />
+
+      <ConfirmModal
+        open={Boolean(pendingNavigation)}
+        title={`Leave ${pendingNavigation?.moduleLabel || "Module"} Without Saving?`}
+        description="You have unsaved draft changes in this section. Leaving now will discard your unsubmitted edits."
+        confirmLabel="Discard & Switch"
+        cancelLabel="Stay & Keep Editing"
+        variant="danger"
+        onConfirm={() => {
+          const next = pendingNavigation;
+          setPendingNavigation(null);
+          next?.proceed();
+        }}
+        onCancel={() => setPendingNavigation(null)}
       />
 
       {/* Reusable Scroll-To-Top Floating Button with Live Progress Ring */}

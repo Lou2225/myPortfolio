@@ -10,9 +10,7 @@ import {
   Monitor,
   Type,
   LayoutGrid,
-  Save,
   RotateCcw,
-  Loader2,
   SlidersHorizontal,
   Gauge,
   RefreshCw,
@@ -63,7 +61,6 @@ import {
   useStepNavigation,
 } from "@/components/admin/AdminMobileStepView";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { InfoTooltip } from "@/components/ui/Tooltip";
@@ -283,6 +280,11 @@ export function AppearanceSettings({
     string | null
   >(null);
 
+  const isDirty = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(savedSnapshot),
+    [draft, savedSnapshot]
+  );
+
   const lastSavedKeyRef = useRef<string>(JSON.stringify(savedSnapshot));
 
   // Sync draft when server snapshot updates externally (e.g. backup restore)
@@ -291,12 +293,15 @@ export function AppearanceSettings({
     if (incomingKey === lastSavedKeyRef.current) return;
     lastSavedKeyRef.current = incomingKey;
 
+    // Do NOT overwrite user's in-progress unsaved draft on background refetches
+    if (isDirty) return;
+
     const rafId = window.requestAnimationFrame(() => {
       setDraft(savedSnapshot);
       setPreviewAppearance(null);
     });
     return () => window.cancelAnimationFrame(rafId);
-  }, [savedSnapshot, setPreviewAppearance]);
+  }, [savedSnapshot, isDirty, setPreviewAppearance]);
 
   // Clear live WYSIWYG preview cleanly when leaving Appearance Studio
   useEffect(() => {
@@ -332,11 +337,6 @@ export function AppearanceSettings({
     };
   }, []);
 
-  const isDirty = useMemo(
-    () => JSON.stringify(draft) !== JSON.stringify(savedSnapshot),
-    [draft, savedSnapshot]
-  );
-
   const hasLivePreviewRef = useRef(false);
 
   // Sync live WYSIWYG preview cleanly post-commit (never inside a state updater)
@@ -345,13 +345,6 @@ export function AppearanceSettings({
     hasLivePreviewRef.current = isDirty;
     setPreviewAppearance(isDirty ? draft : null);
   }, [draft, isDirty, setPreviewAppearance]);
-
-  useBrandPortalWorkspaceSync({
-    moduleId: "settings-appearance",
-    moduleLabel: "Appearance & Theme",
-    hasUnsavedChanges: isDirty,
-    saving,
-  });
 
   const updateDraft = useCallback(
     (updater: (prev: AppearanceConfig) => AppearanceConfig) => {
@@ -415,8 +408,25 @@ export function AppearanceSettings({
   const handleDiscard = () => {
     setDraft(savedSnapshot);
     setPreviewAppearance(null);
+    applyAppearanceToDocument(savedSnapshot);
+    window.dispatchEvent(new CustomEvent(APPEARANCE_SYNC_EVENT));
     onFeedback(null);
+    announceBrandPortalStatus({
+      tone: "synced",
+      label: "Draft Discarded",
+      detail: "Appearance reverted to published defaults",
+      durationMs: 2600,
+    });
   };
+
+  useBrandPortalWorkspaceSync({
+    moduleId: "settings-appearance",
+    moduleLabel: "Appearance & Theme",
+    hasUnsavedChanges: isDirty,
+    saving,
+    onSave: () => setConfirmSaveOpen(true),
+    onDiscard: handleDiscard,
+  });
 
   const handleSavePublish = async () => {
     onFeedback(null);
@@ -480,7 +490,6 @@ export function AppearanceSettings({
         detail: msg,
         durationMs: 4200,
       });
-      onFeedback({ type: "error", message: msg });
     } finally {
       setSaving(false);
     }
@@ -1066,7 +1075,7 @@ export function AppearanceSettings({
     >
       <SectionHeader
         eyebrow="Choreography & Media"
-        title="Motion, Scroll, Preloader & Portrait FX"
+        title="Motion, Scroll, Preloader & Media FX"
         size="sm"
         tooltip={
           <InfoTooltip
@@ -1177,8 +1186,8 @@ export function AppearanceSettings({
           }
         />
         <ToggleRow
-          label="Avatar Particle-Smoke Slice & Hover FX"
-          description="Shatters and vaporizes your hero portrait into impact-driven avatar particles on cursor pass, plus GPU hover sheen on showcase images."
+          label="Showcase Image Hover FX"
+          description="Smooth GPU hover zoom and specular sheen sweep on project showcase images (desktop fine pointer)."
           checked={draft.liquidDistortion}
           onToggle={(liquidDistortion) =>
             updateDraft((prev) => ({ ...prev, liquidDistortion }))
@@ -1416,11 +1425,10 @@ export function AppearanceSettings({
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Top Studio Control Bar (Sticky on Desktop `lg+`) */}
+      {/* Top Studio Header Card */}
       <div
         data-cascade
-        data-sticky-ceiling="true"
-        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 lg:p-6 space-y-3 sm:space-y-4 lg:sticky lg:top-16 [@media(max-height:680px)]:static z-20 shadow-xl"
+        className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-5 lg:p-6 space-y-3 sm:space-y-4"
       >
         <div className="flex flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1 space-y-1">
@@ -1429,13 +1437,6 @@ export function AppearanceSettings({
                 <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" />
                 <span>Theme &amp; Token Studio</span>
               </span>
-              {isDirty && (
-                <StatusPill
-                  label="Unsaved Draft"
-                  variant="warning"
-                  size="xs"
-                />
-              )}
             </div>
 
             <h2 className="font-display text-lg sm:text-2xl uppercase tracking-tight leading-tight text-(--text-primary)">
@@ -1445,7 +1446,7 @@ export function AppearanceSettings({
                 <span className="inline-flex align-middle ml-1.5">
                   <InfoTooltip
                     label="Live preview vs published defaults"
-                    content="Every tweak previews instantaneously across Admin & the Stage Preview without modifying the database until you confirm Save & Publish."
+                    content="Every tweak previews instantaneously across Admin & the Stage Preview without modifying the database until you save from the Brand Portal."
                   />
                 </span>
               </span>
@@ -1458,15 +1459,12 @@ export function AppearanceSettings({
           />
         </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2.5 sm:pt-3 border-t border-(--border-subtle)/70">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 sm:pt-3 border-t border-(--border-subtle)/70">
           <p className="text-[11px] sm:text-xs text-(--text-muted) leading-snug">
-            <span className="sm:hidden">Previews live across components · Publish to save</span>
-            <span className="hidden sm:inline">
-              Changes preview live across every component. Publish to persist site-wide defaults.
-            </span>
+            Changes preview live across every component. Save &amp; publish from the Brand Portal to persist site-wide defaults.
           </p>
 
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto shrink-0">
+          <div className="w-full sm:w-auto shrink-0">
             <Button
               type="button"
               variant="ghost"
@@ -1478,37 +1476,6 @@ export function AppearanceSettings({
               <RotateCcw className="w-3.5 h-3.5 shrink-0" />
               <span>Reset Defaults</span>
             </Button>
-
-            {isDirty && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={saving}
-                onClick={handleDiscard}
-                className="w-full sm:w-auto"
-              >
-                <span>Discard Draft</span>
-              </Button>
-            )}
-
-            <div className={cn(isDirty && "col-span-2 sm:col-span-1")}>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                disabled={!isDirty || saving}
-                onClick={() => setConfirmSaveOpen(true)}
-                className="w-full sm:w-auto"
-              >
-                {saving ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                ) : (
-                  <Save className="w-3.5 h-3.5 shrink-0" />
-                )}
-                <span>{saving ? "Publishing..." : "Save & Publish"}</span>
-              </Button>
-            </div>
           </div>
         </div>
       </div>
@@ -1561,7 +1528,6 @@ export function AppearanceSettings({
                 <AppearancePreviewCard
                   draft={draft}
                   effectiveTheme={theme}
-                  isDirty={isDirty}
                   embedded
                 />
               </div>
@@ -1574,21 +1540,6 @@ export function AppearanceSettings({
             activeStep={activeStep}
             direction={stepDirection}
             onChangeStep={(next) => switchStep(next as AppearanceStep)}
-            finalAction={
-              isDirty
-                ? {
-                    label: saving ? "Publishing..." : "Publish Tokens",
-                    variant: "primary",
-                    icon: saving ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                    ) : (
-                      <Save className="w-3.5 h-3.5 shrink-0" />
-                    ),
-                    disabled: saving,
-                    onClick: () => setConfirmSaveOpen(true),
-                  }
-                : undefined
-            }
           >
             {appearancePanels[activeStep] ?? appearancePanels[0]}
           </AdminMobileStepView>
@@ -1598,7 +1549,6 @@ export function AppearanceSettings({
           <AppearancePreviewCard
             draft={draft}
             effectiveTheme={theme}
-            isDirty={isDirty}
           />
           {themeSectionNode}
           {typographySectionNode}
@@ -1625,7 +1575,7 @@ export function AppearanceSettings({
       <ConfirmModal
         open={confirmResetOpen}
         title="Reset Appearance Tokens to Default?"
-        description="This reverts your unsaved design token draft back to Obsidian Dark, Vermilion Signature (#ff3b1d), Editorial fonts, sharp 2px corners, and full motion. You can still inspect the preview before clicking Save & Publish."
+        description="This reverts your unsaved design token draft back to Obsidian Dark, Vermilion Signature (#ff3b1d), Editorial fonts, sharp 2px corners, and full motion. You can still inspect the preview before saving via the Brand Portal."
         confirmLabel="Load Defaults Into Draft"
         variant="warning"
         onConfirm={handleResetDefaults}

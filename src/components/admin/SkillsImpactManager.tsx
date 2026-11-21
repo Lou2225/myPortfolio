@@ -3,7 +3,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Metric, SectionHeaders, SkillCategory } from "@/types/portfolio";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import {
   FieldSlotButton,
   IconActionButton,
@@ -25,7 +24,6 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import { AnimatedCounter } from "@/components/motion/AdminMotion";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import {
   isNetworkOffline,
   useOfflineStatus,
@@ -44,7 +42,7 @@ import {
   validateSkillsImpactDraft,
 } from "@/lib/validation";
 import { useValidationFollower } from "@/lib/validationFollow";
-import { Cpu, Plus, Save, Star } from "lucide-react";
+import { Cpu, Plus, Star } from "lucide-react";
 
 type SkillsStep = 0 | 1 | 2;
 
@@ -136,7 +134,6 @@ export function SkillsImpactManager({
 }: SkillsImpactManagerProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const { isOnline } = useOfflineStatus();
-  const offline = !isOnline;
   const isMobileOrTablet = useMediaQuery("(max-width: 1023px)");
   const { activeStep, stepDirection, switchStep } =
     useStepNavigation<SkillsStep>(0);
@@ -170,8 +167,6 @@ export function SkillsImpactManager({
   >({});
 
   const [forceTouched, setForceTouched] = useState(false);
-  const [validationBannerActive, setValidationBannerActive] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     title: string;
@@ -196,13 +191,6 @@ export function SkillsImpactManager({
   );
 
   const hasUnsavedChanges = currentSignature !== savedSignature;
-
-  useBrandPortalWorkspaceSync({
-    moduleId: "skills",
-    moduleLabel: "Skills & Metrics",
-    hasUnsavedChanges,
-    saving,
-  });
 
   const liveValidation = useMemo(
     () =>
@@ -248,12 +236,6 @@ export function SkillsImpactManager({
         : followNextInvalid(formRef.current)
     );
   };
-
-  const activeErrorBanner =
-    apiError ??
-    (validationBannerActive && liveErrorsCount > 0
-      ? liveValidation.errors[0]
-      : null);
 
   const duplicateCategoryTitles = useMemo(
     () => findDuplicateValues(draftSkills.map((category) => category.title)),
@@ -441,8 +423,6 @@ export function SkillsImpactManager({
         setNewSkillNames({});
         setSkillFeedbacks({});
         setForceTouched(false);
-        setValidationBannerActive(false);
-        setApiError(null);
         announceBrandPortalStatus({
           tone: "synced",
           label: "Draft Discarded",
@@ -455,9 +435,6 @@ export function SkillsImpactManager({
 
   const executeSave = async () => {
     if (isNetworkOffline(isOnline)) {
-      setApiError(
-        "You are offline. Reconnect to publish Skills, Metrics & Headers."
-      );
       setConfirmState(null);
       announceBrandPortalStatus({
         tone: "offline",
@@ -496,7 +473,6 @@ export function SkillsImpactManager({
     };
 
     setSaving(true);
-    setApiError(null);
     announceBrandPortalStatus({
       tone: "saving",
       label: "Publishing...",
@@ -514,8 +490,6 @@ export function SkillsImpactManager({
       setSavedBaseline(cloned);
       setSavedSignature(JSON.stringify(cloned));
       setForceTouched(false);
-      setValidationBannerActive(false);
-      setApiError(null);
       setConfirmState(null);
 
       announceBrandPortalStatus({
@@ -527,7 +501,6 @@ export function SkillsImpactManager({
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to save skills & KPIs.";
-      setApiError(msg);
       announceBrandPortalStatus({
         tone: "error",
         label: "Publish Failed",
@@ -543,8 +516,6 @@ export function SkillsImpactManager({
     e.preventDefault();
     if (!liveValidation.valid) {
       setForceTouched(true);
-      setValidationBannerActive(true);
-      setApiError(null);
       announceBrandPortalStatus({
         tone: "error",
         label: "Check Fields",
@@ -556,8 +527,6 @@ export function SkillsImpactManager({
       return;
     }
 
-    setValidationBannerActive(false);
-    setApiError(null);
     setConfirmState({
       title: "Save & Publish Skills, Metrics & Headers?",
       description:
@@ -567,6 +536,20 @@ export function SkillsImpactManager({
       action: executeSave,
     });
   };
+
+  useBrandPortalWorkspaceSync({
+    moduleId: "skills",
+    moduleLabel: "Skills & Metrics",
+    hasUnsavedChanges,
+    saving,
+    validationErrorCount: hasUnsavedChanges ? liveErrorsCount : 0,
+    onSave: () => formRef.current?.requestSubmit(),
+    onDiscard: handleDiscardDraft,
+    onFollowIssue: () => {
+      setForceTouched(true);
+      jumpToValidationIssue("next");
+    },
+  });
 
   const skillsSectionNode = (
     <div className="space-y-6">
@@ -604,11 +587,9 @@ export function SkillsImpactManager({
                     <span className="text-[11px] font-mono uppercase tracking-widest text-(--text-accent)">
                       Bento Layer #{catIdx + 1}
                     </span>
-                    <StatusPill
-                      label={`${category.skills.length} skills`}
-                      variant="neutral"
-                      size="xs"
-                    />
+                    <span className="text-[11px] font-mono text-(--text-muted) tabular-nums">
+                      · {category.skills.length} skills
+                    </span>
                   </div>
 
                   <ActionMenuButton
@@ -1119,52 +1100,14 @@ export function SkillsImpactManager({
       noValidate
       className="space-y-4 sm:space-y-8"
     >
-      {/* Header & Sticky Save Bar */}
+      {/* Clean Module Header */}
       <AdminModuleHeaderBar
         icon={<Cpu className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
         title="Skills Bento, Impact Metrics & Section Headers"
         tooltipLabel="Skills, metrics & copy editor guide"
         tooltipContent="Curate core/secondary skills across all 4 system layers, reorder animated KPI counters, and customize section eyebrows, headings, and footer copy globally."
         subtitle="Manage your 4-layer technical arsenal, animated KPI counters, and section titles across the site."
-        liveErrorsCount={liveErrorsCount}
-        onFollowIssue={() => {
-          setForceTouched(true);
-          setValidationBannerActive(true);
-          jumpToValidationIssue("next");
-        }}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onDiscard={handleDiscardDraft}
-        saving={saving}
       />
-
-      {offline && (
-        <AdminAlertBanner
-          variant="offline"
-          message="You are offline."
-          detail="Draft edits stay safe locally, but publishing Skills & Metrics requires an active connection."
-        />
-      )}
-
-      {activeErrorBanner && (
-        <AdminAlertBanner
-          variant="error"
-          message={apiError ? "Save Blocked:" : "Check Required Fields:"}
-          detail={activeErrorBanner}
-          actionLabel={liveErrorsCount > 0 ? "Follow Issue" : undefined}
-          onAction={
-            liveErrorsCount > 0
-              ? () => {
-                  setForceTouched(true);
-                  jumpToValidationIssue("first");
-                }
-              : undefined
-          }
-          onDismiss={() => {
-            setValidationBannerActive(false);
-            setApiError(null);
-          }}
-        />
-      )}
 
       {isMobileOrTablet ? (
         <AdminMobileStepView
@@ -1173,13 +1116,6 @@ export function SkillsImpactManager({
           activeStep={activeStep}
           direction={stepDirection}
           onChangeStep={(next) => switchStep(next as SkillsStep)}
-          finalAction={{
-            label: saving ? "Saving..." : "Save & Publish",
-            type: "submit",
-            variant: "primary",
-            disabled: saving,
-            icon: <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
-          }}
         >
           {skillsPanels[activeStep] ?? skillsPanels[0]}
         </AdminMobileStepView>

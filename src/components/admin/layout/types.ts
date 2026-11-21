@@ -1,10 +1,12 @@
 import React from "react";
 import {
+  Award,
   BarChart3,
   User,
   BookOpen,
   Cpu,
   FolderKanban,
+  HardDrive,
   Inbox,
   Settings,
 } from "lucide-react";
@@ -14,8 +16,10 @@ export type AdminTab =
   | "profile"
   | "story"
   | "skills"
+  | "certificates"
   | "projects"
   | "inbox"
+  | "vault"
   | "settings";
 
 export const ADMIN_TABS: readonly AdminTab[] = [
@@ -23,8 +27,10 @@ export const ADMIN_TABS: readonly AdminTab[] = [
   "profile",
   "story",
   "skills",
+  "certificates",
   "projects",
   "inbox",
+  "vault",
   "settings",
 ];
 
@@ -96,6 +102,8 @@ export interface AdminNavItem {
 export function getAdminNavItems(counts: {
   projectsCount: number;
   unreadMessagesCount: number;
+  certificatesCount?: number;
+  vaultFilesCount?: number;
 }): AdminNavItem[] {
   return [
     {
@@ -127,6 +135,14 @@ export function getAdminNavItems(counts: {
       icon: Cpu,
     },
     {
+      id: "certificates",
+      label: "Certificates & Honors",
+      shortLabel: "Certificates",
+      description: "Academic honors, degrees, cloud & analytics credentials",
+      icon: Award,
+      badge: counts.certificatesCount,
+    },
+    {
       id: "projects",
       label: "Projects CRUD",
       shortLabel: "Projects",
@@ -143,6 +159,14 @@ export function getAdminNavItems(counts: {
       badge:
         counts.unreadMessagesCount > 0 ? counts.unreadMessagesCount : undefined,
       isAlertBadge: counts.unreadMessagesCount > 0,
+    },
+    {
+      id: "vault",
+      label: "Personal Drive (Vault)",
+      shortLabel: "My Drive",
+      description: "Secure private cloud vault for soft-copy documents & records",
+      icon: HardDrive,
+      badge: counts.vaultFilesCount,
     },
     {
       id: "settings",

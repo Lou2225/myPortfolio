@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ScrollArea } from "@/components/ui/ScrollArea";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { InfoTooltip } from "@/components/ui/Tooltip";
@@ -589,11 +588,13 @@ export function SecurityAccessSettings({
                       telemetry?.suggestedName ||
                       "Current Browser Session"}
                   </p>
-                  <StatusPill
-                    label={deviceRegistered ? "Trusted Device" : "Unregistered"}
-                    variant={deviceRegistered ? "success" : "neutral"}
-                    size="xs"
-                  />
+                  <span
+                    className={`text-[10px] font-mono uppercase tracking-[0.14em] ${
+                      deviceRegistered ? "text-emerald-400" : "text-(--text-muted)"
+                    }`}
+                  >
+                    {deviceRegistered ? "Trusted Device" : "Unregistered"}
+                  </span>
                 </div>
                 <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
                   {currentDeviceRecord
@@ -806,11 +807,9 @@ export function SecurityAccessSettings({
                               {device.name}
                             </p>
                             {isCurrent && (
-                              <StatusPill
-                                label="This Browser"
-                                variant="accent"
-                                size="xs"
-                              />
+                              <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-(--text-accent)">
+                                This Browser
+                              </span>
                             )}
                           </div>
                           <p className="text-[11px] font-mono text-(--text-muted) truncate mt-0.5">
@@ -933,11 +932,9 @@ export function SecurityAccessSettings({
                         <span className="font-semibold text-(--text-primary) truncate">
                           {device.name}
                         </span>
-                        <StatusPill
-                          label="Revoked"
-                          variant="danger"
-                          size="xs"
-                        />
+                        <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-rose-400">
+                          Revoked
+                        </span>
                       </div>
                       <p className="text-[11px] font-mono text-(--text-muted) mt-0.5 truncate">
                         {device.model} · Revoked{" "}
@@ -1001,15 +998,17 @@ export function SecurityAccessSettings({
               <span className="text-xs font-semibold text-(--text-primary)">
                 Block Unregistered Browsers on /admin URL
               </span>
-              <StatusPill
-                label={
+              <span
+                className={`text-[10px] font-mono uppercase tracking-[0.14em] ${
                   summary?.stealthGateEnabled
-                    ? "Stealth Active (404)"
-                    : "Direct Login Open"
-                }
-                variant={summary?.stealthGateEnabled ? "success" : "neutral"}
-                size="xs"
-              />
+                    ? "text-emerald-400"
+                    : "text-(--text-muted)"
+                }`}
+              >
+                {summary?.stealthGateEnabled
+                  ? "Stealth Active (404)"
+                  : "Direct Login Open"}
+              </span>
             </div>
             <p className="text-[11px] text-(--text-muted) leading-relaxed">
               When enabled and at least 1 device is registered, unknown visitors opening <code className="font-mono">/admin</code> get HTTP 404. Use your Brand Portal, QR pairing, or secret <code className="font-mono">?portal=</code> link to access.
@@ -1111,15 +1110,15 @@ export function SecurityAccessSettings({
             <h3 className="text-sm font-semibold text-(--text-primary)">
               Authenticator App 2FA (Offline TOTP)
             </h3>
-            <StatusPill
-              label={
-                summary?.totpEnabled
-                  ? "2FA Active (Offline TOTP)"
-                  : "Not Configured"
-              }
-              variant={summary?.totpEnabled ? "success" : "neutral"}
-              size="xs"
-            />
+            <span
+              className={`text-[10px] font-mono uppercase tracking-[0.14em] ${
+                summary?.totpEnabled ? "text-emerald-400" : "text-(--text-muted)"
+              }`}
+            >
+              {summary?.totpEnabled
+                ? "2FA Active (Offline TOTP)"
+                : "Not Configured"}
+            </span>
           </div>
           <p className="text-xs text-(--text-secondary) leading-relaxed max-w-2xl">
             Require a rotating 6-digit RFC 6238 verification code from Google Authenticator, 1Password, or Bitwarden whenever signing into this CMS with your master password. Works offline with AES-256-GCM encryption at rest.

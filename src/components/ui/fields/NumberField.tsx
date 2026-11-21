@@ -42,6 +42,10 @@ export function NumberField({
   const fieldId = id || `number-field-${autoId}`;
   const [blurred, setBlurred] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [localRaw, setLocalRaw] = useState<string | null>(null);
+
+  const displayString =
+    focused && localRaw !== null ? localRaw : String(value ?? "");
 
   const validation = validateNumber(value, {
     label,
@@ -55,25 +59,35 @@ export function NumberField({
       allowDecimals,
       allowNegative: (min ?? 0) < 0,
     });
+    setLocalRaw(clean);
+
+    if (clean === "" || clean === "-" || clean === "." || clean === "-.") {
+      onValidChange?.(!required);
+      return;
+    }
+
     const parsed = Number(clean);
     if (!Number.isNaN(parsed)) {
       onChange(parsed);
+      const nextCheck = validateNumber(parsed, { label, min, max, required });
+      onValidChange?.(nextCheck.valid);
     }
     if (blurred) {
       setBlurred(false);
     }
-    const nextCheck = validateNumber(clean, { label, min, max, required });
-    onValidChange?.(nextCheck.valid);
   };
 
   const handleFocus = () => {
     setFocused(true);
+    setLocalRaw(String(value ?? ""));
   };
 
   const handleBlur = () => {
     setFocused(false);
     setBlurred(true);
-    let num = Number(value);
+    let num = localRaw !== null ? Number(localRaw) : Number(value);
+    setLocalRaw(null);
+
     if (Number.isNaN(num)) {
       num = min ?? 0;
     }
@@ -111,7 +125,7 @@ export function NumberField({
         data-lpignore="true"
         data-1p-ignore="true"
         data-form-type="other"
-        value={String(value)}
+        value={displayString}
         onChange={handleChange}
         onFocus={handleFocus}
         onBlur={handleBlur}

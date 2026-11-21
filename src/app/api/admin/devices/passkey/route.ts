@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as {
+    let body: {
       action?:
         | "register-options"
         | "register-verify"
@@ -75,18 +75,36 @@ export async function POST(request: Request) {
       transports?: string[];
       telemetry?: unknown;
     };
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { success: false, error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as typeof body;
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
     // -------------------------------------------------------------------------
     // 1. Passkey Registration Options (Requires Authenticated Admin Session)
     // -------------------------------------------------------------------------
     if (body.action === "register-options") {
       const ctx = await getSessionAndDeviceContext();
-      if (!ctx.authenticated) {
+      if (!ctx.authenticated || !ctx.securityStore) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      const store = await readAdminSecurityStore();
-      const targetDeviceId = body.deviceId?.trim() || ctx.currentDeviceId;
+      const store = ctx.securityStore;
+      const targetDeviceId =
+        typeof body.deviceId === "string" && body.deviceId.trim()
+          ? body.deviceId.trim()
+          : ctx.currentDeviceId;
       const challenge = createPasskeyChallengeToken({
         purpose: "register",
         rpId: rp.rpId,
@@ -98,18 +116,21 @@ export async function POST(request: Request) {
         .filter((pk) => pk.rpId === rp.rpId)
         .map((pk) => pk.credentialId);
 
-      return NextResponse.json({
-        success: true,
-        challenge,
-        rpId: rp.rpId,
-        rpName: "Lou Diamond Valdellon — Portfolio CMS",
-        user: {
-          id: "lou-portfolio-admin-owner",
-          name: "lou-admin",
-          displayName: "Lou Diamond Valdellon (Admin)",
+      return NextResponse.json(
+        {
+          success: true,
+          challenge,
+          rpId: rp.rpId,
+          rpName: "Lou Diamond Valdellon — Portfolio CMS",
+          user: {
+            id: "lou-portfolio-admin-owner",
+            name: "lou-admin",
+            displayName: "Lou Diamond Valdellon (Admin)",
+          },
+          excludeCredentialIds,
         },
-        excludeCredentialIds,
-      });
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     // -------------------------------------------------------------------------
@@ -151,16 +172,29 @@ export async function POST(request: Request) {
         );
       }
 
-      const customName = body.deviceName
-        ? sanitizeDeviceLabel(body.deviceName, 60)
-        : undefined;
+      const customName =
+        typeof body.deviceName === "string" && body.deviceName.trim()
+          ? sanitizeDeviceLabel(body.deviceName, 60)
+          : undefined;
 
-      let boundDeviceId =
+      const initialDeviceId =
         verified.challengePayload.deviceId || ctx.currentDeviceId || "";
+      let boundDeviceId = initialDeviceId;
       let boundThumbprint: string | null = telemetry?.keyThumbprint ?? null;
       let savedPasskey: DevicePasskey | null = null;
+      let nonceReplayed = false;
 
       const updatedStore = await mutateAdminSecurityStore((store) => {
+        nonceReplayed = false;
+        boundDeviceId = initialDeviceId;
+        boundThumbprint = telemetry?.keyThumbprint ?? null;
+        savedPasskey = null;
+
+        if (store.usedPasskeyNonces[verified.challengePayload.nonce]) {
+          nonceReplayed = true;
+          return store;
+        }
+
         // Ensure a physical TrustedDevice record exists and is active for this passkey
         const builtDevice = buildDeviceFromTelemetry({
           telemetry,
@@ -207,6 +241,10 @@ export async function POST(request: Request) {
           {
             ...upserted.store,
             passkeys: [passkeyRecord, ...filteredPasskeys],
+            usedPasskeyNonces: {
+              ...upserted.store.usedPasskeyNonces,
+              [verified.challengePayload.nonce]: verified.challengePayload.exp,
+            },
           },
           {
             action: "passkey_registered",
@@ -219,6 +257,16 @@ export async function POST(request: Request) {
           }
         );
       });
+
+      if (nonceReplayed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Passkey registration challenge was already used. Please retry.",
+          },
+          { status: 409 }
+        );
+      }
 
       const cookieStore = await cookies();
       const secureCookie = isSecureRequest(request);
@@ -234,12 +282,15 @@ export async function POST(request: Request) {
         secure: secureCookie,
       });
 
-      return NextResponse.json({
-        success: true,
-        passkey: savedPasskey,
-        currentDeviceId: boundDeviceId,
-        summary: toSafeSecuritySummary(updatedStore, boundDeviceId),
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          passkey: savedPasskey,
+          currentDeviceId: boundDeviceId,
+          summary: toSafeSecuritySummary(updatedStore, boundDeviceId),
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     // -------------------------------------------------------------------------
@@ -247,7 +298,14 @@ export async function POST(request: Request) {
     // -------------------------------------------------------------------------
     if (body.action === "auth-options") {
       const rateKey = `passkey-auth:${reqInfo.ipRateKey}`;
-      const store = await readAdminSecurityStore();
+      const ctx = await getSessionAndDeviceContext();
+      if (ctx.storageUnavailable || !ctx.securityStore) {
+        return NextResponse.json(
+          { success: false, error: "Security registry is temporarily unavailable." },
+          { status: 503 }
+        );
+      }
+      const store = ctx.securityStore;
       const rate = checkSecurityRateLimit(store, rateKey);
       if (!rate.allowed) {
         return NextResponse.json(
@@ -257,7 +315,10 @@ export async function POST(request: Request) {
           },
           {
             status: 429,
-            headers: { "Retry-After": String(rate.retryAfterSec) },
+            headers: {
+              "Retry-After": String(rate.retryAfterSec),
+              "Cache-Control": "no-store",
+            },
           }
         );
       }
@@ -270,13 +331,22 @@ export async function POST(request: Request) {
       );
 
       if (matchingPasskeys.length === 0) {
-        return NextResponse.json({
-          success: true,
-          available: false,
-          rpId: rp.rpId,
-          allowCredentialIds: [],
-        });
+        return NextResponse.json(
+          {
+            success: true,
+            available: false,
+            rpId: rp.rpId,
+            allowCredentialIds: [],
+          },
+          { headers: { "Cache-Control": "no-store" } }
+        );
       }
+
+      const stealthRestricted =
+        store.stealthGateEnabled &&
+        activeDeviceIds.size > 0 &&
+        !ctx.authenticated &&
+        !ctx.deviceRegistered;
 
       const challenge = createPasskeyChallengeToken({
         purpose: "auth",
@@ -284,13 +354,20 @@ export async function POST(request: Request) {
         origin: rp.origin,
       });
 
-      return NextResponse.json({
-        success: true,
-        available: true,
-        challenge,
-        rpId: rp.rpId,
-        allowCredentialIds: matchingPasskeys.map((pk) => pk.credentialId),
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          available: true,
+          challenge,
+          rpId: rp.rpId,
+          // Under Stealth Gate for unregistered browsers, use discoverable credentials (empty allowList)
+          // so registered credential IDs are never enumerated by anonymous callers.
+          allowCredentialIds: stealthRestricted
+            ? []
+            : matchingPasskeys.map((pk) => pk.credentialId),
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     // -------------------------------------------------------------------------
@@ -308,52 +385,90 @@ export async function POST(request: Request) {
           },
           {
             status: 429,
-            headers: { "Retry-After": String(rate.retryAfterSec) },
+            headers: {
+              "Retry-After": String(rate.retryAfterSec),
+              "Cache-Control": "no-store",
+            },
           }
         );
       }
 
       const credentialId =
         typeof body.credentialId === "string" ? body.credentialId.trim() : "";
-      const matchedPasskey = preStore.passkeys.find(
-        (pk) => pk.credentialId === credentialId && pk.rpId === rp.rpId
+      const clientDataJSONBase64Url =
+        typeof body.clientDataJSON === "string" ? body.clientDataJSON : "";
+      const authenticatorDataBase64Url =
+        typeof body.authenticatorData === "string"
+          ? body.authenticatorData
+          : "";
+      const signatureBase64Url =
+        typeof body.signature === "string" ? body.signature : "";
+
+      const parsedTelemetry = clientTelemetrySchema.safeParse(
+        body.telemetry ?? {}
       );
-      const linkedDevice = matchedPasskey
-        ? preStore.devices.find(
-            (d) => d.id === matchedPasskey.deviceId && d.status === "active"
-          )
-        : null;
+      const telemetry = parsedTelemetry.success ? parsedTelemetry.data : null;
 
-      if (!matchedPasskey || !linkedDevice) {
-        await mutateAdminSecurityStore((store) =>
-          recordSecurityRateFailure(store, rateKey, { maxFailures: 6 })
+      type PasskeyVerifyOutcome =
+        | {
+            ok: true;
+            deviceId: string;
+            deviceName: string;
+            authenticatorLabel: string;
+            thumbprint: string | null;
+          }
+        | { ok: false; status: number; error: string };
+
+      let verifyOutcome: PasskeyVerifyOutcome = {
+        ok: false,
+        status: 401,
+        error: "Passkey is not recognized or its device was revoked.",
+      };
+
+      // Atomically validate passkey existence, active device, single-use nonce,
+      // cryptographic signature, and monotonic counter inside the CAS transaction.
+      const updatedStore = await mutateAdminSecurityStore((store) => {
+        verifyOutcome = {
+          ok: false,
+          status: 401,
+          error: "Passkey is not recognized or its device was revoked.",
+        };
+
+        const currentRate = checkSecurityRateLimit(store, rateKey);
+        if (!currentRate.allowed) {
+          verifyOutcome = {
+            ok: false,
+            status: 429,
+            error: `Too many failed passkey attempts. Retry in ${currentRate.retryAfterSec}s.`,
+          };
+          return store;
+        }
+
+        const matchedPasskey = store.passkeys.find(
+          (pk) => pk.credentialId === credentialId && pk.rpId === rp.rpId
         );
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Passkey is not recognized or its device was revoked.",
-          },
-          { status: 401 }
-        );
-      }
+        const linkedDevice = matchedPasskey
+          ? store.devices.find(
+              (d) => d.id === matchedPasskey.deviceId && d.status === "active"
+            )
+          : null;
 
-      const assertion = verifyPasskeyAssertion({
-        clientDataJSONBase64Url:
-          typeof body.clientDataJSON === "string" ? body.clientDataJSON : "",
-        authenticatorDataBase64Url:
-          typeof body.authenticatorData === "string"
-            ? body.authenticatorData
-            : "",
-        signatureBase64Url:
-          typeof body.signature === "string" ? body.signature : "",
-        storedPublicKeySpkiBase64: matchedPasskey.publicKeySpki,
-        storedCounter: matchedPasskey.counter,
-        expectedRpId: rp.rpId,
-        expectedOrigin: rp.origin,
-      });
+        if (!matchedPasskey || !linkedDevice) {
+          return recordSecurityRateFailure(store, rateKey, { maxFailures: 6 });
+        }
 
-      if (!assertion.ok) {
-        await mutateAdminSecurityStore((store) => {
+        const assertion = verifyPasskeyAssertion({
+          clientDataJSONBase64Url,
+          authenticatorDataBase64Url,
+          signatureBase64Url,
+          storedPublicKeySpkiBase64: matchedPasskey.publicKeySpki,
+          storedCounter: matchedPasskey.counter,
+          expectedRpId: rp.rpId,
+          expectedOrigin: rp.origin,
+        });
+
+        if (!assertion.ok) {
+          verifyOutcome = { ok: false, status: 401, error: assertion.error };
           const penalized = recordSecurityRateFailure(store, rateKey, {
             maxFailures: 6,
           });
@@ -366,22 +481,29 @@ export async function POST(request: Request) {
             outcome: "blocked",
             detail: `Passkey assertion rejected (${assertion.error})`,
           });
-        });
-        return NextResponse.json(
-          { success: false, error: assertion.error },
-          { status: 401 }
-        );
-      }
+        }
 
-      const parsedTelemetry = clientTelemetrySchema.safeParse(
-        body.telemetry ?? {}
-      );
-      const telemetry = parsedTelemetry.success ? parsedTelemetry.data : null;
+        // Single-use nonce enforcement defeats replay even when synced passkeys report signCount === 0
+        if (store.usedPasskeyNonces[assertion.challengePayload.nonce]) {
+          verifyOutcome = {
+            ok: false,
+            status: 401,
+            error: "Passkey challenge was already consumed. Please retry.",
+          };
+          const penalized = recordSecurityRateFailure(store, rateKey, {
+            maxFailures: 6,
+          });
+          return appendSecurityAudit(penalized, {
+            action: "login_blocked",
+            actorDeviceId: linkedDevice.id,
+            targetDeviceId: linkedDevice.id,
+            deviceLabel: linkedDevice.name,
+            ipMasked: reqInfo.ipMasked,
+            outcome: "blocked",
+            detail: "Blocked replayed WebAuthn passkey challenge nonce.",
+          });
+        }
 
-      let updatedThumbprint: string | null =
-        telemetry?.keyThumbprint || linkedDevice.keyThumbprint;
-
-      const updatedStore = await mutateAdminSecurityStore((store) => {
         let nextStore = clearSecurityRateBucket(store, rateKey);
         nextStore = clearSecurityRateBucket(nextStore, reqInfo.ipRateKey);
 
@@ -396,6 +518,9 @@ export async function POST(request: Request) {
               }
             : pk
         );
+
+        let updatedThumbprint: string | null =
+          telemetry?.keyThumbprint || linkedDevice.keyThumbprint;
 
         const nextDevices = nextStore.devices.map((d) => {
           if (d.id !== linkedDevice.id) return d;
@@ -434,11 +559,23 @@ export async function POST(request: Request) {
           };
         });
 
+        verifyOutcome = {
+          ok: true,
+          deviceId: linkedDevice.id,
+          deviceName: linkedDevice.name,
+          authenticatorLabel: matchedPasskey.authenticatorLabel,
+          thumbprint: updatedThumbprint,
+        };
+
         return appendSecurityAudit(
           {
             ...nextStore,
             devices: nextDevices,
             passkeys: nextPasskeys,
+            usedPasskeyNonces: {
+              ...nextStore.usedPasskeyNonces,
+              [assertion.challengePayload.nonce]: assertion.challengePayload.exp,
+            },
           },
           {
             action: "passkey_login",
@@ -452,37 +589,51 @@ export async function POST(request: Request) {
         );
       });
 
+      const outcome = verifyOutcome as unknown as PasskeyVerifyOutcome;
+      if (!outcome.ok) {
+        return NextResponse.json(
+          { success: false, error: outcome.error },
+          {
+            status: outcome.status,
+            headers: { "Cache-Control": "no-store" },
+          }
+        );
+      }
+
       const cookieStore = await cookies();
       const secureCookie = isSecureRequest(request);
       setSessionCookie(cookieStore, {
         epoch: updatedStore.sessionEpoch,
-        deviceId: linkedDevice.id,
+        deviceId: outcome.deviceId,
         secure: secureCookie,
       });
       setDeviceCookie(cookieStore, {
-        deviceId: linkedDevice.id,
-        keyThumbprint: updatedThumbprint,
+        deviceId: outcome.deviceId,
+        keyThumbprint: outcome.thumbprint,
         epoch: updatedStore.sessionEpoch,
         secure: secureCookie,
       });
 
       const authMeta = await getAdminAuthMeta();
-      return NextResponse.json({
-        success: true,
-        authenticated: true,
-        deviceRegistered: true,
-        currentDeviceId: linkedDevice.id,
-        deviceName: linkedDevice.name,
-        authenticatorLabel: matchedPasskey.authenticatorLabel,
-        sessionEpoch: updatedStore.sessionEpoch,
-        stealthGateEnabled: updatedStore.stealthGateEnabled,
-        totpEnabled: updatedStore.totpEnabled,
-        activeDeviceCount: updatedStore.devices.filter(
-          (d) => d.status === "active"
-        ).length,
-        storageMode: getStorageMode(),
-        ...authMeta,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          authenticated: true,
+          deviceRegistered: true,
+          currentDeviceId: outcome.deviceId,
+          deviceName: outcome.deviceName,
+          authenticatorLabel: outcome.authenticatorLabel,
+          sessionEpoch: updatedStore.sessionEpoch,
+          stealthGateEnabled: updatedStore.stealthGateEnabled,
+          totpEnabled: updatedStore.totpEnabled,
+          activeDeviceCount: updatedStore.devices.filter(
+            (d) => d.status === "active"
+          ).length,
+          storageMode: getStorageMode(),
+          ...authMeta,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     return NextResponse.json(

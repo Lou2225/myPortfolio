@@ -112,18 +112,41 @@ export function AppearanceRuntimeSync() {
       return;
     }
 
-    docEl.setAttribute("data-cursor-overlay", "ready");
+    let cancelled = false;
+
+    // Only set ready once the cursor image has actually loaded into browser memory
+    // so the native cursor is never hidden while an asset is still downloading.
+    if (defaultUrl) {
+      const img = new Image();
+      img.src = defaultUrl;
+      if (img.complete) {
+        docEl.setAttribute("data-cursor-overlay", "ready");
+      } else {
+        img.onload = () => {
+          if (!cancelled) docEl.setAttribute("data-cursor-overlay", "ready");
+        };
+      }
+    } else {
+      docEl.setAttribute("data-cursor-overlay", "ready");
+    }
+
     const rootEl = cursorRootRef.current;
     const defEl = defaultSlotRef.current;
     const ptrEl = pointerSlotRef.current;
     if (!rootEl || !defEl || !ptrEl) {
       return () => {
+        cancelled = true;
         docEl.removeAttribute("data-cursor-overlay");
       };
     }
 
     let visible = false;
     let isPointerMode = false;
+    let moveRafId = 0;
+    let pendingX = 0;
+    let pendingY = 0;
+    let pendingTarget: EventTarget | null = null;
+    let hasPendingMove = false;
 
     const applyMode = (nextPointer: boolean) => {
       if (isPointerMode === nextPointer) return;
@@ -151,20 +174,19 @@ export function AppearanceRuntimeSync() {
       return { passthrough: false, interactive };
     };
 
-    const handlePointerMove = (e: PointerEvent) => {
-      if (e.pointerType && e.pointerType !== "mouse" && e.pointerType !== "pen") {
-        setVisibility(false);
-        return;
-      }
+    const commitPointerMove = () => {
+      moveRafId = 0;
+      if (!hasPendingMove) return;
+      hasPendingMove = false;
 
-      const x = e.clientX - hotspotX;
-      const y = e.clientY - hotspotY;
+      const x = pendingX - hotspotX;
+      const y = pendingY - hotspotY;
       rootEl.style.transform = `translate3d(${x}px, ${y}px, 0)`;
 
       const hit =
-        e.target instanceof Element
-          ? e.target
-          : document.elementFromPoint(e.clientX, e.clientY);
+        pendingTarget instanceof Element
+          ? pendingTarget
+          : document.elementFromPoint(pendingX, pendingY);
       const { passthrough, interactive } = resolveTargetMode(hit);
       if (passthrough) {
         setVisibility(false);
@@ -173,6 +195,22 @@ export function AppearanceRuntimeSync() {
 
       applyMode(interactive);
       setVisibility(true);
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (e.pointerType && e.pointerType !== "mouse" && e.pointerType !== "pen") {
+        setVisibility(false);
+        return;
+      }
+
+      pendingX = e.clientX;
+      pendingY = e.clientY;
+      pendingTarget = e.target;
+      hasPendingMove = true;
+
+      if (!moveRafId) {
+        moveRafId = requestAnimationFrame(commitPointerMove);
+      }
     };
 
     const handleMouseOutWindow = (e: MouseEvent) => {
@@ -193,13 +231,15 @@ export function AppearanceRuntimeSync() {
     window.addEventListener("blur", handleWindowBlur);
 
     return () => {
+      cancelled = true;
+      if (moveRafId) cancelAnimationFrame(moveRafId);
       docEl.removeAttribute("data-cursor-overlay");
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerdown", handlePointerMove);
       document.removeEventListener("mouseout", handleMouseOutWindow);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [overlayEnabled, hotspotX, hotspotY]);
+  }, [overlayEnabled, defaultUrl, hotspotX, hotspotY]);
 
   if (!overlayEnabled) {
     return null;

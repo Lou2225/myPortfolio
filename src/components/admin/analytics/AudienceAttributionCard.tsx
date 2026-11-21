@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import type { AnalyticsSnapshotSummary } from "@/lib/analytics";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import { AnimatedBar, AnimatedCounter } from "@/components/motion/AdminMotion";
 import { shouldReduceMotion } from "@/lib/appearance";
@@ -215,11 +214,9 @@ export function AudienceAttributionCard({
               : "Awaiting attributed client telemetry"}
           </span>
           {devices.unattributedCount > 0 && (
-            <StatusPill
-              label={`${devices.unattributedCount} legacy pre-v2`}
-              variant="neutral"
-              size="xs"
-            />
+            <span className="text-[10px] font-mono text-(--text-muted)">
+              {devices.unattributedCount} legacy pre-v2
+            </span>
           )}
         </div>
       </div>

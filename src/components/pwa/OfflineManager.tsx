@@ -482,6 +482,11 @@ export function OfflineManager({ children }: { children: React.ReactNode }) {
         return;
       }
       if (refreshing) return;
+      if (window.location.pathname.startsWith("/admin")) {
+        // Never auto-reload while inside /admin CMS to prevent wiping active form drafts
+        setSwState("active");
+        return;
+      }
       refreshing = true;
       window.location.reload();
     };

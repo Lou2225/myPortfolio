@@ -27,18 +27,20 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     });
     expect(postMsgRes.status()).toBe(401);
 
-    await page.goto("/admin", { waitUntil: "networkidle" });
+    await page.goto("/admin", { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("heading", { name: /Administrator Login/i })
     ).toBeVisible({ timeout: 15000 });
 
+    await page.locator("#admin-password").fill("definitely-wrong-pass");
+
     const failedAuthPromise = page.waitForResponse(
       (res) =>
         res.url().includes("/api/admin/auth") &&
-        res.request().method() === "POST"
+        res.request().method() === "POST" &&
+        res.request().postData()?.includes('"password"') === true
     );
 
-    await page.locator("#admin-password").fill("definitely-wrong-pass");
     await page
       .getByRole("button", { name: /Unlock Portfolio Manager/i })
       .click();
@@ -82,7 +84,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     expect(botContactRes.status()).toBe(200);
 
     // Log in via AdminLogin form (wait for full hydration before submit).
-    await page.goto("/admin", { waitUntil: "networkidle" });
+    await page.goto("/admin", { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("heading", { name: /Administrator Login/i })
     ).toBeVisible({ timeout: 15000 });
@@ -90,7 +92,8 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     const loginResPromise = page.waitForResponse(
       (res) =>
         res.url().includes("/api/admin/auth") &&
-        res.request().method() === "POST"
+        res.request().method() === "POST" &&
+        res.request().postData()?.includes('"password"') === true
     );
 
     await page.locator("#admin-password").fill(E2E_ADMIN_PASSWORD);
@@ -121,7 +124,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     await page.keyboard.press("Escape");
 
     // Navigate to Inbox tab cleanly and verify Sandbox sender label is absent.
-    await page.goto("/admin?tab=inbox", { waitUntil: "networkidle" });
+    await page.goto("/admin?tab=inbox", { waitUntil: "domcontentloaded" });
     await expect(page.getByText(/Sandbox sender/i)).not.toBeVisible();
     const msgHeading = page.getByRole("heading", { name: inquirySubject });
     await expect(msgHeading).toBeVisible({ timeout: 15000 });
@@ -155,7 +158,9 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     await expect(
       replyDialog.getByRole("heading", { name: /Reply To Inquiry/i })
     ).toBeVisible();
-    await expect(replyDialog.getByText(/Mailto Fallback/i)).toBeVisible();
+    await expect(
+      replyDialog.getByText(/Transactional email is not configured/i)
+    ).toBeVisible();
     await expect(replyDialog.locator("#reply-modal-subject")).toHaveValue(
       `Re: ${inquirySubject}`
     );
@@ -182,17 +187,17 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     await expect(msgHeading).not.toBeVisible({ timeout: 10000 });
 
     // Switch to Profile tab, edit Monogram Fallback, publish live, verify /api/portfolio, then restore.
-    await page.goto("/admin?tab=profile", { waitUntil: "networkidle" });
-    const monogramInput = page.getByLabel(/Monogram Fallback/i);
+    await page.goto("/admin?tab=profile", { waitUntil: "domcontentloaded" });
+    const monogramInput = page.getByLabel(/Monogram Fallback/i).first();
     await expect(monogramInput).toBeVisible({ timeout: 15000 });
     const originalMonogram = await monogramInput.inputValue();
     const updatedMonogram = originalMonogram === "E9" ? "LV" : "E9";
 
     await monogramInput.fill(updatedMonogram);
-    await page
-      .getByRole("main")
-      .getByRole("button", { name: /Save & Publish/i })
-      .click();
+    await expect(
+      page.getByRole("main").getByRole("button", { name: /Save & Publish/i })
+    ).toHaveCount(0);
+    await page.getByTestId("brand-portal-save").click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /Save & Publish/i })
@@ -211,12 +216,9 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
       )
       .toBe(updatedMonogram);
 
-    // Restore original monogram cleanly.
+    // Restore original monogram cleanly via Brand Portal Save button.
     await monogramInput.fill(originalMonogram);
-    await page
-      .getByRole("main")
-      .getByRole("button", { name: /Save & Publish/i })
-      .click();
+    await page.getByTestId("brand-portal-save").click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /Save & Publish/i })
@@ -327,11 +329,8 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     await page.keyboard.press("Escape");
     await expect(roleMenu).not.toBeVisible({ timeout: 5000 });
 
-    // Discard staged avatar draft so unsaved-changes guard stays clean before navigating.
-    await page
-      .getByRole("main")
-      .getByRole("button", { name: /^Discard$/i })
-      .click();
+    // Discard staged avatar draft via Brand Portal so unsaved-changes guard stays clean before navigating.
+    await page.getByTestId("brand-portal-discard").click();
     const discardDialog = page.getByRole("dialog");
     await expect(discardDialog).toBeVisible({ timeout: 5000 });
     await discardDialog
@@ -437,7 +436,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     });
 
     await page.goto("/admin?tab=settings&section=security", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
     });
     const trustedDevicesCard = page
       .locator("[data-cascade]")
@@ -541,7 +540,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     expect(seedRes.status()).toBe(200);
 
     // Log in to /admin cleanly.
-    await page.goto("/admin", { waitUntil: "networkidle" });
+    await page.goto("/admin", { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("heading", { name: /Administrator Login/i })
     ).toBeVisible({ timeout: 15000 });
@@ -549,7 +548,8 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     const loginResPromise = page.waitForResponse(
       (res) =>
         res.url().includes("/api/admin/auth") &&
-        res.request().method() === "POST"
+        res.request().method() === "POST" &&
+        res.request().postData()?.includes('"password"') === true
     );
 
     await page.locator("#admin-password").fill(E2E_ADMIN_PASSWORD);
@@ -559,7 +559,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     const loginRes = await loginResPromise;
     expect(loginRes.status()).toBe(200);
 
-    await page.goto("/admin?tab=overview", { waitUntil: "networkidle" });
+    await page.goto("/admin?tab=overview", { waitUntil: "domcontentloaded" });
 
     // Command Row: 1-Card Metrics Matrix (Left) + Combined Filters, Checkbox Slicers & Reports (Right).
     const kpiSection = page.getByRole("region", {
@@ -665,7 +665,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     page,
     request,
   }) => {
-    await page.goto("/admin", { waitUntil: "networkidle" });
+    await page.goto("/admin", { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("heading", { name: /Administrator Login/i })
     ).toBeVisible({ timeout: 15000 });
@@ -673,7 +673,8 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
     const loginResPromise = page.waitForResponse(
       (res) =>
         res.url().includes("/api/admin/auth") &&
-        res.request().method() === "POST"
+        res.request().method() === "POST" &&
+        res.request().postData()?.includes('"password"') === true
     );
     await page.locator("#admin-password").fill(E2E_ADMIN_PASSWORD);
     await page
@@ -683,7 +684,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
 
     // 1. Navigate to Appearance Studio -> enable Scare On + Get In Touch + Contact Me trigger via UI
     await page.goto("/admin?tab=settings&section=appearance", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
     });
 
     const scareSwitch = page.getByRole("switch", {
@@ -702,10 +703,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
         res.url().includes("/api/admin/portfolio") &&
         res.request().method() === "PUT"
     );
-    await page
-      .getByRole("button", { name: /^Save & Publish$/i })
-      .first()
-      .click();
+    await page.getByTestId("brand-portal-save").click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /^Save & Publish$/i })
@@ -744,7 +742,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
 
     // 3. Switch to `first-click` in Admin and verify first click anywhere triggers scare
     await page.goto("/admin?tab=settings&section=appearance", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
     });
     const firstClickBtn = page.getByRole("button", {
       name: /Armed First Click/i,
@@ -757,10 +755,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
         res.url().includes("/api/admin/portfolio") &&
         res.request().method() === "PUT"
     );
-    await page
-      .getByRole("button", { name: /^Save & Publish$/i })
-      .first()
-      .click();
+    await page.getByTestId("brand-portal-save").click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /^Save & Publish$/i })
@@ -781,7 +776,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
 
     // 4. Restore Scare Off cleanly via API while keeping E2E state spotless
     await page.goto("/admin?tab=settings&section=appearance", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
     });
     const restoreSwitch = page.getByRole("switch", {
       name: /Enable jumpscare Easter egg on public portfolio/i,
@@ -793,10 +788,7 @@ test.describe("Admin Auth, Inbox Reply Modal & CMS CRUD E2E", () => {
         res.url().includes("/api/admin/portfolio") &&
         res.request().method() === "PUT"
     );
-    await page
-      .getByRole("button", { name: /^Save & Publish$/i })
-      .first()
-      .click();
+    await page.getByTestId("brand-portal-save").click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /^Save & Publish$/i })

@@ -28,7 +28,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as Record<string, unknown>;
+    let body: Record<string, unknown>;
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { success: false, error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
     // Silent honeypot drop BEFORE schema validation so automated bots receive no failure signal or storage write
     if (
@@ -65,9 +80,11 @@ export async function POST(request: Request) {
       emailStatus = dispatch.status;
       notificationSent = dispatch.ok;
 
-      await updateContactMessageById(savedMsg.id, {
-        emailDispatchStatus: dispatch.status,
-      });
+      await updateContactMessageById(
+        savedMsg.id,
+        { emailDispatchStatus: dispatch.status },
+        { returnAll: false }
+      );
     } catch (emailErr) {
       emailStatus = "failed";
       console.error("Contact email notification error:", emailErr);

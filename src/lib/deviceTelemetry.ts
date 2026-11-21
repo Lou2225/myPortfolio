@@ -483,49 +483,29 @@ export async function signExistingDeviceChallenge(challenge: string): Promise<{
  *    matches this physical machine on the same network.
  */
 export async function recoverOrRecognizeDeviceChallenge(
-  challenge: string,
-  precollectedTelemetryPromise?: Promise<ClientDeviceTelemetry> | null
+  challenge: string
 ): Promise<boolean> {
   if (typeof window === "undefined" || !challenge) return false;
 
   try {
     const existingAssertion = await signExistingDeviceChallenge(challenge);
-    if (existingAssertion) {
-      const recRes = await fetch("/api/admin/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "recover-device-trust",
-          challenge,
-          keyThumbprint: existingAssertion.keyThumbprint,
-          signature: existingAssertion.signature,
-        }),
-      });
-      if (recRes.ok) {
-        const recData = await recRes.json().catch(() => ({}));
-        if (recData?.deviceRegistered) {
-          return true;
-        }
-      }
+    if (!existingAssertion) {
+      return false;
     }
 
-    const telemetry = precollectedTelemetryPromise
-      ? await precollectedTelemetryPromise
-      : await collectClientDeviceTelemetry();
-    const newAssertion = await signExistingDeviceChallenge(challenge);
-    const physRes = await fetch("/api/admin/auth", {
+    const recRes = await fetch("/api/admin/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "recognize-physical-device",
+        action: "recover-device-trust",
         challenge,
-        signature: newAssertion?.signature || "",
-        telemetry,
+        keyThumbprint: existingAssertion.keyThumbprint,
+        signature: existingAssertion.signature,
       }),
     });
-    if (physRes.ok) {
-      const physData = await physRes.json().catch(() => ({}));
-      if (physData?.deviceRegistered) {
+    if (recRes.ok) {
+      const recData = await recRes.json().catch(() => ({}));
+      if (recData?.deviceRegistered) {
         return true;
       }
     }

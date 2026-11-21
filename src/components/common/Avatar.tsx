@@ -1,14 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import { ImageTransform } from "@/types/portfolio";
 import { usePortfolio } from "@/context/PortfolioContext";
-import { resolveEffectiveReducedMotion } from "@/lib/appearance";
-import { resolveSmartAvatarAspect } from "@/lib/avatarSmokeSlice";
 import { isIdentityImageTransform } from "@/lib/imageTransform";
 import { dispatchJumpscareTrigger } from "@/lib/jumpscare";
-import { AvatarSmokeSliceCanvas } from "@/components/motion/AvatarSmokeSliceCanvas";
 import { TransformedImage } from "@/components/ui/TransformedImage";
 import { cn } from "@/lib/utils";
 
@@ -16,39 +13,26 @@ interface AvatarProps {
   className?: string;
   imageSrc?: string;
   transform?: ImageTransform;
-  onFirstSlice?: () => void;
+}
+
+function clampAvatarAspect(rawAspect: number): number {
+  if (!Number.isFinite(rawAspect) || rawAspect <= 0) return 0.85;
+  return Number(Math.min(1.38, Math.max(0.62, rawAspect)).toFixed(3));
 }
 
 export function Avatar({
   className,
   imageSrc = "/assets/hero/avatar.webp",
   transform,
-  onFirstSlice,
 }: AvatarProps) {
   const { appearance, profile } = usePortfolio();
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const [supportsFinePointer, setSupportsFinePointer] = useState(false);
-  const [canvasReady, setCanvasReady] = useState(false);
   const [naturalAspect, setNaturalAspect] = useState<number>(0.85);
 
   const tapStreakRef = useRef<{ count: number; lastMs: number }>({
     count: 0,
     lastMs: 0,
   });
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
-    const rafId = requestAnimationFrame(() => setSupportsFinePointer(mq.matches));
-    const handleChange = (e: MediaQueryListEvent) =>
-      setSupportsFinePointer(e.matches);
-    mq.addEventListener("change", handleChange);
-    return () => {
-      cancelAnimationFrame(rafId);
-      mq.removeEventListener("change", handleChange);
-    };
-  }, []);
 
   const handleAvatarTap = () => {
     if (
@@ -67,12 +51,8 @@ export function Avatar({
     }
   };
 
-  const handleCanvasReady = useCallback((ready: boolean) => {
-    setCanvasReady(ready);
-  }, []);
-
   const handleNaturalAspect = useCallback((rawAspect: number) => {
-    const next = resolveSmartAvatarAspect(rawAspect, 1);
+    const next = clampAvatarAspect(rawAspect);
     setNaturalAspect((prev) => (Math.abs(prev - next) < 0.01 ? prev : next));
   }, []);
 
@@ -80,13 +60,6 @@ export function Avatar({
     Boolean(transform) && !isIdentityImageTransform(transform, "squircle");
 
   const hasCustomImage = Boolean(imageSrc) && failedSrc !== imageSrc;
-  const reducedMotion = resolveEffectiveReducedMotion(appearance);
-  const smokeSliceEnabled =
-    hasCustomImage &&
-    Boolean(appearance.liquidDistortion) &&
-    supportsFinePointer &&
-    !reducedMotion;
-
   const showRimGlow = appearance.heroRimGlow;
   const displayAlt = profile.fullName || profile.name || "Portfolio portrait";
   const monogramLabel = profile.monogram || "P";
@@ -94,7 +67,6 @@ export function Avatar({
 
   return (
     <div
-      ref={containerRef}
       onClick={handleAvatarTap}
       style={
         hasCustomImage
@@ -102,7 +74,7 @@ export function Avatar({
           : undefined
       }
       className={cn(
-        "relative h-[clamp(14.5rem,43svh,25rem)] sm:h-[clamp(16.5rem,51svh,34rem)] lg:h-[clamp(23rem,64svh,37rem)] [@media(max-height:640px)]:h-[clamp(12.5rem,44svh,19.5rem)] max-w-[92vw] flex items-end justify-center select-none pointer-events-auto overflow-visible group",
+        "relative h-[clamp(14.5rem,43svh,25rem)] sm:h-[clamp(16.5rem,51svh,34rem)] lg:h-[clamp(23rem,64svh,37rem)] [@media(max-height:640px)]:h-[clamp(12.5rem,44svh,19.5rem)] max-w-[92vw] flex items-end justify-center select-none pointer-events-auto overflow-visible",
         !hasCustomImage && "aspect-3/4",
         className
       )}
@@ -114,64 +86,45 @@ export function Avatar({
 
       {/* Real Photo Cutout or Dynamic Profile Fallback */}
       {hasCustomImage ? (
-        <div className="relative w-full h-full flex items-end justify-center overflow-visible [@media(hover:hover)_and_(pointer:fine)]:contrast-105">
-          {/* SSR/LCP Image — stays silently hidden once borderless canvas paints so hover never flickers or refreshes */}
-          <div
-            data-avatar-ssr-img="true"
-            className={cn(
-              "relative w-full h-full flex items-end justify-center",
-              smokeSliceEnabled && canvasReady && "opacity-0 invisible pointer-events-none"
-            )}
-          >
-            {useTransformedView ? (
-              <TransformedImage
-                src={imageSrc}
-                alt={displayAlt}
-                transform={transform}
-                defaultFit="contain"
-                defaultPosition="bottom"
-                sizes="(max-width: 640px) 90vw, (max-width: 1024px) 65vw, 50vw"
-                unoptimized
-                loading="eager"
-                fetchPriority="high"
-                className="w-full h-full"
-                onNaturalSize={({ width, height }) => {
-                  if (width > 0 && height > 0) {
-                    handleNaturalAspect(width / height);
-                  }
-                }}
-                onError={() => setFailedSrc(imageSrc)}
-              />
-            ) : (
-              <Image
-                src={imageSrc}
-                alt={displayAlt}
-                fill
-                unoptimized
-                loading="eager"
-                fetchPriority="high"
-                sizes="(max-width: 640px) 90vw, (max-width: 1024px) 65vw, 50vw"
-                className="object-contain object-bottom"
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                    handleNaturalAspect(img.naturalWidth / img.naturalHeight);
-                  }
-                }}
-                onError={() => setFailedSrc(imageSrc)}
-              />
-            )}
-          </div>
-
-          <AvatarSmokeSliceCanvas
-            containerRef={containerRef}
-            imageSrc={imageSrc}
-            transform={transform}
-            enabled={smokeSliceEnabled}
-            onCanvasReady={handleCanvasReady}
-            onNaturalAspect={handleNaturalAspect}
-            onFirstSlice={onFirstSlice}
-          />
+        <div className="relative w-full h-full flex items-end justify-center [@media(hover:hover)_and_(pointer:fine)]:contrast-105">
+          {useTransformedView ? (
+            <TransformedImage
+              src={imageSrc}
+              alt={displayAlt}
+              transform={transform}
+              defaultFit="contain"
+              defaultPosition="bottom"
+              sizes="(max-width: 640px) 90vw, (max-width: 1024px) 65vw, 50vw"
+              unoptimized
+              loading="eager"
+              fetchPriority="high"
+              className="w-full h-full"
+              onNaturalSize={({ width, height }) => {
+                if (width > 0 && height > 0) {
+                  handleNaturalAspect(width / height);
+                }
+              }}
+              onError={() => setFailedSrc(imageSrc)}
+            />
+          ) : (
+            <Image
+              src={imageSrc}
+              alt={displayAlt}
+              fill
+              unoptimized
+              loading="eager"
+              fetchPriority="high"
+              sizes="(max-width: 640px) 90vw, (max-width: 1024px) 65vw, 50vw"
+              className="object-contain object-bottom"
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                  handleNaturalAspect(img.naturalWidth / img.naturalHeight);
+                }
+              }}
+              onError={() => setFailedSrc(imageSrc)}
+            />
+          )}
         </div>
       ) : (
         <div className="relative w-full h-[88%] rounded-t-3xl border border-(--border-subtle) bg-linear-to-b from-(--bg-surface-2) via-(--bg-surface) to-(--bg-canvas) p-6 flex flex-col items-center justify-between shadow-2xl overflow-hidden">

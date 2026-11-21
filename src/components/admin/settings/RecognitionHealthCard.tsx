@@ -227,13 +227,8 @@ export function RecognitionHealthCard({
               <Globe className="w-3 h-3 text-(--text-accent) shrink-0" />
               <span className="truncate">Origin</span>
             </span>
-            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  health.secureContext ? "bg-emerald-400" : "bg-amber-400"
-                }`}
-              />
-              <span>{health.secureContext ? "TLS" : "HTTP"}</span>
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) shrink-0">
+              {health.secureContext ? "TLS" : "HTTP"}
             </span>
           </div>
           <span
@@ -251,13 +246,8 @@ export function RecognitionHealthCard({
               <ShieldCheck className="w-3 h-3 text-(--text-accent) shrink-0" />
               <span className="truncate">Cookie</span>
             </span>
-            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  deviceRegistered ? "bg-emerald-400" : "bg-(--text-muted)"
-                }`}
-              />
-              <span>{deviceRegistered ? "365d" : "Off"}</span>
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) shrink-0">
+              {deviceRegistered ? "365d" : "Off"}
             </span>
           </div>
           <span className="text-(--text-primary) truncate block">
@@ -276,23 +266,12 @@ export function RecognitionHealthCard({
               <KeyRound className="w-3 h-3 text-(--text-accent) shrink-0" />
               <span className="truncate">ECDSA Key</span>
             </span>
-            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  keySyncedWithServer
-                    ? "bg-emerald-400"
-                    : health.hasIndexedDbKey
-                      ? "bg-amber-400"
-                      : "bg-(--text-muted)"
-                }`}
-              />
-              <span>
-                {keySyncedWithServer
-                  ? "Synced"
-                  : health.hasIndexedDbKey
-                    ? "Local"
-                    : "None"}
-              </span>
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) shrink-0">
+              {keySyncedWithServer
+                ? "Synced"
+                : health.hasIndexedDbKey
+                  ? "Local"
+                  : "None"}
             </span>
           </div>
           <span className="text-(--text-primary) truncate block">
@@ -311,17 +290,8 @@ export function RecognitionHealthCard({
               )}
               <span className="truncate">Storage</span>
             </span>
-            <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-wider text-(--text-secondary) shrink-0">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  health.storagePersisted === true
-                    ? "bg-emerald-400"
-                    : "bg-(--text-muted)"
-                }`}
-              />
-              <span>
-                {health.storagePersisted === true ? "Locked" : "Standard"}
-              </span>
+            <span className="text-[9px] uppercase tracking-wider text-(--text-muted) shrink-0">
+              {health.storagePersisted === true ? "Locked" : "Standard"}
             </span>
           </div>
           <span className="text-(--text-primary) truncate block">

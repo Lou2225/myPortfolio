@@ -2,7 +2,6 @@
 
 import { Project } from "@/types/portfolio";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { IconActionButton } from "@/components/ui/ActionButtons";
 import {
   ActionMenuButton,
@@ -12,7 +11,6 @@ import { TransformedImage } from "@/components/ui/TransformedImage";
 import { useInstantImageUrl } from "@/lib/instantImageCache";
 import { cn } from "@/lib/utils";
 import {
-  AlertCircle,
   ChevronRight,
   Eye,
   EyeOff,
@@ -109,22 +107,19 @@ export function ProjectCardEditor({
           </div>
 
           <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <StatusPill
-                label={`#${String(index + 1).padStart(2, "0")}`}
-                variant="accent"
-                size="xs"
-              />
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+              <span className="text-(--text-accent) font-semibold tabular-nums">
+                #{String(index + 1).padStart(2, "0")}
+              </span>
               {project.featured && (
-                <StatusPill label="Featured" variant="accent" size="xs" />
+                <span className="text-(--text-accent) uppercase tracking-wider text-[10px]">
+                  · Featured
+                </span>
               )}
               {showCardErrorState && (
-                <StatusPill
-                  label={`${errors.length} ${errors.length === 1 ? "Issue" : "Issues"}`}
-                  variant="danger"
-                  size="xs"
-                  icon={<AlertCircle className="w-3 h-3" aria-hidden="true" />}
-                />
+                <span className="text-rose-400 uppercase tracking-wider text-[10px]">
+                  · {errors.length} {errors.length === 1 ? "Issue" : "Issues"}
+                </span>
               )}
             </div>
 

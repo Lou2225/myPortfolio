@@ -1,8 +1,14 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getStorageMode, buildSupabaseHeaders } from "@/lib/db";
+import {
+  checkMemoryRateLimit,
+  createRateLimitResponse,
+  extractNormalizedClientIp,
+} from "@/lib/rateLimit";
 import { verifyUploadMagicBytes } from "@/lib/uploadSecurity";
 import {
   ALLOWED_AUDIO_EXTENSIONS,
@@ -25,30 +31,59 @@ const IMAGE_UPLOAD_FOLDERS = new Set([
   "general",
 ]);
 
-function resolveEffectiveCursorMime(ext: string, rawMime: string): string {
-  if (ext === ".cur") {
-    return "image/x-icon";
-  }
-  return rawMime;
-}
+const CANONICAL_MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".cur": "image/x-icon",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+};
 
 export async function POST(request: Request) {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    const rawFolder = ((formData.get("folder") as string) || "general").replace(
-      /[^a-zA-Z0-9_-]/g,
-      ""
+  const ip = extractNormalizedClientIp(request.headers);
+  const rate = checkMemoryRateLimit(`admin-upload:${ip}`, {
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rate.allowed) {
+    return createRateLimitResponse(
+      rate.retryAfterSec,
+      "Too many uploads. Please wait a moment and try again."
     );
+  }
+
+  try {
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid multipart form-data request." },
+        { status: 400 }
+      );
+    }
+
+    const rawFile = formData.get("file");
+    const rawFolderEntry = formData.get("folder");
+    const rawFolder = (
+      typeof rawFolderEntry === "string" ? rawFolderEntry : "general"
+    ).replace(/[^a-zA-Z0-9_-]/g, "");
     const folder = rawFolder || "general";
 
-    if (!file) {
+    if (!(rawFile instanceof File)) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
+    const file = rawFile;
 
     const lowerName = file.name.toLowerCase();
     const ext = path.extname(lowerName);
@@ -114,6 +149,32 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+    } else if (folder === "certificates") {
+      const isPdf = ext === ".pdf" && mime === "application/pdf";
+      const isImg =
+        (ALLOWED_IMAGE_EXTENSIONS as readonly string[]).includes(ext) &&
+        (ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(mime);
+
+      if (!isPdf && !isImg) {
+        return NextResponse.json(
+          {
+            error:
+              "Certificates accept PDF documents (.pdf) or image files (.png, .jpg, .webp, .avif).",
+          },
+          { status: 400 }
+        );
+      }
+      const maxBytes = isPdf ? MAX_PDF_UPLOAD_BYTES : MAX_IMAGE_UPLOAD_BYTES;
+      if (file.size <= 0 || file.size > maxBytes) {
+        return NextResponse.json(
+          {
+            error: `Certificate file must be between 1 byte and ${
+              isPdf ? "10 MB" : "5 MB"
+            }.`,
+          },
+          { status: 400 }
+        );
+      }
     } else if (IMAGE_UPLOAD_FOLDERS.has(folder)) {
       const validExt = (ALLOWED_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
       const validMime = (ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(mime);
@@ -152,14 +213,14 @@ export async function POST(request: Request) {
     }
 
     const safeExt = ext || (folder === "resume" ? ".pdf" : ".png");
-    const effectiveMime =
-      folder === "cursors" ? resolveEffectiveCursorMime(safeExt, mime) : mime;
-    const baseName =
+    const effectiveMime = CANONICAL_MIME_BY_EXT[safeExt] || "application/octet-stream";
+    const baseName = (
       path
         .basename(file.name, path.extname(file.name))
         .toLowerCase()
-        .replace(/[^a-z0-9_-]/g, "-") || "asset";
-    const fileName = `${baseName}-${Date.now()}${safeExt}`;
+        .replace(/[^a-z0-9_-]/g, "-") || "asset"
+    ).slice(0, 48);
+    const fileName = `${baseName}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}${safeExt}`;
 
     // 1. If Supabase is configured, upload to Supabase Storage bucket
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -177,6 +238,7 @@ export async function POST(request: Request) {
             "x-upsert": "true",
           }),
           body: buffer,
+          signal: AbortSignal.timeout(15000),
         }
       );
 

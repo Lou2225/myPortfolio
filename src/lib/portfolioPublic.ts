@@ -23,6 +23,9 @@ export function toPublicPortfolioPayload(
     marqueePrinciples: db.marqueePrinciples,
     pillars: db.pillars,
     skills: db.skills,
+    certificates: (db.certificates || [])
+      .filter((cert) => cert.published !== false)
+      .sort((a, b) => a.order - b.order),
     projects: db.projects.filter((project) => project.published !== false),
     impactMetrics: db.impactMetrics,
     appearance: db.appearance,

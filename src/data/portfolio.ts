@@ -49,7 +49,11 @@ export const defaultSectionHeaders: SectionHeaders = {
   skillsHeading: "THE FOUR SYSTEM LAYERS.",
   skillsSubtitle:
     "Bridging database infrastructure with modern frontend engineering and quantitative business analytics.",
-  projectsEyebrow: "CH // 03 · Selected Work",
+  certificatesEyebrow: "CH // 03 · Certified Competence",
+  certificatesHeading: "CREDENTIALS & RECOGNITIONS.",
+  certificatesSubtitle:
+    "Academic honors, applied business analytics credentials, and verified engineering certifications.",
+  projectsEyebrow: "CH // 04 · Selected Work",
   projectsHeading: "SYSTEMS ENGINEERED END-TO-END.",
   projectsCounterLabel: "Featured Systems",
   impactEyebrow: "CH // 04 · By The Numbers",

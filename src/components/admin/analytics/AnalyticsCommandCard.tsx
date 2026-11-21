@@ -27,7 +27,6 @@ import {
   type AnalyticsSnapshotSummary,
 } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip, Tooltip } from "@/components/ui/Tooltip";
 import { AnalyticsDateRangePicker } from "./AnalyticsDateRangePicker";
 import type { SettingsSectionId } from "@/components/admin/layout/types";
@@ -180,16 +179,16 @@ export function AnalyticsCommandCard({
 
         {/* Fixed control cluster (zero DOM mount/unmount shifting) */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <StatusPill
-            label={
-              storageMode === "supabase"
-                ? `${summary.buffer.used.toLocaleString()} rows`
-                : `${summary.buffer.pct}%`
-            }
-            variant={bufferNearCap ? "warning" : "neutral"}
-            size="xs"
-            className="hidden sm:inline-flex"
-          />
+          <span
+            className={cn(
+              "hidden sm:inline-block text-[10px] font-mono tabular-nums",
+              bufferNearCap ? "text-amber-400" : "text-(--text-muted)"
+            )}
+          >
+            {storageMode === "supabase"
+              ? `${summary.buffer.used.toLocaleString()} rows`
+              : `${summary.buffer.pct}%`}
+          </span>
 
           <Button
             type="button"

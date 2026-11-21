@@ -12,6 +12,7 @@ import { profileData, defaultSectionHeaders } from "@/data/portfolio";
 import { marqueePrinciples } from "@/data/principles";
 import { pillarsData } from "@/data/pillars";
 import { skillsData } from "@/data/skills";
+import { certificatesData } from "@/data/certificates";
 import { projectsData } from "@/data/projects";
 import { impactMetrics } from "@/data/impact";
 import { DEFAULT_APPEARANCE } from "@/data/appearance";
@@ -85,6 +86,7 @@ export function getDefaultSeedDatabase(): PortfolioDatabase {
     marqueePrinciples,
     pillars: pillarsData,
     skills: skillsData,
+    certificates: certificatesData,
     projects: projectsData,
     impactMetrics,
     appearance: DEFAULT_APPEARANCE,
@@ -149,6 +151,10 @@ function normalizeDatabase(raw: Partial<PortfolioDatabase>): PortfolioDatabase {
       Array.isArray(raw.skills) && raw.skills.length > 0
         ? raw.skills
         : seed.skills,
+    certificates:
+      Array.isArray(raw.certificates) && raw.certificates.length > 0
+        ? raw.certificates
+        : seed.certificates,
     projects:
       Array.isArray(raw.projects) && raw.projects.length > 0
         ? raw.projects
@@ -503,10 +509,23 @@ export function clearPortfolioMemoryCache(): void {
   serverMemoryCache = null;
   inflightContentRead = null;
   try {
-    revalidateTag(PORTFOLIO_CACHE_TAG, "max");
+    revalidateTag(PORTFOLIO_CACHE_TAG, { expire: 0 });
     revalidatePath("/", "layout");
   } catch {
     // Ignore outside request context
+  }
+}
+
+async function writeFileAtomic(targetPath: string, content: string): Promise<void> {
+  const dir = path.dirname(targetPath);
+  const tmpPath = `${targetPath}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(tmpPath, content, "utf-8");
+  try {
+    await fs.rename(tmpPath, targetPath);
+  } catch {
+    await fs.writeFile(targetPath, content, "utf-8");
+    await fs.unlink(tmpPath).catch(() => undefined);
   }
 }
 
@@ -532,6 +551,7 @@ async function writeSupabaseDB(db: PortfolioDatabase): Promise<void> {
         payload: db,
         updated_at: new Date().toISOString(),
       }),
+      signal: AbortSignal.timeout(8000),
     });
   } catch (err) {
     const detail =
@@ -564,27 +584,39 @@ async function readPortfolioContentUncached(): Promise<PortfolioDatabase> {
     if (cloudResult.data) return cloudResult.data;
   }
 
-  // 2. Local JSON database store (content-only once migrated; strips high-churn arrays)
+  // 2. Local JSON database store (only seed when file truly does not exist — ENOENT)
   const localFile = getLocalPortfolioFile();
-  try {
-    const content = await fs.readFile(localFile, "utf-8");
-    const parsed = JSON.parse(content) as Partial<PortfolioDatabase>;
-    return normalizeContentOnly(parsed);
-  } catch {
-    // Seed initial content file cleanly if it doesn't exist yet
-    const seedContent = normalizeContentOnly(getDefaultSeedDatabase());
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      await fs.mkdir(resolveLocalDataDir(), { recursive: true });
-      await fs.writeFile(
-        localFile,
-        JSON.stringify(seedContent, null, 2),
-        "utf-8"
+      const content = await fs.readFile(localFile, "utf-8");
+      const parsed = JSON.parse(content) as Partial<PortfolioDatabase>;
+      return normalizeContentOnly(parsed);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code === "ENOENT") {
+        const seedContent = normalizeContentOnly(getDefaultSeedDatabase());
+        try {
+          await writeFileAtomic(localFile, JSON.stringify(seedContent, null, 2));
+        } catch {
+          // Ignore write error on read-only serverless fs if Supabase isn't connected yet
+        }
+        return seedContent;
+      }
+      const isTransient =
+        code === "EBUSY" ||
+        code === "EPERM" ||
+        code === "EACCES" ||
+        err instanceof SyntaxError;
+      if (isTransient && attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+        continue;
+      }
+      throw new StorageReadError(
+        "Unable to read local portfolio database file (file locked or corrupted)."
       );
-    } catch {
-      // Ignore write error on read-only serverless fs if Supabase isn't connected yet
     }
-    return seedContent;
   }
+  throw new StorageReadError("Unable to read local portfolio database file.");
 }
 
 async function readPortfolioContentForWrite(): Promise<PortfolioDatabase> {
@@ -700,8 +732,8 @@ export async function savePortfolioDB(
     const [currentContent, currentMessages, currentAnalytics] =
       await Promise.all([
         readPortfolioContentForWrite(),
-        listContactMessages(),
-        listAnalyticsEvents(),
+        listContactMessages().catch(() => []),
+        listAnalyticsEvents().catch(() => []),
       ]);
 
     const currentCombined: PortfolioDatabase = {
@@ -723,12 +755,7 @@ export async function savePortfolioDB(
 
     const localFile = getLocalPortfolioFile();
     try {
-      await fs.mkdir(resolveLocalDataDir(), { recursive: true });
-      await fs.writeFile(
-        localFile,
-        JSON.stringify(nextContent, null, 2),
-        "utf-8"
-      );
+      await writeFileAtomic(localFile, JSON.stringify(nextContent, null, 2));
     } catch (err) {
       if (mode === "local-json") {
         const detail =
@@ -747,9 +774,9 @@ export async function savePortfolioDB(
     };
 
     try {
-      revalidateTag(PORTFOLIO_CACHE_TAG, "max");
+      revalidateTag(PORTFOLIO_CACHE_TAG, { expire: 0 });
       if (shouldRevalidate) {
-        revalidatePath("/");
+        revalidatePath("/", "layout");
         revalidatePath("/admin");
       }
     } catch {
@@ -918,6 +945,7 @@ export async function writeAdminCredentialOverride(
           payload: credentials,
           updated_at: new Date().toISOString(),
         }),
+        signal: AbortSignal.timeout(8000),
       });
     } catch (err) {
       const detail =
@@ -942,11 +970,9 @@ export async function writeAdminCredentialOverride(
   }
 
   try {
-    await fs.mkdir(resolveLocalDataDir(), { recursive: true });
-    await fs.writeFile(
+    await writeFileAtomic(
       getLocalCredentialsFile(),
-      JSON.stringify(credentials, null, 2),
-      "utf-8"
+      JSON.stringify(credentials, null, 2)
     );
   } catch (err) {
     if (mode === "local-json") {
@@ -971,13 +997,23 @@ export async function clearAdminCredentialOverride(): Promise<void> {
       );
     }
 
-    const res = await fetch(
-      `${url}/rest/v1/portfolio_store?id=eq.${SUPABASE_ADMIN_CREDENTIALS_ID}`,
-      {
-        method: "DELETE",
-        headers: buildSupabaseHeaders(key),
-      }
-    );
+    let res: Response;
+    try {
+      res = await fetch(
+        `${url}/rest/v1/portfolio_store?id=eq.${SUPABASE_ADMIN_CREDENTIALS_ID}`,
+        {
+          method: "DELETE",
+          headers: buildSupabaseHeaders(key),
+          signal: AbortSignal.timeout(8000),
+        }
+      );
+    } catch (err) {
+      const detail =
+        err instanceof Error ? err.message : "Network request failed";
+      throw new StorageWriteError(
+        `Unable to reach Supabase while reverting credentials (${detail}).`
+      );
+    }
 
     if (!res.ok) {
       throw new StorageWriteError(

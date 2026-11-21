@@ -153,6 +153,14 @@ export function ImageUploadField({
     };
   }, [pendingFile]);
 
+  useEffect(() => {
+    return () => {
+      if (cropSession?.isObjectUrl) {
+        URL.revokeObjectURL(cropSession.src);
+      }
+    };
+  }, [cropSession]);
+
   const reportError = (msg: string) => {
     setLocalError(msg);
     onUploadError?.(msg);
@@ -165,10 +173,10 @@ export function ImageUploadField({
     setCropSession(null);
   };
 
-  const uploadFileImmediately = async (rawFile: File) => {
+  const uploadFileImmediately = async (rawFile: File): Promise<boolean> => {
     if (isNetworkOffline(isOnline)) {
       reportError("Offline — Reconnect to upload image assets.");
-      return;
+      return false;
     }
 
     setLocalError(null);
@@ -203,11 +211,14 @@ export function ImageUploadField({
         if (onAssetSaved) {
           await onAssetSaved(data.url);
         }
+        return true;
       }
+      return false;
     } catch (err) {
       reportError(
         err instanceof Error ? err.message : "Failed to upload image."
       );
+      return false;
     } finally {
       setUploading(false);
     }
@@ -282,11 +293,16 @@ export function ImageUploadField({
     if (originalFile) {
       if (onPendingFileChange) {
         onPendingFileChange(originalFile);
+        onTransformChange?.(nextTransform);
       } else {
-        await uploadFileImmediately(originalFile);
+        const ok = await uploadFileImmediately(originalFile);
+        if (ok) {
+          onTransformChange?.(nextTransform);
+        }
       }
+    } else {
+      onTransformChange?.(nextTransform);
     }
-    onTransformChange?.(nextTransform);
     closeCropSession();
   };
 

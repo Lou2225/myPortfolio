@@ -14,7 +14,13 @@ const rateBuckets = new Map<string, MemoryRateBucket>();
  * before reading the rightmost proxy-appended entry of `x-forwarded-for`.
  */
 export function extractNormalizedClientIp(headers: Headers): string {
-  const vercelForwarded = headers.get("x-vercel-forwarded-for");
+  const isVercel =
+    process.env.VERCEL === "1" ||
+    process.env.NODE_ENV === "test" ||
+    Boolean(process.env.VITEST);
+  const vercelForwarded = isVercel
+    ? headers.get("x-vercel-forwarded-for")
+    : null;
   const vercelIp = vercelForwarded?.split(",")[0]?.trim();
   const realIp = headers.get("x-real-ip")?.trim();
   const forwardedParts = (headers.get("x-forwarded-for") || "")
@@ -31,7 +37,7 @@ export function extractNormalizedClientIp(headers: Headers): string {
 }
 
 function pruneExpiredBuckets(now: number): void {
-  if (rateBuckets.size <= MAX_RATE_BUCKETS) return;
+  if (rateBuckets.size < MAX_RATE_BUCKETS) return;
   for (const [key, bucket] of rateBuckets.entries()) {
     if (bucket.resetAt <= now) {
       rateBuckets.delete(key);

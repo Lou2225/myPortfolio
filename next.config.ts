@@ -23,7 +23,8 @@ const globalCspDirectives = [
   `img-src 'self' blob: data: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""}`,
   `media-src 'self' blob: data: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""}`,
   "font-src 'self' data:",
-  `connect-src 'self' blob: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""} https://psgc.gitlab.io`,
+  `connect-src 'self' blob: data: https://*.supabase.co${supabaseImageOrigin ? ` ${supabaseImageOrigin}` : ""} https://psgc.gitlab.io`,
+  "worker-src 'self' blob:",
   "frame-src 'self' blob: https://drive.google.com",
   "object-src 'none'",
   "base-uri 'self'",
@@ -50,6 +51,21 @@ const remotePatterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
+  turbopack: {},
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      canvas: false,
+      "@napi-rs/canvas": false,
+    };
+    return config;
+  },
+  outputFileTracingIncludes: {
+    "/api/pdf-worker": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+    ],
+  },
   experimental: {
     staleTimes: {
       dynamic: 0,

@@ -83,7 +83,9 @@ export function Preloader() {
     if (preloaderMode === "once-per-session" && !forceRun) {
       try {
         if (window.sessionStorage.getItem(PRELOADER_SEEN_SESSION_KEY) === "1") {
-          const id = requestAnimationFrame(() => setComplete(true));
+          const id = requestAnimationFrame(() => {
+            setComplete(true);
+          });
           return () => cancelAnimationFrame(id);
         }
       } catch {
@@ -112,7 +114,7 @@ export function Preloader() {
     const minCountDurationMs = forceRun ? 760 : 360;
     const maxBootWaitMs = 950;
     const holdAtFullMs = forceRun ? 110 : 40;
-    const exitDurationMs = 460;
+    const exitDurationMs = 500;
     const startTime = performance.now();
     let rafId = 0;
     let lastShown = -1;

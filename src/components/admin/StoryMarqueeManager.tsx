@@ -3,7 +3,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Pillar, Profile, SectionHeaders } from "@/types/portfolio";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { FieldSlotButton } from "@/components/ui/ActionButtons";
 import {
   ActionMenuButton,
@@ -19,7 +18,6 @@ import { SortableTextRow } from "@/components/admin/SortableTextRow";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import {
   isNetworkOffline,
   useOfflineStatus,
@@ -32,7 +30,7 @@ import {
 import { findDuplicateValues, swapArrayItem } from "@/lib/utils";
 import { validateStoryDraft, validateSubject } from "@/lib/validation";
 import { useValidationFollower } from "@/lib/validationFollow";
-import { BookOpen, Plus, Save } from "lucide-react";
+import { BookOpen, Plus } from "lucide-react";
 
 type StoryStep = 0 | 1 | 2;
 
@@ -93,7 +91,6 @@ export function StoryMarqueeManager({
 }: StoryMarqueeManagerProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const { isOnline } = useOfflineStatus();
-  const offline = !isOnline;
   const isMobileOrTablet = useMediaQuery("(max-width: 1023px)");
   const { activeStep, stepDirection, switchStep } =
     useStepNavigation<StoryStep>(0);
@@ -136,8 +133,6 @@ export function StoryMarqueeManager({
   const [newTicker, setNewTicker] = useState("");
   const [tickerFeedback, setTickerFeedback] = useState<string | null>(null);
   const [forceTouched, setForceTouched] = useState(false);
-  const [validationBannerActive, setValidationBannerActive] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     title: string;
@@ -164,13 +159,6 @@ export function StoryMarqueeManager({
   );
 
   const hasUnsavedChanges = currentSignature !== savedSignature;
-
-  useBrandPortalWorkspaceSync({
-    moduleId: "story",
-    moduleLabel: "Story & Principles",
-    hasUnsavedChanges,
-    saving,
-  });
 
   const liveValidation = useMemo(
     () =>
@@ -218,12 +206,6 @@ export function StoryMarqueeManager({
         : followNextInvalid(formRef.current)
     );
   };
-
-  const activeErrorBanner =
-    apiError ??
-    (validationBannerActive && liveErrorsCount > 0
-      ? liveValidation.errors[0]
-      : null);
 
   const duplicatePillarCodes = useMemo(
     () => findDuplicateValues(draftPillars.map((pillar) => pillar.number)),
@@ -386,8 +368,6 @@ export function StoryMarqueeManager({
         setNewTicker("");
         setTickerFeedback(null);
         setForceTouched(false);
-        setValidationBannerActive(false);
-        setApiError(null);
         announceBrandPortalStatus({
           tone: "synced",
           label: "Draft Discarded",
@@ -400,7 +380,6 @@ export function StoryMarqueeManager({
 
   const executeSave = async () => {
     if (isNetworkOffline(isOnline)) {
-      setApiError("You are offline. Reconnect to publish Story & Principles.");
       setConfirmState(null);
       announceBrandPortalStatus({
         tone: "offline",
@@ -424,7 +403,6 @@ export function StoryMarqueeManager({
     };
 
     setSaving(true);
-    setApiError(null);
     announceBrandPortalStatus({
       tone: "saving",
       label: "Publishing...",
@@ -456,8 +434,6 @@ export function StoryMarqueeManager({
       setSavedBaseline(cloned);
       setSavedSignature(JSON.stringify(cloned));
       setForceTouched(false);
-      setValidationBannerActive(false);
-      setApiError(null);
       setConfirmState(null);
 
       announceBrandPortalStatus({
@@ -469,7 +445,6 @@ export function StoryMarqueeManager({
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to save story changes.";
-      setApiError(msg);
       announceBrandPortalStatus({
         tone: "error",
         label: "Publish Failed",
@@ -485,8 +460,6 @@ export function StoryMarqueeManager({
     e.preventDefault();
     if (!liveValidation.valid) {
       setForceTouched(true);
-      setValidationBannerActive(true);
-      setApiError(null);
       announceBrandPortalStatus({
         tone: "error",
         label: "Check Fields",
@@ -497,8 +470,6 @@ export function StoryMarqueeManager({
       return;
     }
 
-    setValidationBannerActive(false);
-    setApiError(null);
     setConfirmState({
       title: "Save & Publish Story & Principles?",
       description:
@@ -509,6 +480,20 @@ export function StoryMarqueeManager({
     });
   };
 
+  useBrandPortalWorkspaceSync({
+    moduleId: "story",
+    moduleLabel: "Story & Principles",
+    hasUnsavedChanges,
+    saving,
+    validationErrorCount: hasUnsavedChanges ? liveErrorsCount : 0,
+    onSave: () => formRef.current?.requestSubmit(),
+    onDiscard: handleDiscardDraft,
+    onFollowIssue: () => {
+      setForceTouched(true);
+      jumpToValidationIssue("next");
+    },
+  });
+
   const storySectionNode = (
     <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-(--border-subtle) pb-3">
@@ -516,11 +501,9 @@ export function StoryMarqueeManager({
             <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary)">
               1. Chapter 01 — The Origin Narrative
             </h3>
-            <StatusPill
-              label={`${storyBody.length} ${storyBody.length === 1 ? "paragraph" : "paragraphs"}`}
-              variant="neutral"
-              size="xs"
-            />
+            <span className="text-[11px] font-mono text-(--text-muted) tabular-nums shrink-0">
+              {storyBody.length} {storyBody.length === 1 ? "paragraph" : "paragraphs"}
+            </span>
           </div>
 
           <Button
@@ -622,11 +605,9 @@ export function StoryMarqueeManager({
             <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary)">
               2. Core Engineering &amp; Analytics Pillars
             </h3>
-            <StatusPill
-              label={`${draftPillars.length} ${draftPillars.length === 1 ? "pillar" : "pillars"}`}
-              variant="neutral"
-              size="xs"
-            />
+            <span className="text-[11px] font-mono text-(--text-muted) tabular-nums shrink-0">
+              {draftPillars.length} {draftPillars.length === 1 ? "pillar" : "pillars"}
+            </span>
           </div>
 
           <Button
@@ -759,11 +740,9 @@ export function StoryMarqueeManager({
           <h3 className="font-display text-lg sm:text-xl uppercase tracking-tight text-(--text-primary) min-w-0">
             3. Infinite Marquee Ticker Statements
           </h3>
-          <StatusPill
-            label={`${draftMarquee.length} ${draftMarquee.length === 1 ? "statement" : "statements"}`}
-            variant="neutral"
-            size="xs"
-          />
+          <span className="text-[11px] font-mono text-(--text-muted) tabular-nums shrink-0">
+            {draftMarquee.length} {draftMarquee.length === 1 ? "statement" : "statements"}
+          </span>
         </div>
 
         <ScrollArea
@@ -864,52 +843,14 @@ export function StoryMarqueeManager({
       noValidate
       className="space-y-4 sm:space-y-8"
     >
-      {/* Header & Sticky Save Bar */}
+      {/* Clean Module Header */}
       <AdminModuleHeaderBar
         icon={<BookOpen className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
         title="Story, 4 Pillars & Marquee Ticker"
         tooltipLabel="Story pillars & ticker rules"
-        tooltipContent="Edit the multi-paragraph narrative, reorder the 4 architectural pillars, and curate marquee ticker statements before saving to publish."
+        tooltipContent="Edit the multi-paragraph narrative, reorder the 4 architectural pillars, and curate marquee ticker statements before saving from the Brand Portal."
         subtitle="Edit your origin narrative paragraphs, core engineering pillars, and infinite marquee statements."
-        liveErrorsCount={liveErrorsCount}
-        onFollowIssue={() => {
-          setForceTouched(true);
-          setValidationBannerActive(true);
-          jumpToValidationIssue("next");
-        }}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onDiscard={handleDiscardDraft}
-        saving={saving}
       />
-
-      {offline && (
-        <AdminAlertBanner
-          variant="offline"
-          message="You are offline."
-          detail="Draft edits stay safe locally, but publishing Story & Principles requires an active connection."
-        />
-      )}
-
-      {activeErrorBanner && (
-        <AdminAlertBanner
-          variant="error"
-          message={apiError ? "Save Blocked:" : "Check Required Fields:"}
-          detail={activeErrorBanner}
-          actionLabel={liveErrorsCount > 0 ? "Follow Issue" : undefined}
-          onAction={
-            liveErrorsCount > 0
-              ? () => {
-                  setForceTouched(true);
-                  jumpToValidationIssue("first");
-                }
-              : undefined
-          }
-          onDismiss={() => {
-            setValidationBannerActive(false);
-            setApiError(null);
-          }}
-        />
-      )}
 
       {isMobileOrTablet ? (
         <AdminMobileStepView
@@ -918,13 +859,6 @@ export function StoryMarqueeManager({
           activeStep={activeStep}
           direction={stepDirection}
           onChangeStep={(next) => switchStep(next as StoryStep)}
-          finalAction={{
-            label: saving ? "Saving..." : "Save & Publish",
-            type: "submit",
-            variant: "primary",
-            disabled: saving,
-            icon: <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
-          }}
         >
           {storyPanels[activeStep] ?? storyPanels[0]}
         </AdminMobileStepView>

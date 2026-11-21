@@ -3,11 +3,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
-  ArrowUpRight,
   CheckCircle2,
+  HardDrive,
   Loader2,
   PenLine,
   Radio,
+  RotateCcw,
+  Save,
   WifiOff,
   X,
 } from "lucide-react";
@@ -22,6 +24,9 @@ import {
   dismissBrandPortalNotice,
   formatPortalTimestamp,
   getBrandPortalToneTheme,
+  triggerBrandPortalDiscard,
+  triggerBrandPortalFollowIssue,
+  triggerBrandPortalSave,
   useBrandPortalStatus,
 } from "@/lib/brandPortalStatus";
 import { cn } from "@/lib/utils";
@@ -34,6 +39,7 @@ export interface BrandPortalOrbProps {
   isSlideTransition?: boolean;
   onOrbAction: () => void;
   onOrbLongPress?: () => void;
+  onOpenVault?: () => void;
 }
 
 function StatusGlyph({
@@ -67,6 +73,7 @@ export function BrandPortalOrb({
   isSlideTransition = false,
   onOrbAction,
   onOrbLongPress,
+  onOpenVault,
 }: BrandPortalOrbProps) {
   const { profile, updatedAt } = usePortfolio();
   const {
@@ -137,9 +144,52 @@ export function BrandPortalOrb({
     return () => cancelAnimationFrame(rafId);
   }, [isOnline, lastSyncedOutboxCount, dismissSyncNotice]);
 
-  // Ambient steady-state status shown on the orb dot + hover/focus peek
+  // Global Ctrl+S / Cmd+S shortcut in /admin triggers the Brand Portal Save action
+  useEffect(() => {
+    if (!isAdminRoute) return;
+
+    const handleSaveShortcut = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "s"
+      ) {
+        if (!workspace.canSave || workspace.saving) return;
+        e.preventDefault();
+        if (!isOnline) {
+          announceBrandPortalStatus({
+            tone: "offline",
+            label: "Offline Mode",
+            detail: "Reconnect to save changes",
+            durationMs: 3200,
+          });
+          return;
+        }
+        triggerBrandPortalSave();
+      }
+    };
+
+    window.addEventListener("keydown", handleSaveShortcut);
+    return () => window.removeEventListener("keydown", handleSaveShortcut);
+  }, [isAdminRoute, isOnline, workspace.canSave, workspace.saving]);
+
+  // Ambient steady-state status shown on the orb dot + hover/focus peek + persistent draft command bar
   const publishedIso = meta.lastPublishedAt || updatedAt;
   const formattedTime = formatPortalTimestamp(publishedIso);
+  const storageLabel =
+    meta.storageMode === "supabase"
+      ? "Supabase PG"
+      : meta.storageMode === "local-json"
+      ? "Local JSON"
+      : null;
+
+  const hasWorkspaceCommandState =
+    isAdminRoute &&
+    Boolean(workspace.moduleId) &&
+    (workspace.hasUnsavedChanges ||
+      workspace.saving ||
+      workspace.validationErrorCount > 0);
 
   let ambientTone: BrandPortalTone = "live";
   let ambientLabel = "Portfolio Live";
@@ -151,7 +201,9 @@ export function BrandPortalOrb({
     ambientTone = "offline";
     ambientLabel = "Offline Mode";
     ambientDetail = isAdminRoute
-      ? "Reconnect to save changes"
+      ? workspace.hasUnsavedChanges
+        ? `${workspace.moduleLabel || "Draft"} · Reconnect to save`
+        : "Reconnect to save changes"
       : pendingOutboxCount > 0
       ? `Cached · ${pendingOutboxCount} queued`
       : "Viewing cached portfolio";
@@ -162,18 +214,26 @@ export function BrandPortalOrb({
       ambientDetail = workspace.moduleLabel
         ? `Syncing ${workspace.moduleLabel} live`
         : "Saving changes live";
+    } else if (workspace.validationErrorCount > 0) {
+      ambientTone = "error";
+      ambientLabel = `${workspace.validationErrorCount} ${
+        workspace.validationErrorCount === 1 ? "Issue" : "Issues"
+      }`;
+      ambientDetail = workspace.moduleLabel
+        ? `${workspace.moduleLabel} · Fix before saving`
+        : "Fix required fields";
     } else if (workspace.hasUnsavedChanges) {
       ambientTone = "draft";
       ambientLabel = "Unsaved Draft";
-      ambientDetail = workspace.moduleLabel
-        ? `${workspace.moduleLabel} · Save to publish`
-        : "Save & Publish to go live";
+      ambientDetail = workspace.moduleLabel || "Ready to publish";
     } else {
       ambientTone = "synced";
       ambientLabel = "Synced & Live";
       ambientDetail = formattedTime
-        ? `Updated ${formattedTime}`
-        : "Portfolio up to date";
+        ? storageLabel
+          ? `${storageLabel} · ${formattedTime}`
+          : `Updated ${formattedTime}`
+        : storageLabel || "Portfolio up to date";
     }
   }
 
@@ -185,8 +245,18 @@ export function BrandPortalOrb({
     ? `notice-${notice.id}`
     : `ambient-${ambientTone}-${ambientLabel}`;
 
-  const isExpanded = Boolean(notice) || hovered || focused;
+  // Stay persistently expanded whenever /admin has unsaved changes, errors, or active publish
+  const stayExpandedForWorkspace = hasWorkspaceCommandState;
+  const isExpanded =
+    Boolean(notice) || stayExpandedForWorkspace || hovered || focused;
   const theme = getBrandPortalToneTheme(activeTone);
+
+  const showWorkspaceControls =
+    isAdminRoute &&
+    (workspace.canSave ||
+      workspace.canDiscard ||
+      workspace.hasFollowIssue ||
+      workspace.saving);
 
   // Auto-collapse transient notices after durationMs (pauses while hovered/focused)
   useEffect(() => {
@@ -337,11 +407,14 @@ export function BrandPortalOrb({
 
   return (
     <div
+      data-brand-portal="true"
       style={{ zIndex: orbZIndex }}
       className={cn(
-        "fixed left-4 items-center select-none pointer-events-none transition-[opacity,transform] duration-220 ease-out",
+        "fixed items-center select-none pointer-events-none transition-[opacity,transform] duration-220 ease-out",
         isSlideTransition && "opacity-0 scale-95",
-        showDesktopAdmin ? "bottom-22 md:bottom-4" : "bottom-4",
+        showDesktopAdmin
+          ? "bottom-22 md:bottom-4 left-3 right-3 sm:left-4 sm:right-auto max-w-[calc(100vw-1.5rem)]"
+          : "bottom-4 left-4 max-w-[calc(100vw-2rem)]",
         showDesktopAdmin
           ? showMobileAdmin
             ? "flex"
@@ -352,7 +425,10 @@ export function BrandPortalOrb({
       <div
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
-        className="relative inline-flex items-center pointer-events-auto"
+        className={cn(
+          "relative inline-flex items-center pointer-events-auto max-w-full",
+          showWorkspaceControls && "w-full sm:w-auto"
+        )}
       >
         {/* Local Radial Status Halo Wave */}
         <span
@@ -370,7 +446,9 @@ export function BrandPortalOrb({
           role="status"
           aria-live="polite"
           className={cn(
-            "inline-flex items-center h-10 rounded-full bg-(--bg-surface) border shadow-[0_10px_30px_rgba(0,0,0,0.42)] transition-[border-color,box-shadow] duration-300",
+            "inline-flex items-center min-h-10 rounded-full bg-(--bg-surface)/96 backdrop-blur-xl border shadow-[0_12px_36px_rgba(0,0,0,0.48)] transition-[border-color,box-shadow] duration-300 max-w-full",
+            showWorkspaceControls && "w-full sm:w-auto py-1 sm:py-0 sm:h-11",
+            !showWorkspaceControls && "h-10",
             theme.capsuleBorderClass
           )}
         >
@@ -448,21 +526,24 @@ export function BrandPortalOrb({
             </span>
           </div>
 
-          {/* Right: Morphing Status Drawer (`grid-template-columns: 0fr -> 1fr`) */}
+          {/* Right: Morphing Status & Command Action Drawer (`grid-template-columns: 0fr -> 1fr`) */}
           <div
             className={cn(
-              "grid transition-[grid-template-columns,opacity,padding] duration-450 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              "grid transition-[grid-template-columns,opacity,padding] duration-450 ease-[cubic-bezier(0.22,1,0.36,1)] min-w-0",
+              showWorkspaceControls && "flex-1 sm:flex-initial",
               isExpanded
-                ? "grid-cols-[1fr] opacity-100 pl-2 pr-3"
+                ? showWorkspaceControls
+                  ? "grid-cols-[1fr] opacity-100 pl-2 pr-1.5 sm:pr-2"
+                  : "grid-cols-[1fr] opacity-100 pl-2 pr-3"
                 : "grid-cols-[0fr] opacity-0 pl-0 pr-0 pointer-events-none"
             )}
           >
-            <div className="overflow-hidden min-w-0 flex items-center gap-2.5 whitespace-nowrap">
+            <div className="overflow-hidden min-w-0 flex items-center justify-between gap-2 sm:gap-2.5 whitespace-nowrap">
               <div
                 ref={textSlotRef}
                 key={activeDisplayKey}
                 onClick={
-                  canNavigate && !isAnimating
+                  canNavigate && !isAnimating && !showWorkspaceControls
                     ? () => {
                         setFocused(false);
                         setHovered(false);
@@ -472,7 +553,10 @@ export function BrandPortalOrb({
                 }
                 className={cn(
                   "flex items-center gap-2 min-w-0",
-                  canNavigate && !isAnimating && "cursor-pointer"
+                  canNavigate &&
+                    !isAnimating &&
+                    !showWorkspaceControls &&
+                    "cursor-pointer"
                 )}
               >
                 <StatusGlyph
@@ -483,7 +567,7 @@ export function BrandPortalOrb({
                 <div className="flex flex-col leading-tight min-w-0">
                   <span
                     className={cn(
-                      "text-[10px] font-mono uppercase tracking-[0.15em] font-semibold",
+                      "text-[10px] font-mono uppercase tracking-[0.14em] font-semibold truncate",
                       theme.textClass
                     )}
                   >
@@ -492,7 +576,7 @@ export function BrandPortalOrb({
                   {activeDetail && (
                     <span
                       suppressHydrationWarning
-                      className="text-[10px] text-(--text-muted) truncate max-w-44 sm:max-w-56"
+                      className="text-[10px] text-(--text-muted) truncate max-w-36 min-[420px]:max-w-44 sm:max-w-52"
                     >
                       {activeDetail}
                     </span>
@@ -500,25 +584,94 @@ export function BrandPortalOrb({
                 </div>
               </div>
 
-              {/* Navigation Pill on Registered Idle Hover */}
-              {!notice && isRegisteredDevice && (
-                <Magnetic strength={0.18}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isAnimating) onOrbAction();
-                    }}
-                    aria-label={isAdminRoute ? "Go to Public Site" : "Open CMS"}
-                    className="ml-0.5 pl-2 border-l border-(--border-subtle) inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-(--text-muted) hover:text-(--text-primary) cursor-pointer transition-colors"
-                  >
-                    <span>{isAdminRoute ? "SITE" : "CMS"}</span>
-                    <ArrowUpRight className="w-3 h-3 text-(--text-accent)" />
-                  </button>
-                </Magnetic>
+              {/* Interactive Workspace Command Actions (Follow Issue · Discard · Save & Publish) */}
+              {showWorkspaceControls && (
+                <div
+                  className="flex items-center gap-1.5 pl-2 border-l border-(--border-subtle) shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {workspace.hasFollowIssue &&
+                    workspace.validationErrorCount > 0 && (
+                      <button
+                        type="button"
+                        data-testid="brand-portal-follow"
+                        onClick={() => triggerBrandPortalFollowIssue()}
+                        aria-label={`Jump to next validation issue (${workspace.validationErrorCount})`}
+                        title="Jump smoothly to the next field requiring attention"
+                        className="h-7.5 px-2.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/45 text-rose-400 text-[10px] font-mono uppercase tracking-wider font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                      >
+                        <AlertCircle className="w-3 h-3 shrink-0" aria-hidden="true" />
+                        <span>Follow</span>
+                      </button>
+                    )}
+
+                  {workspace.canDiscard && (
+                    <button
+                      type="button"
+                      data-testid="brand-portal-discard"
+                      disabled={workspace.saving}
+                      onClick={() => triggerBrandPortalDiscard()}
+                      aria-label="Discard"
+                      title="Discard unsaved changes"
+                      className="h-7.5 px-2 sm:px-2.5 rounded-full border border-(--border-strong) bg-(--bg-surface-2)/75 hover:bg-(--bg-surface-2) text-(--text-secondary) hover:text-(--text-primary) text-[10px] font-mono uppercase tracking-wider font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors active:scale-95 disabled:opacity-45 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                      <RotateCcw className="w-3 h-3 shrink-0" aria-hidden="true" />
+                      <span className="hidden min-[420px]:inline">Discard</span>
+                    </button>
+                  )}
+
+                  {(workspace.canSave || workspace.saving) && (
+                    <button
+                      type="button"
+                      data-testid="brand-portal-save"
+                      disabled={workspace.saving || !isOnline}
+                      onClick={() => triggerBrandPortalSave()}
+                      aria-label={workspace.saveLabel}
+                      title={
+                        !isOnline
+                          ? "Reconnect to save changes"
+                          : `${workspace.saveLabel} (Ctrl+S)`
+                      }
+                      className="h-7.5 px-3 sm:px-3.5 rounded-full bg-brand-solid hover:bg-brand-solid-hover text-brand-contrast text-[10px] font-mono uppercase tracking-[0.12em] font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-[0_4px_16px_var(--accent-glow)] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                      {workspace.saving ? (
+                        <Loader2
+                          className="w-3 h-3 animate-spin shrink-0"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Save className="w-3 h-3 shrink-0" aria-hidden="true" />
+                      )}
+                      <span>
+                        {workspace.saving ? "Saving..." : workspace.saveLabel}
+                      </span>
+                    </button>
+                  )}
+                </div>
               )}
 
-              {/* Dismiss Button for Active Notices (except ongoing "saving") */}
-              {notice && notice.durationMs > 0 && (
+              {/* Optional Vault Shortcut Pill on Registered Idle Hover */}
+              {!notice && !showWorkspaceControls && isRegisteredDevice && onOpenVault && (
+                <div className="flex items-center gap-1.5 ml-0.5 pl-2 border-l border-(--border-subtle)">
+                  <Magnetic strength={0.18}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isAnimating) onOpenVault();
+                      }}
+                      aria-label="Open Personal Vault"
+                      title="Open Personal Drive (Vault)"
+                      className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-(--text-muted) hover:text-cyan-400 cursor-pointer transition-colors"
+                    >
+                      <span>VAULT</span>
+                      <HardDrive className="w-3 h-3 text-cyan-400" />
+                    </button>
+                  </Magnetic>
+                </div>
+              )}
+
+              {/* Dismiss Button for Active Notices (when standalone notice is shown without command bar) */}
+              {notice && notice.durationMs > 0 && !showWorkspaceControls && (
                 <Magnetic strength={0.2}>
                   <button
                     type="button"

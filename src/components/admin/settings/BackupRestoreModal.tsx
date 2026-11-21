@@ -10,7 +10,6 @@ import {
   X,
 } from "lucide-react";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import type { RestoreSectionFlags } from "@/lib/validation";
 
@@ -206,23 +205,21 @@ export function BackupRestoreModal({
                 </>
               )}
             </div>
-            <StatusPill
-              label={
+            <span
+              className={`text-[10px] font-mono uppercase tracking-[0.14em] shrink-0 ${
                 integrityStatus === "verified"
-                  ? "Verified v2"
+                  ? "text-emerald-400"
                   : integrityStatus === "mismatch"
-                    ? "Tampered"
-                    : "Legacy Format"
-              }
-              variant={
-                integrityStatus === "verified"
-                  ? "success"
-                  : integrityStatus === "mismatch"
-                    ? "danger"
-                    : "warning"
-              }
-              size="xs"
-            />
+                    ? "text-rose-400"
+                    : "text-amber-400"
+              }`}
+            >
+              {integrityStatus === "verified"
+                ? "Verified v2"
+                : integrityStatus === "mismatch"
+                  ? "Tampered"
+                  : "Legacy Format"}
+            </span>
           </div>
 
           {/* Checkboxes per Domain */}

@@ -17,7 +17,6 @@ import { ChevronRight, Search, X } from "lucide-react";
 import { shouldReduceMotion } from "@/lib/appearance";
 import { createSearchRowStaggerTween } from "@/lib/searchMotion";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { TextField } from "@/components/ui/fields/TextField";
 import { getFieldControlClassName } from "@/components/ui/fields/inputStyles";
 import { cn } from "@/lib/utils";
@@ -528,12 +527,9 @@ export function SearchCommandBar<TMeta = unknown>({
 
                     <div className="flex items-center gap-2 shrink-0">
                       {item.badge && (
-                        <StatusPill
-                          label={item.badge}
-                          variant={item.badgeVariant || "neutral"}
-                          size="xs"
-                          className="hidden sm:inline-flex"
-                        />
+                        <span className="hidden sm:inline-block text-[10px] font-mono uppercase tracking-wider text-(--text-muted)">
+                          {item.badge}
+                        </span>
                       )}
                       <ChevronRight
                         className="w-3.5 h-3.5 text-(--text-muted)"

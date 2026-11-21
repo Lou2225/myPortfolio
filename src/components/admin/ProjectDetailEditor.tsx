@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { Project } from "@/types/portfolio";
 import { AdminMobileStepView } from "@/components/admin/AdminMobileStepView";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import {
   FieldSlotButton,
   IconActionButton,
@@ -25,7 +24,6 @@ import { useMediaQuery } from "@/lib/useMediaQuery";
 import { validateProjectYear, validateSkillName } from "@/lib/validation";
 import { cn, findDuplicateValues } from "@/lib/utils";
 import {
-  AlertCircle,
   ArrowLeft,
   Check,
   Eye,
@@ -320,7 +318,7 @@ export function ProjectDetailEditor({
           required
           allowRelativePath
           forceTouched={forceTouched}
-          hint="Recommended 16:10 screenshot (.webp, .png, .jpg max 5MB). Staged until Save & Publish."
+          hint="Recommended 16:10 screenshot (.webp, .png, .jpg max 5MB). Staged until saved via the Brand Portal."
         />
       </div>
 
@@ -519,25 +517,18 @@ export function ProjectDetailEditor({
 
         <div className="order-3 lg:order-2 basis-full lg:basis-auto lg:flex-1 min-w-0 pt-2.5 lg:pt-0 border-t lg:border-t-0 border-(--border-subtle)/60 flex items-start sm:items-center justify-between gap-2">
           <div className="flex items-start sm:items-center gap-2 min-w-0 flex-1">
-            <StatusPill
-              label={`#${String(index + 1).padStart(2, "0")}`}
-              variant="accent"
-              size="xs"
-              className="mt-0.5 sm:mt-0 shrink-0"
-            />
+            <span className="text-xs font-mono font-semibold text-(--text-accent) tabular-nums mt-0.5 sm:mt-0 shrink-0">
+              #{String(index + 1).padStart(2, "0")}
+            </span>
             <span className="text-sm sm:text-base font-semibold text-(--text-primary) leading-snug wrap-break-word lg:truncate">
               {project.title || "Untitled Project"}
             </span>
           </div>
 
           {forceTouched && errors.length > 0 && (
-            <StatusPill
-              label={`${errors.length} ${errors.length === 1 ? "Issue" : "Issues"}`}
-              variant="danger"
-              size="xs"
-              className="shrink-0"
-              icon={<AlertCircle className="w-3 h-3" aria-hidden="true" />}
-            />
+            <span className="text-[11px] font-mono uppercase tracking-wider text-rose-400 shrink-0">
+              {errors.length} {errors.length === 1 ? "Issue" : "Issues"}
+            </span>
           )}
         </div>
 

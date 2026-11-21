@@ -38,21 +38,104 @@ export async function POST(request: Request) {
   const reqInfo = extractRequestNetworkInfo(request.headers);
 
   try {
-    const body = (await request.json()) as {
+    let body: {
       action?: "begin-setup" | "confirm-setup" | "disable";
       code?: string;
       currentPassword?: string;
     };
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as typeof body;
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
     const sessionSecret = requireSessionSecret();
 
+    const verifyPasswordIfTotpActive = async (): Promise<NextResponse | null> => {
+      const preStore = ctx.securityStore ?? (await readAdminSecurityStore());
+      if (!preStore.totpEnabled) return null;
+
+      const pwdRateKey = `totp-disable:${reqInfo.ipRateKey}`;
+      const rate = checkSecurityRateLimit(preStore, pwdRateKey);
+      if (!rate.allowed) {
+        return NextResponse.json(
+          {
+            error: `Too many incorrect password checks. Retry in ${rate.retryAfterSec}s.`,
+          },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(rate.retryAfterSec),
+              "Cache-Control": "no-store",
+            },
+          }
+        );
+      }
+
+      if (typeof body.currentPassword !== "string" || !body.currentPassword) {
+        return NextResponse.json(
+          {
+            error:
+              "Authenticator 2FA is already active. Enter your current password to reconfigure it.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const pwdCheck = await verifyAdminCredential(body.currentPassword);
+      if (!pwdCheck.valid) {
+        let nowBlocked = false;
+        await mutateAdminSecurityStore((store) => {
+          const penalized = recordSecurityRateFailure(store, pwdRateKey, {
+            maxFailures: 5,
+          });
+          nowBlocked =
+            penalized.loginFailures[pwdRateKey]?.blockedUntil != null;
+          return appendSecurityAudit(penalized, {
+            action: nowBlocked ? "login_blocked" : "login_failed",
+            actorDeviceId: ctx.currentDeviceId,
+            targetDeviceId: null,
+            deviceLabel: "Authenticator App (TOTP)",
+            ipMasked: reqInfo.ipMasked,
+            outcome: "blocked",
+            detail:
+              "Incorrect password submitted while trying to rotate active Authenticator 2FA.",
+          });
+        });
+        return NextResponse.json(
+          {
+            error: nowBlocked
+              ? "Too many incorrect password attempts. Cooldown active for 15 minutes."
+              : "Administrator password is incorrect.",
+          },
+          { status: nowBlocked ? 429 : 401 }
+        );
+      }
+      return null;
+    };
+
     if (body.action === "begin-setup") {
+      const activeGuard = await verifyPasswordIfTotpActive();
+      if (activeGuard) return activeGuard;
+
       const secret = generateTotpSecret();
       const pendingEnc = encryptTotpSecret(secret, sessionSecret);
+      const pendingExpiresAt = Date.now() + 15 * 60 * 1000;
 
       await mutateAdminSecurityStore((store) => ({
         ...store,
         totpPendingSecretEnc: pendingEnc,
+        totpPendingExpiresAt: pendingExpiresAt,
       }));
 
       const otpAuthUri = buildOtpAuthUri({
@@ -71,17 +154,24 @@ export async function POST(request: Request) {
         },
       });
 
-      return NextResponse.json({
-        success: true,
-        qrSvg,
-        manualSecret: secret,
-        otpAuthUri,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          qrSvg,
+          manualSecret: secret,
+          otpAuthUri,
+          expiresAt: new Date(pendingExpiresAt).toISOString(),
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     if (body.action === "confirm-setup") {
+      const activeGuard = await verifyPasswordIfTotpActive();
+      if (activeGuard) return activeGuard;
+
       const setupRateKey = `totp-setup:${reqInfo.ipRateKey}`;
-      const preStore = await readAdminSecurityStore();
+      const preStore = ctx.securityStore ?? (await readAdminSecurityStore());
       const setupRate = checkSecurityRateLimit(preStore, setupRateKey);
       if (!setupRate.allowed) {
         return NextResponse.json(
@@ -95,7 +185,9 @@ export async function POST(request: Request) {
         );
       }
 
-      const cleanCode = (body.code || "").replace(/\D/g, "");
+      const cleanCode = (
+        typeof body.code === "string" ? body.code : ""
+      ).replace(/\D/g, "");
       if (cleanCode.length !== 6) {
         return NextResponse.json(
           { error: "Enter a valid 6-digit Authenticator verification code." },
@@ -112,17 +204,25 @@ export async function POST(request: Request) {
       };
 
       const updated = await mutateAdminSecurityStore((store) => {
-        const pendingSecret = decryptTotpSecret(
-          store.totpPendingSecretEnc,
-          sessionSecret
-        );
+        const isExpired =
+          typeof store.totpPendingExpiresAt === "number" &&
+          Date.now() > store.totpPendingExpiresAt;
+        const pendingSecret = isExpired
+          ? null
+          : decryptTotpSecret(store.totpPendingSecretEnc, sessionSecret);
         if (!pendingSecret) {
           outcome = {
             ok: false,
             status: 400,
             error: "Authenticator setup expired. Generate a fresh secret QR.",
           };
-          return store;
+          return isExpired
+            ? {
+                ...store,
+                totpPendingSecretEnc: null,
+                totpPendingExpiresAt: null,
+              }
+            : store;
         }
 
         const verified = verifyTotpToken({
@@ -153,6 +253,7 @@ export async function POST(request: Request) {
             totpEnabled: true,
             totpSecretEnc: store.totpPendingSecretEnc,
             totpPendingSecretEnc: null,
+            totpPendingExpiresAt: null,
             totpLastStepUsed: verified.matchedStep,
           },
           {
@@ -168,18 +269,24 @@ export async function POST(request: Request) {
       });
 
       if (!outcome.ok) {
-        return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+        return NextResponse.json(
+          { error: outcome.error },
+          { status: outcome.status, headers: { "Cache-Control": "no-store" } }
+        );
       }
 
-      return NextResponse.json({
-        success: true,
-        totpEnabled: updated.totpEnabled,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          totpEnabled: updated.totpEnabled,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     if (body.action === "disable") {
       const disableRateKey = `totp-disable:${reqInfo.ipRateKey}`;
-      const preStore = await readAdminSecurityStore();
+      const preStore = ctx.securityStore ?? (await readAdminSecurityStore());
       const disableRate = checkSecurityRateLimit(preStore, disableRateKey);
       if (!disableRate.allowed) {
         return NextResponse.json(
@@ -193,7 +300,7 @@ export async function POST(request: Request) {
         );
       }
 
-      if (!body.currentPassword) {
+      if (typeof body.currentPassword !== "string" || !body.currentPassword) {
         return NextResponse.json(
           { error: "Enter your administrator password to disable Authenticator 2FA." },
           { status: 400 }

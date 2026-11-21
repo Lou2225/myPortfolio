@@ -63,6 +63,9 @@ export interface SectionHeaders {
   skillsEyebrow: string;
   skillsHeading: string;
   skillsSubtitle: string;
+  certificatesEyebrow?: string;
+  certificatesHeading?: string;
+  certificatesSubtitle?: string;
   projectsEyebrow: string;
   projectsHeading: string;
   projectsCounterLabel: string;
@@ -74,6 +77,31 @@ export interface SectionHeaders {
   contactFormTitle: string;
   contactFormSubtitle: string;
   footerTagline: string;
+}
+
+export type CertificateCategory =
+  | "academic"
+  | "industry"
+  | "analytics"
+  | "fullstack";
+
+export interface Certificate {
+  id: string;
+  title: string;
+  issuer: string;
+  issuerLogoUrl?: string;
+  issueDate: string;
+  expiryDate?: string | null;
+  credentialId?: string | null;
+  category: CertificateCategory;
+  description?: string | null;
+  thumbnailUrl?: string | null;
+  skills: string[];
+  fileUrl: string;
+  fileType: "image" | "pdf";
+  featured: boolean;
+  published: boolean;
+  order: number;
 }
 
 export interface Project {
@@ -144,7 +172,7 @@ export type AnalyticsDeviceType = "desktop" | "tablet" | "mobile";
 
 export interface AnalyticsEvent {
   id: string;
-  type: "page_view" | "chapter_view" | "project_click" | "contact_click" | "cv_download";
+  type: "page_view" | "chapter_view" | "project_click" | "contact_click" | "cv_download" | "certificate_click";
   target: string;
   createdAt: string;
   sessionId?: string;
@@ -237,6 +265,7 @@ export interface PortfolioDatabase {
   marqueePrinciples: string[];
   pillars: Pillar[];
   skills: SkillCategory[];
+  certificates: Certificate[];
   projects: Project[];
   impactMetrics: Metric[];
   appearance: AppearanceConfig;
@@ -251,6 +280,7 @@ export interface PublicPortfolioData {
   marqueePrinciples: string[];
   pillars: Pillar[];
   skills: SkillCategory[];
+  certificates: Certificate[];
   projects: Project[];
   impactMetrics: Metric[];
   appearance?: AppearanceConfig;

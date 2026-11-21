@@ -27,6 +27,17 @@ export interface BrandPortalWorkspaceState {
   moduleLabel: string;
   hasUnsavedChanges: boolean;
   saving: boolean;
+  saveLabel: string;
+  validationErrorCount: number;
+  canSave: boolean;
+  canDiscard: boolean;
+  hasFollowIssue: boolean;
+}
+
+export interface BrandPortalWorkspaceActions {
+  onSave?: () => void;
+  onDiscard?: () => void;
+  onFollowIssue?: () => void;
 }
 
 export interface BrandPortalMetaState {
@@ -55,6 +66,11 @@ const DEFAULT_WORKSPACE: BrandPortalWorkspaceState = {
   moduleLabel: "",
   hasUnsavedChanges: false,
   saving: false,
+  saveLabel: "Save & Publish",
+  validationErrorCount: 0,
+  canSave: false,
+  canDiscard: false,
+  hasFollowIssue: false,
 };
 
 const DEFAULT_META: BrandPortalMetaState = {
@@ -71,6 +87,18 @@ const SERVER_SNAPSHOT: BrandPortalSnapshot = {
 let currentSnapshot: BrandPortalSnapshot = SERVER_SNAPSHOT;
 let nextNoticeId = 1;
 const listeners = new Set<() => void>();
+
+/**
+ * Active module command handlers kept outside snapshot equality checks
+ * so callback identity updates never cause extra re-renders in BrandPortalOrb.
+ */
+let activeWorkspaceActions: {
+  moduleId: string | null;
+  actions: BrandPortalWorkspaceActions;
+} = {
+  moduleId: null,
+  actions: {},
+};
 
 function emitSnapshot(next: BrandPortalSnapshot) {
   currentSnapshot = next;
@@ -152,15 +180,28 @@ export function dismissBrandPortalNotice(noticeId?: number): void {
   });
 }
 
-function setBrandPortalWorkspace(
-  workspace: BrandPortalWorkspaceState
+export function setBrandPortalWorkspace(
+  workspace: BrandPortalWorkspaceState,
+  actions?: BrandPortalWorkspaceActions
 ): void {
+  if (actions !== undefined) {
+    activeWorkspaceActions = {
+      moduleId: workspace.moduleId,
+      actions,
+    };
+  }
+
   const prev = currentSnapshot.workspace;
   if (
     prev.moduleId === workspace.moduleId &&
     prev.moduleLabel === workspace.moduleLabel &&
     prev.hasUnsavedChanges === workspace.hasUnsavedChanges &&
-    prev.saving === workspace.saving
+    prev.saving === workspace.saving &&
+    prev.saveLabel === workspace.saveLabel &&
+    prev.validationErrorCount === workspace.validationErrorCount &&
+    prev.canSave === workspace.canSave &&
+    prev.canDiscard === workspace.canDiscard &&
+    prev.hasFollowIssue === workspace.hasFollowIssue
   ) {
     return;
   }
@@ -171,12 +212,80 @@ function setBrandPortalWorkspace(
   });
 }
 
-function clearBrandPortalWorkspace(moduleId: string): void {
+export function clearBrandPortalWorkspace(moduleId: string): void {
+  if (activeWorkspaceActions.moduleId === moduleId) {
+    activeWorkspaceActions = { moduleId: null, actions: {} };
+  }
   if (currentSnapshot.workspace.moduleId !== moduleId) return;
   emitSnapshot({
     ...currentSnapshot,
     workspace: DEFAULT_WORKSPACE,
   });
+}
+
+/**
+ * Triggers the active `/admin` module's Save / Publish / Update handler registered in Brand Portal.
+ */
+export function triggerBrandPortalSave(): boolean {
+  const { workspace } = currentSnapshot;
+  if (
+    !workspace.moduleId ||
+    workspace.saving ||
+    !workspace.canSave ||
+    activeWorkspaceActions.moduleId !== workspace.moduleId ||
+    !activeWorkspaceActions.actions.onSave
+  ) {
+    return false;
+  }
+  activeWorkspaceActions.actions.onSave();
+  return true;
+}
+
+/**
+ * Triggers the active `/admin` module's Discard handler registered in Brand Portal.
+ */
+export function triggerBrandPortalDiscard(): boolean {
+  const { workspace } = currentSnapshot;
+  if (
+    !workspace.moduleId ||
+    workspace.saving ||
+    !workspace.canDiscard ||
+    activeWorkspaceActions.moduleId !== workspace.moduleId ||
+    !activeWorkspaceActions.actions.onDiscard
+  ) {
+    return false;
+  }
+  activeWorkspaceActions.actions.onDiscard();
+  return true;
+}
+
+/**
+ * Triggers the active `/admin` module's Follow Validation Issue jump handler registered in Brand Portal.
+ */
+export function triggerBrandPortalFollowIssue(): boolean {
+  const { workspace } = currentSnapshot;
+  if (
+    !workspace.moduleId ||
+    activeWorkspaceActions.moduleId !== workspace.moduleId ||
+    !activeWorkspaceActions.actions.onFollowIssue
+  ) {
+    return false;
+  }
+  activeWorkspaceActions.actions.onFollowIssue();
+  return true;
+}
+
+/**
+ * Returns whether the currently mounted `/admin` module holds unsaved draft edits.
+ */
+export function getActiveBrandPortalDraft(): {
+  hasUnsavedChanges: boolean;
+  moduleLabel: string;
+} {
+  return {
+    hasUnsavedChanges: currentSnapshot.workspace.hasUnsavedChanges,
+    moduleLabel: currentSnapshot.workspace.moduleLabel,
+  };
 }
 
 export function setBrandPortalMeta(meta: Partial<BrandPortalMetaState>): void {
@@ -213,32 +322,92 @@ export function useBrandPortalStatus(): BrandPortalSnapshot {
 }
 
 /**
- * Synchronizes an active admin manager's draft / saving state with the Brand Portal
- * orb, automatically announcing transitions into "Unsaved Draft" or "Publishing..."
- * and resetting cleanly when switching away from the module.
+ * Synchronizes an active `/admin` module's draft state, validation issue counter,
+ * and Save / Discard / Follow Issue command handlers directly into the floating
+ * Brand Portal Dynamic Island capsule.
  */
 export function useBrandPortalWorkspaceSync({
   moduleId,
   moduleLabel,
   hasUnsavedChanges,
   saving,
+  saveLabel = "Save & Publish",
+  validationErrorCount = 0,
+  canSave,
+  canDiscard,
+  onSave,
+  onDiscard,
+  onFollowIssue,
 }: {
   moduleId: string;
   moduleLabel: string;
   hasUnsavedChanges: boolean;
   saving: boolean;
+  saveLabel?: string;
+  validationErrorCount?: number;
+  canSave?: boolean;
+  canDiscard?: boolean;
+  onSave?: () => void;
+  onDiscard?: () => void;
+  onFollowIssue?: () => void;
 }) {
-  const prevDirtyRef = useRef(hasUnsavedChanges);
   const prevSavingRef = useRef(saving);
+  const actionsRef = useRef<BrandPortalWorkspaceActions>({
+    onSave,
+    onDiscard,
+    onFollowIssue,
+  });
+
+  useEffect(() => {
+    actionsRef.current = { onSave, onDiscard, onFollowIssue };
+    if (activeWorkspaceActions.moduleId === moduleId) {
+      activeWorkspaceActions = {
+        moduleId,
+        actions: {
+          onSave: onSave ? () => actionsRef.current.onSave?.() : undefined,
+          onDiscard: onDiscard
+            ? () => actionsRef.current.onDiscard?.()
+            : undefined,
+          onFollowIssue: onFollowIssue
+            ? () => actionsRef.current.onFollowIssue?.()
+            : undefined,
+        },
+      };
+    }
+  }, [moduleId, onSave, onDiscard, onFollowIssue]);
+
+  const resolvedCanSave =
+    canSave !== undefined ? canSave : Boolean(onSave) && hasUnsavedChanges;
+  const resolvedCanDiscard =
+    canDiscard !== undefined
+      ? canDiscard
+      : Boolean(onDiscard) && hasUnsavedChanges;
+  const hasFollowIssue = Boolean(onFollowIssue) && validationErrorCount > 0;
 
   useEffect(() => {
     const rafId = requestAnimationFrame(() => {
-      setBrandPortalWorkspace({
-        moduleId,
-        moduleLabel,
-        hasUnsavedChanges,
-        saving,
-      });
+      setBrandPortalWorkspace(
+        {
+          moduleId,
+          moduleLabel,
+          hasUnsavedChanges,
+          saving,
+          saveLabel,
+          validationErrorCount,
+          canSave: resolvedCanSave,
+          canDiscard: resolvedCanDiscard,
+          hasFollowIssue,
+        },
+        {
+          onSave: onSave ? () => actionsRef.current.onSave?.() : undefined,
+          onDiscard: onDiscard
+            ? () => actionsRef.current.onDiscard?.()
+            : undefined,
+          onFollowIssue: onFollowIssue
+            ? () => actionsRef.current.onFollowIssue?.()
+            : undefined,
+        }
+      );
 
       if (!prevSavingRef.current && saving) {
         if (currentSnapshot.notice?.tone !== "saving") {
@@ -249,25 +418,28 @@ export function useBrandPortalWorkspaceSync({
             durationMs: 0,
           });
         }
-      } else if (!prevDirtyRef.current && hasUnsavedChanges && !saving) {
-        if (currentSnapshot.notice?.tone !== "draft") {
-          announceBrandPortalStatus({
-            tone: "draft",
-            label: "Unsaved Draft",
-            detail: `${moduleLabel} · Save & Publish to go live`,
-            durationMs: 2600,
-          });
-        }
       }
 
-      prevDirtyRef.current = hasUnsavedChanges;
       prevSavingRef.current = saving;
     });
 
     return () => {
       cancelAnimationFrame(rafId);
     };
-  }, [moduleId, moduleLabel, hasUnsavedChanges, saving]);
+  }, [
+    moduleId,
+    moduleLabel,
+    hasUnsavedChanges,
+    saving,
+    saveLabel,
+    validationErrorCount,
+    resolvedCanSave,
+    resolvedCanDiscard,
+    hasFollowIssue,
+    onSave,
+    onDiscard,
+    onFollowIssue,
+  ]);
 
   useEffect(() => {
     return () => {

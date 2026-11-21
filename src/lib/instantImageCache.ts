@@ -76,7 +76,7 @@ export function useInstantImageUrl(url?: string): string {
  */
 export async function uploadImageToAdminApi(
   file: File,
-  folder: "hero" | "monogram" | "projects"
+  folder: "hero" | "monogram" | "projects" | "certificates" | "general" = "general"
 ): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);

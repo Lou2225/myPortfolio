@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { requireSessionSecret } from "@/lib/auth";
 import { constantTimeHashEqual } from "@/lib/security";
+import { getSiteUrl } from "@/lib/siteUrl";
+
+const SUPPORTED_COSE_ALGORITHMS = new Set<number>([-7, -257]);
 
 export interface PasskeyChallengePayload {
   kind: "webauthn_passkey_challenge";
@@ -21,6 +24,7 @@ export interface ParsedAuthenticatorData {
   attestedCredentialDataIncluded: boolean;
   counter: number;
   aaguid: string | null;
+  attestedCredentialId: string | null;
 }
 
 const KNOWN_AAGUID_LABELS: Record<string, string> = {
@@ -35,9 +39,34 @@ const KNOWN_AAGUID_LABELS: Record<string, string> = {
   "b5397666-4885-aa6b-cebf-e52262a439a2": "Chromium Passkey",
 };
 
+function getAllowedPasskeyHostnames(incomingUrl: URL): Set<string> {
+  const allowed = new Set<string>(["localhost"]);
+  const addHost = (raw?: string | null) => {
+    const trimmed = (raw || "").trim();
+    if (!trimmed) return;
+    try {
+      const parsed = /^https?:\/\//i.test(trimmed)
+        ? new URL(trimmed)
+        : new URL(`https://${trimmed}`);
+      if (parsed.hostname) {
+        allowed.add(parsed.hostname.toLowerCase());
+      }
+    } catch {
+      // ignore malformed host env value
+    }
+  };
+
+  addHost(incomingUrl.hostname);
+  addHost(getSiteUrl().hostname);
+  addHost(process.env.NEXT_PUBLIC_SITE_URL);
+  addHost(process.env.VERCEL_PROJECT_PRODUCTION_URL);
+  addHost(process.env.VERCEL_URL);
+  return allowed;
+}
+
 /**
  * Resolves the active WebAuthn Relying Party ID (`rpId`) and expected `origin`
- * from an incoming HTTP request (supporting `louvaldellon.vercel.app`, custom domains, and `localhost`).
+ * from an incoming HTTP request while strictly allowlisting canonical/deployment hosts.
  */
 export function resolvePasskeyRelyingParty(request: Request): {
   rpId: string;
@@ -45,13 +74,28 @@ export function resolvePasskeyRelyingParty(request: Request): {
   supported: boolean;
   reason?: string;
 } {
+  let incoming: URL;
+  try {
+    incoming = new URL(request.url);
+  } catch {
+    return {
+      rpId: "localhost",
+      origin: "http://localhost:3000",
+      supported: false,
+      reason: "Unable to parse request URL for WebAuthn passkey.",
+    };
+  }
+
+  const allowedHosts = getAllowedPasskeyHostnames(incoming);
   const headerOrigin = request.headers.get("origin")?.trim();
   let url: URL;
   try {
     if (headerOrigin) {
       url = new URL(headerOrigin);
+      if (url.username || url.password) {
+        throw new Error("Origin must not include credentials.");
+      }
     } else {
-      const incoming = new URL(request.url);
       const forwardedProto = request.headers
         .get("x-forwarded-proto")
         ?.split(",")[0]
@@ -65,6 +109,15 @@ export function resolvePasskeyRelyingParty(request: Request): {
         : incoming.protocol;
       const host = forwardedHost || request.headers.get("host") || incoming.host;
       url = new URL(`${proto}//${host}`);
+      if (
+        url.username ||
+        url.password ||
+        url.pathname !== "/" ||
+        url.search ||
+        url.hash
+      ) {
+        throw new Error("Host header contains unexpected URL components.");
+      }
     }
   } catch {
     return {
@@ -76,6 +129,16 @@ export function resolvePasskeyRelyingParty(request: Request): {
   }
 
   const hostname = url.hostname.toLowerCase();
+  const isLocalhost = hostname === "localhost" || hostname.endsWith(".localhost");
+  if (!isLocalhost && !allowedHosts.has(hostname)) {
+    return {
+      rpId: hostname,
+      origin: url.origin,
+      supported: false,
+      reason: `Untrusted WebAuthn origin host (${hostname}).`,
+    };
+  }
+
   const isIpAddress =
     /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":");
 
@@ -89,7 +152,6 @@ export function resolvePasskeyRelyingParty(request: Request): {
     };
   }
 
-  const isLocalhost = hostname === "localhost" || hostname.endsWith(".localhost");
   if (url.protocol !== "https:" && !isLocalhost) {
     return {
       rpId: hostname,
@@ -149,7 +211,9 @@ export function verifyPasskeyChallengeToken(
     return null;
   }
 
-  const [encoded, sig] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [encoded, sig] = parts;
   if (!encoded || !sig) return null;
 
   const expectedSig = crypto
@@ -227,8 +291,15 @@ export function parseAuthenticatorData(
   const counter = authDataBuf.readUInt32BE(33);
 
   let aaguid: string | null = null;
+  let attestedCredentialId: string | null = null;
   if (attestedCredentialDataIncluded && authDataBuf.length >= 55) {
     aaguid = formatAaguid(authDataBuf.subarray(37, 53));
+    const credIdLen = authDataBuf.readUInt16BE(53);
+    if (credIdLen > 0 && authDataBuf.length >= 55 + credIdLen) {
+      attestedCredentialId = authDataBuf
+        .subarray(55, 55 + credIdLen)
+        .toString("base64url");
+    }
   }
 
   return {
@@ -240,6 +311,7 @@ export function parseAuthenticatorData(
     attestedCredentialDataIncluded,
     counter,
     aaguid,
+    attestedCredentialId,
   };
 }
 
@@ -367,11 +439,32 @@ export function verifyPasskeyRegistration(params: {
     return { ok: false, error: "Passkey RP ID hash does not match this domain." };
   }
 
-  if (!authData.userPresent) {
+  if (!authData.userPresent || !authData.userVerified) {
     return {
       ok: false,
       error:
-        "Authenticator user presence confirmation (UP) is required to link an admin passkey.",
+        "Authenticator user presence (UP) and biometric/PIN verification (UV) are required to link an admin passkey.",
+    };
+  }
+
+  if (
+    !authData.attestedCredentialDataIncluded ||
+    !authData.attestedCredentialId ||
+    !constantTimeHashEqual(authData.attestedCredentialId, credentialId)
+  ) {
+    return {
+      ok: false,
+      error:
+        "Attested credential ID in authenticatorData does not match registered credential.",
+    };
+  }
+
+  const algorithm =
+    typeof params.algorithm === "number" ? params.algorithm : -7;
+  if (!SUPPORTED_COSE_ALGORITHMS.has(algorithm)) {
+    return {
+      ok: false,
+      error: `Unsupported WebAuthn public key algorithm (${algorithm}).`,
     };
   }
 
@@ -379,11 +472,20 @@ export function verifyPasskeyRegistration(params: {
   let spkiBuffer: Buffer;
   try {
     spkiBuffer = Buffer.from(params.publicKeySpkiBase64Url, "base64url");
-    crypto.createPublicKey({
+    const pubKey = crypto.createPublicKey({
       key: spkiBuffer,
       format: "der",
       type: "spki",
     });
+    if (
+      (algorithm === -7 && pubKey.asymmetricKeyType !== "ec") ||
+      (algorithm === -257 && pubKey.asymmetricKeyType !== "rsa")
+    ) {
+      return {
+        ok: false,
+        error: "Passkey public key type does not match declared COSE algorithm.",
+      };
+    }
   } catch {
     return {
       ok: false,
@@ -391,8 +493,6 @@ export function verifyPasskeyRegistration(params: {
     };
   }
 
-  const algorithm =
-    typeof params.algorithm === "number" ? params.algorithm : -7;
   const transports = Array.isArray(params.transports)
     ? params.transports
         .filter((t): t is string => typeof t === "string" && t.length <= 32)
@@ -465,10 +565,11 @@ export function verifyPasskeyAssertion(params: {
     return { ok: false, error: "Passkey RP ID hash mismatch." };
   }
 
-  if (!authData.userPresent) {
+  if (!authData.userPresent || !authData.userVerified) {
     return {
       ok: false,
-      error: "Authenticator user presence confirmation is required.",
+      error:
+        "Authenticator user presence (UP) and biometric/PIN verification (UV) are required.",
     };
   }
 

@@ -33,7 +33,7 @@ function generateReadableRecoveryKey(): string {
 export async function GET() {
   try {
     const ctx = await getSessionAndDeviceContext();
-    if (ctx.storageUnavailable) {
+    if (ctx.storageUnavailable || !ctx.securityStore) {
       return NextResponse.json(
         { error: "Security registry is temporarily unavailable." },
         { status: 503 }
@@ -43,8 +43,10 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const store = await readAdminSecurityStore();
-    return NextResponse.json(toSafeSecuritySummary(store, ctx.currentDeviceId));
+    return NextResponse.json(
+      toSafeSecuritySummary(ctx.securityStore, ctx.currentDeviceId),
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     if (err instanceof StorageReadError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
@@ -197,9 +199,12 @@ export async function PATCH(request: Request) {
         );
       }
 
+      let foundDevice = false;
       const updated = await mutateAdminSecurityStore((store) => {
+        foundDevice = false;
         const exists = store.devices.find((d) => d.id === targetId);
         if (!exists) return store;
+        foundDevice = true;
         const nextDevices = store.devices.map((d) =>
           d.id === targetId
             ? {
@@ -222,10 +227,20 @@ export async function PATCH(request: Request) {
         );
       });
 
-      return NextResponse.json({
-        success: true,
-        summary: toSafeSecuritySummary(updated, ctx.currentDeviceId),
-      });
+      if (!foundDevice) {
+        return NextResponse.json(
+          { error: "Trusted device not found." },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          summary: toSafeSecuritySummary(updated, ctx.currentDeviceId),
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     if (body.action === "revoke-device") {
@@ -237,11 +252,13 @@ export async function PATCH(request: Request) {
         );
       }
 
-      revokedCurrentDevice = targetId === ctx.currentDeviceId;
-
+      let foundTarget = false;
       const updated = await mutateAdminSecurityStore((store) => {
+        foundTarget = false;
+        revokedCurrentDevice = targetId === ctx.currentDeviceId;
         const target = store.devices.find((d) => d.id === targetId);
         if (!target) return store;
+        foundTarget = true;
 
         const revokedIds = new Set<string>([targetId]);
         const nowIso = new Date().toISOString();
@@ -287,6 +304,13 @@ export async function PATCH(request: Request) {
           }
         );
       });
+
+      if (!foundTarget) {
+        return NextResponse.json(
+          { error: "Trusted device not found." },
+          { status: 404 }
+        );
+      }
 
       if (revokedCurrentDevice) {
         cookieStore.delete(REGISTERED_DEVICE_COOKIE);
@@ -433,6 +457,7 @@ export async function PATCH(request: Request) {
       body.action === "regenerate-stealth-key"
     ) {
       const updated = await mutateAdminSecurityStore((store) => {
+        generatedStealthKey = null;
         const nextEnabled =
           body.action === "regenerate-stealth-key"
             ? store.stealthGateEnabled

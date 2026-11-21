@@ -1,41 +1,34 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { usePortfolio } from "@/context/PortfolioContext";
 import { resolveEffectiveReducedMotion } from "@/lib/appearance";
 import { dispatchJumpscareTrigger } from "@/lib/jumpscare";
+import { prewarmResumePdf } from "@/lib/resumeCache";
 import { Avatar } from "@/components/common/Avatar";
-import { ResumeViewerModal } from "@/components/common/ResumeViewerModal";
 import { SplitText } from "@/components/motion/SplitText";
 import { Button } from "@/components/ui/Button";
 import { Eyebrow, BodyText, MonoLabel } from "@/components/ui/Typography";
 import { ArrowDown, FileText } from "lucide-react";
 
+const ResumeViewerModal = dynamic(
+  () =>
+    import("@/components/common/ResumeViewerModal").then(
+      (mod) => mod.ResumeViewerModal
+    ),
+  { ssr: false }
+);
+
 export function Hero() {
   const { profile, appearance, trackEvent } = usePortfolio();
   const [resumeOpen, setResumeOpen] = useState(false);
-  const [hasSlicedPortrait, setHasSlicedPortrait] = useState(false);
-  const prewarmedResumeRef = useRef<string | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
 
   const prewarmResume = () => {
-    const raw = (profile.resumeUrl || "").trim();
-    if (
-      !raw ||
-      prewarmedResumeRef.current === raw ||
-      /^https?:\/\/drive\.google\.com\//i.test(raw)
-    ) {
-      return;
-    }
-    prewarmedResumeRef.current = raw;
-    void fetch(`/api/resume?v=${encodeURIComponent(raw)}`)
-      .then((res) => (res.ok ? res.arrayBuffer() : null))
-      .catch(() => {
-        prewarmedResumeRef.current = null;
-      });
+    prewarmResumePdf(profile.resumeUrl);
   };
   const nameLayerRef = useRef<HTMLDivElement>(null);
-  const avatarLayerRef = useRef<HTMLDivElement>(null);
 
   const reducedMotion = resolveEffectiveReducedMotion(appearance);
 
@@ -45,7 +38,6 @@ export function Hero() {
 
     if (reducedMotion) {
       if (nameLayerRef.current) nameLayerRef.current.style.transform = "";
-      if (avatarLayerRef.current) avatarLayerRef.current.style.transform = "";
       return;
     }
 
@@ -66,19 +58,6 @@ export function Hero() {
         if (nameLayerRef.current) {
           gsap.to(nameLayerRef.current, {
             yPercent: 20,
-            ease: "none",
-            scrollTrigger: {
-              trigger: section,
-              start: "top top",
-              end: "bottom top",
-              scrub: true,
-            },
-          });
-        }
-
-        if (avatarLayerRef.current) {
-          gsap.to(avatarLayerRef.current, {
-            yPercent: 8,
             ease: "none",
             scrollTrigger: {
               trigger: section,
@@ -252,14 +231,10 @@ export function Hero() {
       </div>
 
       {/* LAYER 2 (Middle Cutout Portrait, z-20 — Anchored to bottom of viewport) */}
-      <div
-        ref={avatarLayerRef}
-        className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-center pointer-events-none"
-      >
+      <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-center pointer-events-none">
         <Avatar
-          imageSrc={profile.avatarUrl || "/assets/hero/avatar.png"}
+          imageSrc={profile.avatarUrl || "/assets/hero/avatar.webp"}
           transform={profile.avatarTransform}
-          onFirstSlice={() => setHasSlicedPortrait(true)}
         />
       </div>
 
@@ -278,18 +253,6 @@ export function Hero() {
           <span className="w-6 sm:w-8 h-px bg-brand" />
           <span>{profile.heroScrollCue || "Scroll to enter the story"}</span>
         </a>
-
-        {appearance.liquidDistortion && !reducedMotion && (
-          <span
-            aria-hidden="true"
-            className={`hidden [@media(hover:hover)_and_(pointer:fine)_and_(min-width:1024px)]:inline-flex items-center gap-1.5 text-[0.625rem] font-mono uppercase tracking-[0.22em] text-(--text-muted) transition-opacity duration-700 pointer-events-none select-none ${
-              hasSlicedPortrait ? "opacity-0" : "opacity-75"
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
-            <span>Swipe portrait to reveal</span>
-          </span>
-        )}
 
         <MonoLabel tone="secondary" className="hidden sm:inline">
           00 // PROLOGUE — {profile.education.major}

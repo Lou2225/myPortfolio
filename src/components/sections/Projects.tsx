@@ -133,6 +133,32 @@ export function Projects() {
     }
   };
 
+  const handleTablistKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (visibleProjects.length <= 1) return;
+    let targetIdx: number | null = null;
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+      e.preventDefault();
+      targetIdx = (safeActiveIndex + 1) % visibleProjects.length;
+    } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      targetIdx = (safeActiveIndex - 1 + visibleProjects.length) % visibleProjects.length;
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      targetIdx = 0;
+    } else if (e.key === "End") {
+      e.preventDefault();
+      targetIdx = visibleProjects.length - 1;
+    }
+    if (targetIdx !== null) {
+      markUserPresent();
+      setActiveIndex(targetIdx);
+      const targetProj = visibleProjects[targetIdx];
+      if (targetProj) {
+        document.getElementById(`project-tab-${targetProj.id}`)?.focus();
+      }
+    }
+  };
+
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     markUserPresent();
     setIsPaused(true);
@@ -327,6 +353,8 @@ export function Projects() {
               <div
                 role="tablist"
                 aria-label="Featured Systems Directory"
+                aria-orientation="vertical"
+                onKeyDown={handleTablistKeyDown}
                 className="flex flex-col gap-2.5 flex-1"
               >
                 {visibleProjects.map((proj, idx) => {
@@ -334,9 +362,12 @@ export function Projects() {
                   return (
                     <button
                       key={proj.id}
+                      id={`project-tab-${proj.id}`}
                       type="button"
                       role="tab"
+                      tabIndex={isSelected ? 0 : -1}
                       aria-selected={isSelected}
+                      aria-controls={`project-tabpanel-${proj.id}`}
                       aria-label={`${String(idx + 1).padStart(2, "0")} ${proj.title} — ${proj.category}`}
                       onClick={() => {
                         markUserPresent();
@@ -467,6 +498,10 @@ export function Projects() {
                     return (
                       <div
                         key={proj.id}
+                        role="tabpanel"
+                        id={`project-tabpanel-${proj.id}`}
+                        aria-labelledby={`project-tab-${proj.id}`}
+                        tabIndex={isSelected ? 0 : -1}
                         aria-hidden={!isSelected}
                         className={cn(
                           "col-start-1 row-start-1 w-full h-full flex transition-[opacity,transform,visibility] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[transform,opacity]",

@@ -267,7 +267,13 @@ export function JumpscareController() {
       if (activeRef.current) return;
 
       const target = e.target as HTMLElement | null;
-      if (target?.closest("[data-brand-portal-orb='true']")) return;
+      if (
+        target?.closest(
+          "[data-brand-portal='true'], [data-brand-portal-orb='true']"
+        )
+      ) {
+        return;
+      }
       if (target?.closest("[data-jumpscare-overlay='true']")) return;
 
       const mode = appearance.jumpscareTrigger || "secret-taps";

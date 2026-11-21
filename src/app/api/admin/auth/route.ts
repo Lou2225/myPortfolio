@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import {
   ADMIN_COOKIE_NAME,
@@ -32,7 +32,6 @@ import {
   clearSecurityRateBucket,
   deviceHasThumbprint,
   extractRequestNetworkInfo,
-  isSamePhysicalDeviceHardware,
   mutateAdminSecurityStore,
   readAdminSecurityStore,
   recordSecurityRateFailure,
@@ -49,20 +48,36 @@ import {
   sanitizeDeviceLabel,
 } from "@/lib/validation";
 
+function scheduleBackgroundTask(task: () => Promise<unknown>): void {
+  try {
+    after(() => {
+      void task().catch(() => undefined);
+    });
+  } catch {
+    // Fallback outside Next.js request lifecycle (e.g., direct unit tests)
+    void task().catch(() => undefined);
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const reqInfo = extractRequestNetworkInfo(request.headers);
     const ctx = await getSessionAndDeviceContext();
 
-    if (ctx.storageUnavailable) {
+    if (ctx.storageUnavailable || !ctx.securityStore) {
       return NextResponse.json(
         { error: "Security registry is temporarily unavailable." },
-        { status: 503 }
+        { status: 503, headers: { "Cache-Control": "no-store" } }
       );
     }
 
+    const securityStore = ctx.securityStore;
+
     if (ctx.currentDeviceId && (ctx.authenticated || ctx.deviceRegistered)) {
-      void touchDeviceActivity(ctx.currentDeviceId, reqInfo.ipMasked);
+      const activeId = ctx.currentDeviceId;
+      scheduleBackgroundTask(() =>
+        touchDeviceActivity(activeId, reqInfo.ipMasked)
+      );
     }
 
     // Rolling renewal: refresh `lou_registered_device` cookie once older than 7 days
@@ -78,39 +93,6 @@ export async function GET(request: Request) {
     }
 
     const rp = resolvePasskeyRelyingParty(request);
-
-    if (!ctx.authenticated) {
-      const store = await readAdminSecurityStore();
-      const activeIds = new Set(
-        store.devices.filter((d) => d.status === "active").map((d) => d.id)
-      );
-      const passkeyAvailable =
-        rp.supported &&
-        store.passkeys.some(
-          (pk) => pk.rpId === rp.rpId && activeIds.has(pk.deviceId)
-        );
-
-      return NextResponse.json({
-        authenticated: false,
-        deviceRegistered: ctx.deviceRegistered,
-        currentDeviceId: ctx.currentDeviceId,
-        passkeyAvailable,
-        storageMode: getStorageMode(),
-        ...(!ctx.deviceRegistered
-          ? { deviceChallenge: createDeviceChallengeToken() }
-          : {}),
-      });
-    }
-
-    const [authMeta, securityStore] = await Promise.all([
-      getAdminAuthMeta(),
-      readAdminSecurityStore(),
-    ]);
-
-    const securitySummary = toSafeSecuritySummary(
-      securityStore,
-      ctx.currentDeviceId
-    );
     const activeIds = new Set(
       securityStore.devices
         .filter((d) => d.status === "active")
@@ -122,19 +104,45 @@ export async function GET(request: Request) {
         (pk) => pk.rpId === rp.rpId && activeIds.has(pk.deviceId)
       );
 
-    return NextResponse.json({
-      authenticated: true,
-      deviceRegistered: ctx.deviceRegistered,
-      currentDeviceId: ctx.currentDeviceId,
-      passkeyAvailable,
-      sessionEpoch: securitySummary.sessionEpoch,
-      stealthGateEnabled: securitySummary.stealthGateEnabled,
-      stealthKeyConfigured: securitySummary.stealthKeyConfigured,
-      totpEnabled: securitySummary.totpEnabled,
-      activeDeviceCount: securitySummary.activeDeviceCount,
-      storageMode: getStorageMode(),
-      ...authMeta,
-    });
+    if (!ctx.authenticated) {
+      const stealthActive =
+        securityStore.stealthGateEnabled && activeIds.size > 0;
+      return NextResponse.json(
+        {
+          authenticated: false,
+          deviceRegistered: ctx.deviceRegistered,
+          currentDeviceId: ctx.currentDeviceId,
+          passkeyAvailable: stealthActive && !ctx.deviceRegistered ? false : passkeyAvailable,
+          ...(!ctx.deviceRegistered
+            ? { deviceChallenge: createDeviceChallengeToken() }
+            : {}),
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    const authMeta = await getAdminAuthMeta();
+    const securitySummary = toSafeSecuritySummary(
+      securityStore,
+      ctx.currentDeviceId
+    );
+
+    return NextResponse.json(
+      {
+        authenticated: true,
+        deviceRegistered: ctx.deviceRegistered,
+        currentDeviceId: ctx.currentDeviceId,
+        passkeyAvailable,
+        sessionEpoch: securitySummary.sessionEpoch,
+        stealthGateEnabled: securitySummary.stealthGateEnabled,
+        stealthKeyConfigured: securitySummary.stealthKeyConfigured,
+        totpEnabled: securitySummary.totpEnabled,
+        activeDeviceCount: securitySummary.activeDeviceCount,
+        storageMode: getStorageMode(),
+        ...authMeta,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     if (err instanceof StorageReadError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
@@ -161,7 +169,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as {
+    let body: {
       action?: "recover-device-trust" | "recognize-physical-device";
       challenge?: string;
       keyThumbprint?: string;
@@ -174,6 +182,21 @@ export async function POST(request: Request) {
       portalKey?: string;
       stealthUnlockToken?: string;
     };
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { success: false, error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as typeof body;
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
     // Cryptographic WebCrypto ECDSA P-256 hardware-key device re-recognition
     if (body.action === "recover-device-trust") {
@@ -232,20 +255,14 @@ export async function POST(request: Request) {
           signatureBase64Url: signature,
         });
 
-      if (!matched) {
-        return NextResponse.json({
-          success: false,
-          deviceRegistered: false,
-        });
-      }
-
-      if (!signatureValid) {
+      // Return uniform 401 and record failure for both unknown thumbprints and invalid signatures
+      if (!matched || !signatureValid) {
         await mutateAdminSecurityStore((store) =>
           recordSecurityRateFailure(store, recoverRateKey, { maxFailures: 8 })
         );
         return NextResponse.json(
           { success: false, deviceRegistered: false, error: "Invalid device key signature." },
-          { status: 401 }
+          { status: 401, headers: { "Cache-Control": "no-store" } }
         );
       }
 
@@ -273,150 +290,54 @@ export async function POST(request: Request) {
         secure: isSecureRequest(request),
       });
 
-      return NextResponse.json({
-        success: true,
-        deviceRegistered: true,
-        currentDeviceId: matched.id,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          deviceRegistered: true,
+          currentDeviceId: matched.id,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
-    // Cross-browser physical device recognition on the same registered machine & network
+    // Unauthenticated hardware-fingerprint trust elevation is disabled to prevent
+    // shared-subnet (/24) spoofing and unauthorized public key injection.
     if (body.action === "recognize-physical-device") {
-      const challenge = typeof body.challenge === "string" ? body.challenge : "";
-      const signature =
-        typeof body.signature === "string" ? body.signature.trim() : "";
-
-      if (!challenge || !verifyDeviceChallengeToken(challenge)) {
-        return NextResponse.json(
-          {
-            success: false,
-            deviceRegistered: false,
-            error: "Expired or invalid challenge.",
-          },
-          { status: 401 }
-        );
-      }
-
-      const parsedTelemetry = clientTelemetrySchema.safeParse(
-        body.telemetry ?? {}
-      );
-      if (!parsedTelemetry.success) {
-        return NextResponse.json(
-          {
-            success: false,
-            deviceRegistered: false,
-            error: "Invalid device telemetry.",
-          },
-          { status: 400 }
-        );
-      }
-      const t = parsedTelemetry.data;
-
-      // If the browser sent a WebCrypto public key, verify its challenge signature
-      if (t.publicKeySpki && signature) {
-        const validNewKeySig = verifyEcdsaDeviceSignature({
-          publicKeySpkiBase64: t.publicKeySpki,
-          challenge,
-          signatureBase64Url: signature,
-        });
-        if (!validNewKeySig) {
-          return NextResponse.json(
-            {
-              success: false,
-              deviceRegistered: false,
-              error: "Invalid browser key signature.",
-            },
-            { status: 401 }
-          );
-        }
-      }
-
-      const preStore = await readAdminSecurityStore();
-      const matchedPhysical = preStore.devices.find((d) =>
-        isSamePhysicalDeviceHardware(d, {
-          platform: t.platform,
-          deviceType: t.deviceType,
-          screenMetrics: t.screenMetrics ?? null,
-          cpuCores: typeof t.cpuCores === "number" ? t.cpuCores : null,
-          timezone: t.timezone ?? null,
-          ipMasked: reqInfo.ipMasked,
-        })
-      );
-
-      if (!matchedPhysical) {
-        return NextResponse.json({
+      return NextResponse.json(
+        {
           success: false,
           deviceRegistered: false,
-        });
-      }
-
-      const updated = await mutateAdminSecurityStore((store) => ({
-        ...store,
-        devices: store.devices.map((d) => {
-          if (d.id !== matchedPhysical.id) return d;
-          const nextBrowserKeys: Record<string, string> = {
-            ...(d.browserKeys || {}),
-            ...(d.keyThumbprint && d.publicKeySpki
-              ? { [d.keyThumbprint]: d.publicKeySpki }
-              : {}),
-            ...(t.keyThumbprint && t.publicKeySpki
-              ? { [t.keyThumbprint]: t.publicKeySpki }
-              : {}),
-          };
-          const nextBrowsers = Array.from(
-            new Set([
-              ...(d.browsers || [d.browser]),
-              t.browser,
-            ].filter(Boolean))
-          );
-          return {
-            ...d,
-            browser: t.browser || d.browser,
-            browsers: nextBrowsers,
-            browserKeys: nextBrowserKeys,
-            keyThumbprint: t.keyThumbprint || d.keyThumbprint,
-            publicKeySpki: t.publicKeySpki || d.publicKeySpki,
-            lastSeenAt: new Date().toISOString(),
-          };
-        }),
-      }));
-
-      const cookieStore = await cookies();
-      setDeviceCookie(cookieStore, {
-        deviceId: matchedPhysical.id,
-        keyThumbprint: t.keyThumbprint || matchedPhysical.keyThumbprint,
-        epoch: updated.sessionEpoch,
-        secure: isSecureRequest(request),
-      });
-
-      return NextResponse.json({
-        success: true,
-        deviceRegistered: true,
-        currentDeviceId: matchedPhysical.id,
-      });
+          error:
+            "Unauthenticated hardware fingerprint trust elevation is disabled. Sign in with Password + 2FA, Passkey, or QR Pairing to trust a new browser.",
+        },
+        { status: 403, headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     // Check Stealth Gate status for audit attribution (while allowing valid rate-limited
     // administrator password + TOTP authentication so the owner can never be locked out).
     const stealthCheck = await checkStealthGateAccess({
-      portalKey: body.portalKey,
-      stealthUnlockToken: body.stealthUnlockToken,
+      portalKey: typeof body.portalKey === "string" ? body.portalKey : undefined,
+      stealthUnlockToken:
+        typeof body.stealthUnlockToken === "string"
+          ? body.stealthUnlockToken
+          : undefined,
     });
-    if (stealthCheck.storageUnavailable) {
+    if (stealthCheck.storageUnavailable || !stealthCheck.securityStore) {
       return NextResponse.json(
         { success: false, error: "Security storage temporarily unavailable." },
         { status: 503 }
       );
     }
 
-    if (!body.password) {
+    if (typeof body.password !== "string" || !body.password) {
       return NextResponse.json(
         { success: false, error: "Administrator password is required." },
         { status: 400 }
       );
     }
 
-    const currentStore = await readAdminSecurityStore();
+    const currentStore = stealthCheck.securityStore;
     const rate = checkSecurityRateLimit(currentStore, reqInfo.ipRateKey);
     if (!rate.allowed) {
       const mins = Math.floor(rate.retryAfterSec / 60);
@@ -1014,7 +935,8 @@ export async function DELETE(request: Request) {
 
   if (unregisterDevice) {
     cookieStore.delete(REGISTERED_DEVICE_COOKIE);
-    if (ctx.currentDeviceId) {
+    // Only revoke server-side device & passkey records when the caller holds an authenticated admin session
+    if (ctx.authenticated && ctx.currentDeviceId) {
       const targetId = ctx.currentDeviceId;
       try {
         await mutateAdminSecurityStore((store) => {

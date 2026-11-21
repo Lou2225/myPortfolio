@@ -22,7 +22,6 @@ import {
 } from "@/components/pwa/OfflineManager";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import type { PairedDevicePreview } from "@/types/security";
 
 interface GeneratedPairData {
@@ -346,7 +345,9 @@ export function QrDevicePairModal({
                     </p>
                   </div>
                 </div>
-                <StatusPill label="6-Digit Verified" variant="success" size="xs" />
+                <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-emerald-400 shrink-0">
+                  6-Digit Verified
+                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs font-mono">

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { CheckCircle2, AlertTriangle, Sparkles, Eye } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Eye } from "lucide-react";
 import {
   FONT_PAIRINGS,
   RADIUS_PRESETS,
@@ -12,13 +12,11 @@ import {
   resolveCursorCssVars,
 } from "@/lib/appearance";
 import type { AppearanceConfig, PortfolioTheme } from "@/types/portfolio";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { cn } from "@/lib/utils";
 
 export interface AppearancePreviewCardProps {
   draft: AppearanceConfig;
   effectiveTheme: PortfolioTheme;
-  isDirty: boolean;
   /** Omit outer card chrome & header when rendered inside a collapsible drawer. */
   embedded?: boolean;
 }
@@ -44,7 +42,6 @@ export const FONT_PAIRING_STYLE_MAP: Record<
 export function AppearancePreviewCard({
   draft,
   effectiveTheme,
-  isDirty,
   embedded = false,
 }: AppearancePreviewCardProps) {
   const palette = useMemo(
@@ -123,15 +120,6 @@ export function AppearancePreviewCard({
                 ({radiusMeta.pxCard}) · {draft.canvasTexture} texture
               </p>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <StatusPill
-              label={isDirty ? "Draft Preview Active" : "Published"}
-              variant={isDirty ? "warning" : "success"}
-              size="xs"
-              icon={<Sparkles className="w-3 h-3" />}
-            />
           </div>
         </div>
       )}

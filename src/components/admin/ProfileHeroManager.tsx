@@ -29,7 +29,6 @@ import {
 import { HeroRoleRow } from "@/components/admin/HeroRoleRow";
 import { AdminModuleHeaderBar } from "@/components/admin/AdminModuleHeaderBar";
 import { ProfileLivePreviewCard } from "@/components/admin/ProfileLivePreviewCard";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import { Button } from "@/components/ui/Button";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -56,7 +55,6 @@ import {
   Loader2,
   User,
   Sparkles,
-  Save,
 } from "lucide-react";
 
 type ProfileStep = 0 | 1 | 2 | 3;
@@ -135,7 +133,6 @@ export function ProfileHeroManager({
   const [roleFeedback, setRoleFeedback] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
   const [forceTouched, setForceTouched] = useState(false);
   const [validationAttempt, setValidationAttempt] = useState(0);
   const [confirmState, setConfirmState] = useState<{
@@ -149,13 +146,6 @@ export function ProfileHeroManager({
   const hasUnsavedChanges =
     JSON.stringify(draft) !== JSON.stringify(savedBaseline) ||
     Boolean(pendingFiles.monogramImageUrl || pendingFiles.avatarUrl);
-
-  useBrandPortalWorkspaceSync({
-    moduleId: "profile",
-    moduleLabel: "Profile & Hero",
-    hasUnsavedChanges,
-    saving,
-  });
 
   const liveValidation = useMemo(
     () =>
@@ -219,20 +209,27 @@ export function ProfileHeroManager({
 
     const pdfCheck = validatePdfFile(file);
     if (!pdfCheck.valid) {
-      setFormError(
-        pdfCheck.error || "Only PDF (.pdf) documents are permitted for Resume/CV."
-      );
+      announceBrandPortalStatus({
+        tone: "error",
+        label: "Invalid PDF",
+        detail:
+          pdfCheck.error ||
+          "Only PDF (.pdf) documents are permitted for Resume/CV.",
+      });
       e.target.value = "";
       return;
     }
 
     if (isNetworkOffline(isOnline)) {
-      setFormError("Offline — Reconnect to save changes.");
+      announceBrandPortalStatus({
+        tone: "offline",
+        label: "Offline Mode",
+        detail: "Reconnect to upload Resume PDF",
+      });
       e.target.value = "";
       return;
     }
 
-    setFormError(null);
     setUploadingResume(true);
 
     try {
@@ -253,14 +250,13 @@ export function ProfileHeroManager({
         announceBrandPortalStatus({
           tone: "draft",
           label: "Resume Staged",
-          detail: "Save & Publish to go live",
+          detail: "Save from Brand Portal to go live",
           durationMs: 2800,
         });
       }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to upload resume PDF.";
-      setFormError(msg);
       announceBrandPortalStatus({
         tone: "error",
         label: "Upload Failed",
@@ -363,7 +359,6 @@ export function ProfileHeroManager({
         );
         setPendingFiles({ monogramImageUrl: null, avatarUrl: null });
         setForceTouched(false);
-        setFormError(null);
         setRoleFeedback(null);
         setNewRole("");
         announceBrandPortalStatus({
@@ -378,8 +373,6 @@ export function ProfileHeroManager({
 
   const executeSave = async (candidateProfile: Profile) => {
     if (isNetworkOffline(isOnline)) {
-      const msg = "Offline — Reconnect to publish changes.";
-      setFormError(msg);
       announceBrandPortalStatus({
         tone: "offline",
         label: "Offline Mode",
@@ -390,7 +383,6 @@ export function ProfileHeroManager({
     }
 
     setSaving(true);
-    setFormError(null);
     announceBrandPortalStatus({
       tone: "saving",
       label: "Publishing...",
@@ -431,7 +423,6 @@ export function ProfileHeroManager({
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to save portfolio changes.";
-      setFormError(msg);
       announceBrandPortalStatus({
         tone: "error",
         label: "Publish Failed",
@@ -447,7 +438,6 @@ export function ProfileHeroManager({
     e.preventDefault();
     setForceTouched(true);
     setValidationAttempt((c) => c + 1);
-    setFormError(null);
     setRoleFeedback(null);
 
     const syncedAge = calculateAge(draft.birthDate);
@@ -460,12 +450,6 @@ export function ProfileHeroManager({
     const validation = validateProfileDraft(candidateProfile);
 
     if (!validation.valid) {
-      const extraCount =
-        validation.errors.length > 1
-          ? ` (+${validation.errors.length - 1} more field${validation.errors.length > 2 ? "s" : ""
-          } require attention)`
-          : "";
-      setFormError(`${validation.errors[0]}${extraCount}`);
       announceBrandPortalStatus({
         tone: "error",
         label: "Check Required Fields",
@@ -483,6 +467,17 @@ export function ProfileHeroManager({
       action: () => executeSave(candidateProfile),
     });
   };
+
+  useBrandPortalWorkspaceSync({
+    moduleId: "profile",
+    moduleLabel: "Profile & Hero",
+    hasUnsavedChanges,
+    saving,
+    validationErrorCount: liveErrorsCount,
+    onSave: () => formRef.current?.requestSubmit(),
+    onDiscard: handleDiscardDraft,
+    onFollowIssue: () => jumpToValidationIssue("next"),
+  });
 
   const identitySectionNode = (
     <div className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-6">
@@ -529,11 +524,12 @@ export function ProfileHeroManager({
 
           <NameField
             label="Surname (Red Hero)"
-            value={draft.lastName || "Valdellon"}
+            value={draft.lastName ?? ""}
             onChange={(lastName) => setDraft({ ...draft, lastName })}
             maxLength={40}
             showIcon={false}
             forceTouched={forceTouched}
+            placeholder="Valdellon"
           />
 
           <NameField
@@ -603,10 +599,11 @@ export function ProfileHeroManager({
         <div className="pt-3.5 sm:pt-4 border-t border-(--border-subtle)/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
           <TextField
             label="Primary CTA Text"
-            value={draft.heroCtaPrimary || "View Systems"}
+            value={draft.heroCtaPrimary ?? ""}
             onChange={(heroCtaPrimary) =>
               setDraft({ ...draft, heroCtaPrimary })
             }
+            placeholder="View Systems"
             minLength={2}
             maxLength={32}
             showCounter
@@ -615,10 +612,11 @@ export function ProfileHeroManager({
 
           <TextField
             label="Secondary CTA Text"
-            value={draft.heroCtaSecondary || "Contact Me"}
+            value={draft.heroCtaSecondary ?? ""}
             onChange={(heroCtaSecondary) =>
               setDraft({ ...draft, heroCtaSecondary })
             }
+            placeholder="Contact Me"
             minLength={2}
             maxLength={32}
             showCounter
@@ -627,8 +625,9 @@ export function ProfileHeroManager({
 
           <TextField
             label="Scroll Cue Label"
-            value={draft.heroScrollCue || "Scroll to enter the story"}
+            value={draft.heroScrollCue ?? ""}
             onChange={(heroScrollCue) => setDraft({ ...draft, heroScrollCue })}
+            placeholder="Scroll to enter the story"
             minLength={3}
             maxLength={60}
             showCounter
@@ -687,7 +686,6 @@ export function ProfileHeroManager({
             JSON.stringify(draft[transformKey] ?? null) !==
               JSON.stringify(savedBaseline[transformKey] ?? null),
           onUploadError: (msg: string) => {
-            setFormError(msg);
             announceBrandPortalStatus({
               tone: "error",
               label: "Image Rejected",
@@ -726,7 +724,7 @@ export function ProfileHeroManager({
                 previewFit="cover"
                 previewAlt="Monogram & browser favicon placeholder"
                 forceTouched={forceTouched}
-                hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until you click Save & Publish."
+                hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until saved via the Brand Portal."
               />
             </div>
 
@@ -745,7 +743,7 @@ export function ProfileHeroManager({
                 previewFit="contain"
                 previewAlt="Hero portrait preview placeholder"
                 forceTouched={forceTouched}
-                hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until you click Save & Publish."
+                hint="Strict images only (.png, .jpg, .webp, .avif, .svg, .ico · max 5MB). Resize/framing updates placeholder only until saved via the Brand Portal."
               />
             </div>
           </div>
@@ -1043,31 +1041,14 @@ export function ProfileHeroManager({
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 sm:space-y-8">
-      {/* Header & Sticky Save Bar */}
+      {/* Clean Module Header */}
       <AdminModuleHeaderBar
         icon={<User className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
         title="Profile, Hero & Identity Manager"
         tooltipLabel="Profile & identity publishing rules"
-        tooltipContent="Changes update the Hero headline, portrait cutout, roles, Resume PDF URL, and contact details cleanly across the live site once published. Draft state is preserved locally while editing."
+        tooltipContent="Changes update the Hero headline, portrait cutout, roles, Resume PDF URL, and contact details cleanly across the live site once published from the Brand Portal."
         subtitle="Manage identity typography, monogram & browser tab favicon, portrait cutout, roles, birth date, education, and PSGC location."
-        liveErrorsCount={forceTouched ? liveErrorsCount : 0}
-        onFollowIssue={() => jumpToValidationIssue("next")}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onDiscard={handleDiscardDraft}
-        saving={saving}
       />
-
-      {formError && (
-        <AdminAlertBanner
-          variant="error"
-          message={formError}
-          actionLabel={forceTouched ? "Follow Issue" : undefined}
-          onAction={
-            forceTouched ? () => jumpToValidationIssue("next") : undefined
-          }
-          onDismiss={() => setFormError(null)}
-        />
-      )}
 
       {isMobileOrTablet ? (
         <AdminMobileStepView
@@ -1076,13 +1057,6 @@ export function ProfileHeroManager({
           activeStep={activeStep}
           direction={stepDirection}
           onChangeStep={(next) => switchStep(next as ProfileStep)}
-          finalAction={{
-            label: saving ? "Saving..." : "Save & Publish",
-            type: "submit",
-            variant: "primary",
-            disabled: saving,
-            icon: <Save className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
-          }}
         >
           {mobileProfilePanels[activeStep] ?? mobileProfilePanels[0]}
         </AdminMobileStepView>

@@ -402,6 +402,13 @@ export function validateEmail(
       : { valid: true };
   }
 
+  if (trimmed.length > 254) {
+    return {
+      valid: false,
+      error: `${label} cannot exceed 254 characters.`,
+    };
+  }
+
   if (trimmed.includes("..")) {
     return {
       valid: false,
@@ -533,7 +540,7 @@ export function validateUrl(
   }
 
   if (allowRelative && trimmed.startsWith("/")) {
-    if (trimmed.length < 2 || /\s/.test(trimmed)) {
+    if (trimmed.startsWith("//") || trimmed.length < 2 || /\s/.test(trimmed)) {
       return {
         valid: false,
         error: `${label} path must be a valid relative path (e.g. /assets/...).`,

@@ -9,7 +9,6 @@ import {
   createSearchRowStaggerTween,
   useIsomorphicLayoutEffect,
 } from "@/lib/searchMotion";
-import { StatusPill } from "@/components/ui/StatusPill";
 import {
   renderHighlightedSearchText,
   type SearchCommandItem,
@@ -425,11 +424,9 @@ export function AdminMobileSearchView({
 
                 <div className="flex items-center gap-2 shrink-0">
                   {item.badge && (
-                    <StatusPill
-                      label={item.badge}
-                      variant={item.badgeVariant || "neutral"}
-                      size="xs"
-                    />
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted)">
+                      {item.badge}
+                    </span>
                   )}
                   <ChevronRight
                     className="w-4 h-4 text-(--text-muted)"

@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   KeyRound,
   ShieldAlert,
   RotateCcw,
   Check,
-  Loader2,
   Lock,
 } from "lucide-react";
 import type { AdminPasswordSource } from "@/lib/auth";
@@ -17,12 +16,14 @@ import {
   passwordChangeSchema,
 } from "@/lib/validation";
 import { useOfflineStatus, isNetworkOffline } from "@/components/pwa/OfflineManager";
-import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
+import {
+  announceBrandPortalStatus,
+  useBrandPortalWorkspaceSync,
+} from "@/lib/brandPortalStatus";
 import { PasswordField } from "@/components/ui/fields/PasswordField";
 import {
   InfoTooltip,
 } from "@/components/ui/Tooltip";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -51,6 +52,7 @@ export function PasswordCredentialsSettings({
 }: PasswordCredentialsSettingsProps) {
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
+  const formRef = useRef<HTMLFormElement>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -59,6 +61,57 @@ export function PasswordCredentialsSettings({
   const [reverting, setReverting] = useState(false);
   const [confirmRevertOpen, setConfirmRevertOpen] = useState(false);
   const [confirmPasswordSaveOpen, setConfirmPasswordSaveOpen] = useState(false);
+
+  const hasDraftInput = Boolean(
+    currentPassword || newPassword || confirmPassword
+  );
+
+  const handleClearDraft = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setForceTouched(false);
+    onFeedback(null);
+    announceBrandPortalStatus({
+      tone: "synced",
+      label: "Fields Cleared",
+      detail: "Password draft cleared",
+      durationMs: 2400,
+    });
+  };
+
+  const validationResult = passwordChangeSchema.safeParse({
+    currentPassword,
+    newPassword,
+    confirmPassword,
+  });
+  const validationErrorCount =
+    hasDraftInput && !validationResult.success
+      ? validationResult.error.issues.length
+      : 0;
+
+  const handleFollowIssue = () => {
+    setForceTouched(true);
+    if (!currentPassword) {
+      document.getElementById("settings-current-password")?.focus();
+    } else if (!newPassword || strength.score < 2) {
+      document.getElementById("settings-new-password")?.focus();
+    } else {
+      document.getElementById("settings-confirm-password")?.focus();
+    }
+  };
+
+  useBrandPortalWorkspaceSync({
+    moduleId: "settings-password",
+    moduleLabel: "Admin Password",
+    hasUnsavedChanges: hasDraftInput,
+    validationErrorCount: hasDraftInput ? validationErrorCount : 0,
+    onFollowIssue: handleFollowIssue,
+    saving: submitting,
+    saveLabel: "Update Password",
+    onSave: () => formRef.current?.requestSubmit(),
+    onDiscard: handleClearDraft,
+  });
 
   const strength = evaluatePasswordStrength(newPassword);
   const passwordsMatch =
@@ -245,23 +298,14 @@ export function PasswordCredentialsSettings({
                   </span>
                 </span>
               </h3>
-              <StatusPill
-                label={
-                  passwordSource === "override"
-                    ? "Custom Scrypt Override"
-                    : passwordSource === "env"
-                      ? "Environment Variable (ADMIN_PASSWORD)"
-                      : "Unconfigured"
-                }
-                variant={
-                  passwordSource === "override"
-                    ? "accent"
-                    : passwordSource === "env"
-                      ? "success"
-                      : "warning"
-                }
-                size="xs"
-              />
+              <span className="text-[11px] font-mono text-(--text-muted)">
+                ·{" "}
+                {passwordSource === "override"
+                  ? "Custom Scrypt Override"
+                  : passwordSource === "env"
+                    ? "Environment Variable"
+                    : "Unconfigured"}
+              </span>
             </div>
             <p className="text-xs text-(--text-muted) mt-1 leading-relaxed">
               {passwordSource === "override" && overrideUpdatedAt ? (
@@ -309,6 +353,8 @@ export function PasswordCredentialsSettings({
 
       {/* Change Password Form */}
       <form
+        ref={formRef}
+        noValidate
         data-cascade
         onSubmit={handleSubmit}
         className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 space-y-4 sm:space-y-5"
@@ -436,24 +482,10 @@ export function PasswordCredentialsSettings({
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            disabled={submitting}
-            variant="primary"
-            size="sm"
-            className="w-full sm:w-auto"
-          >
-            {submitting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-            ) : (
-              <KeyRound className="w-3.5 h-3.5 shrink-0" />
-            )}
-            <span>
-              {submitting ? "Updating Password..." : "Update Admin Password"}
-            </span>
-          </Button>
-        </div>
+        {/* Hidden submit input preserves Enter-key submission while Save action lives in Brand Portal */}
+        <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
+          Update Admin Password
+        </button>
       </form>
 
       <ConfirmModal

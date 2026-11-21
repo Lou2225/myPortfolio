@@ -13,7 +13,6 @@ import {
 } from "@/lib/analytics";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { useOfflineStatus, isNetworkOffline } from "@/components/pwa/OfflineManager";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import { announceBrandPortalStatus } from "@/lib/brandPortalStatus";
 import type { AdminTab, SettingsSectionId } from "./layout/types";
 import { AnalyticsCommandCard } from "./analytics/AnalyticsCommandCard";
@@ -62,7 +61,6 @@ export function AnalyticsOverview({
 
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [clearingLogs, setClearingLogs] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(() => Date.parse(db.updatedAt) || 0);
   const [syncTick, setSyncTick] = useState(0);
 
@@ -185,20 +183,16 @@ export function AnalyticsOverview({
       setCopiedBrief(true);
       setTimeout(() => setCopiedBrief(false), 2000);
     } catch {
-      setActionError("Unable to copy KPI brief to clipboard.");
+      announceBrandPortalStatus({
+        tone: "error",
+        label: "Copy Failed",
+        detail: "Unable to copy KPI brief to clipboard.",
+      });
     }
   };
 
   return (
     <div className="space-y-6">
-      {actionError && (
-        <AdminAlertBanner
-          variant="error"
-          message={actionError}
-          onDismiss={() => setActionError(null)}
-        />
-      )}
-
       {/* Row 1: Unified 1-Card Metrics Matrix (Left) + Combined Filters, Checkbox Slicers & Reports (Right) */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
         <div className="xl:col-span-7 flex flex-col [&>section]:flex-1">
@@ -277,10 +271,7 @@ export function AnalyticsOverview({
         }}
         onConfirm={async () => {
           setClearingLogs(true);
-          setActionError(null);
           if (isNetworkOffline(isOnline)) {
-            const msg = "Offline — Reconnect to clear server telemetry logs.";
-            setActionError(msg);
             announceBrandPortalStatus({
               tone: "offline",
               label: "Offline Mode",
@@ -303,7 +294,6 @@ export function AnalyticsOverview({
               err instanceof Error
                 ? err.message
                 : "Failed to clear analytics logs.";
-            setActionError(msg);
             announceBrandPortalStatus({
               tone: "error",
               label: "Clear Failed",

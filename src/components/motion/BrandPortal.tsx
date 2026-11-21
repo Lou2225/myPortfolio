@@ -13,7 +13,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { BrandPortalOrb } from "@/components/motion/BrandPortalOrb";
 import {
-  collectClientDeviceTelemetry,
   recoverOrRecognizeDeviceChallenge,
 } from "@/lib/deviceTelemetry";
 import { authenticateWithPasskey } from "@/lib/passkeyClient";
@@ -23,6 +22,7 @@ import {
   DEVICE_STORAGE_KEY,
   DEVICE_SYNC_EVENT,
   dismissBrandPortalNotice,
+  getActiveBrandPortalDraft,
   markWorkspaceBootReady,
   PRELOADER_ARM_EVENT,
   PRELOADER_START_EVENT,
@@ -198,12 +198,6 @@ export function BrandPortalProvider({
       inFlight = true;
       lastCheckedAt = Date.now();
       try {
-        // Start hardware telemetry & IndexedDB key collection in parallel with the auth request
-        // so cross-browser device recognition completes with zero sequential waterfall delay.
-        const parallelTelemetryPromise = !cached
-          ? collectClientDeviceTelemetry()
-          : null;
-
         const res = await fetch("/api/admin/auth", { cache: "no-store" });
         if (!res.ok) {
           // Never wipe persisted device trust on transient network/503 responses; retry with backoff
@@ -224,8 +218,7 @@ export function BrandPortalProvider({
         // physical device, prove ownership / match physical hardware to restore `lou_registered_device`.
         if (!verified && typeof data.deviceChallenge === "string" && data.deviceChallenge) {
           const recovered = await recoverOrRecognizeDeviceChallenge(
-            data.deviceChallenge,
-            parallelTelemetryPromise
+            data.deviceChallenge
           );
           if (!cancelled && recovered) {
             verified = true;
@@ -316,8 +309,21 @@ export function BrandPortalProvider({
       }
     };
 
-    // Start device verification immediately (0ms) so it completes inside the Preloader curtain
-    void verifyAdminDeviceStatus();
+    // For recognized devices or admin routes, verify immediately (0ms) so it completes inside the Preloader curtain.
+    // For anonymous public visitors, mark workspace ready immediately and defer auth probe to idle to save CPU/LCP.
+    if (cached || isAdminRoute) {
+      void verifyAdminDeviceStatus();
+    } else {
+      markWorkspaceBootReady();
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(
+          () => {
+            if (!cancelled) void verifyAdminDeviceStatus();
+          },
+          { timeout: 4000 }
+        );
+      }
+    }
 
     const handleVisibilityOrFocus = () => {
       if (
@@ -769,6 +775,16 @@ export function BrandPortalProvider({
     if (isAnimating || isGreetingRef.current || !isRegisteredDevice) return;
 
     if (isAdminRoute) {
+      const draft = getActiveBrandPortalDraft();
+      if (draft.hasUnsavedChanges) {
+        announceBrandPortalStatus({
+          tone: "draft",
+          label: "Unsaved Changes",
+          detail: `${draft.moduleLabel || "Draft"} has unsaved changes. Publish or discard first.`,
+          durationMs: 4000,
+        });
+        return;
+      }
       triggerSlideNavigate("/", "left");
       return;
     }
@@ -792,6 +808,15 @@ export function BrandPortalProvider({
     }, 420);
   }, [isAnimating, isRegisteredDevice, isAdminRoute, triggerSlideNavigate]);
 
+  const handleOpenVault = useCallback(() => {
+    if (isAnimating) return;
+    if (isAdminRoute) {
+      router.push("/admin?tab=vault");
+    } else {
+      triggerSlideNavigate("/admin?tab=vault", "right");
+    }
+  }, [isAnimating, isAdminRoute, router, triggerSlideNavigate]);
+
   const handlePasskeyUnlock = useCallback(
     async (fallbackToAdminRoute: boolean) => {
       if (isAnimating || isGreetingRef.current || passkeyUnlockBusyRef.current) {
@@ -799,6 +824,16 @@ export function BrandPortalProvider({
       }
 
       if (isAdminRoute) {
+        const draft = getActiveBrandPortalDraft();
+        if (draft.hasUnsavedChanges) {
+          announceBrandPortalStatus({
+            tone: "draft",
+            label: "Unsaved Changes",
+            detail: `${draft.moduleLabel || "Draft"} has unsaved changes. Publish or discard first.`,
+            durationMs: 4000,
+          });
+          return;
+        }
         triggerSlideNavigate("/", "left");
         return;
       }
@@ -868,6 +903,7 @@ export function BrandPortalProvider({
         isSlideTransition={portalMode === "slide"}
         onOrbAction={handleOrbAction}
         onOrbLongPress={handleOrbLongPress}
+        onOpenVault={handleOpenVault}
       />
 
       {/* Radial Wave Pulse Overlay (Expands from Logo across Viewport, then Collapses Reverse back to Logo) */}

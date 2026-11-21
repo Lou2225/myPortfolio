@@ -20,6 +20,9 @@ import { ScrollToTop } from "@/components/ui/ScrollToTop";
 
 export const viewport: Viewport = {
   themeColor: "#08080a",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -75,11 +78,20 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: `${shortTitle} — Portfolio`,
       type: "website",
       locale: "en_US",
+      images: [
+        {
+          url: db.profile.avatarUrl || "/assets/hero/avatar.webp",
+          width: 1200,
+          height: 630,
+          alt: displayName,
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title: pageTitle,
       description: pageDescription,
+      images: [db.profile.avatarUrl || "/assets/hero/avatar.webp"],
     },
     manifest: "/manifest.webmanifest",
     icons: {

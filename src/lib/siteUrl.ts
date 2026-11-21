@@ -103,10 +103,13 @@ export function resolveCanonicalRedirectUrl(
     return null;
   }
 
-  const destination = new URL(
-    `${incomingUrl.pathname}${incomingUrl.search}`,
-    canonicalUrl.origin
-  );
+  const safePathname = `/${incomingUrl.pathname.replace(/^\/+/, "")}`;
+  const destination = new URL(canonicalUrl.origin);
+  destination.pathname = safePathname;
+  destination.search = incomingUrl.search;
+  if (destination.origin !== canonicalUrl.origin) {
+    return null;
+  }
   return destination.toString();
 }
 

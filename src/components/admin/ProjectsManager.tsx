@@ -5,10 +5,8 @@ import { Project } from "@/types/portfolio";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { DropdownPopover } from "@/components/ui/DropdownPopover";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Tabs, TabItem } from "@/components/ui/Tabs";
 import { TabPanel } from "@/components/ui/TabPanel";
-import { AdminAlertBanner } from "@/components/admin/AdminAlertBanner";
 import { AdminModuleHeaderBar } from "@/components/admin/AdminModuleHeaderBar";
 import { ProjectCardEditor } from "@/components/admin/ProjectCardEditor";
 import {
@@ -147,15 +145,12 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
 
   const [saving, setSaving] = useState(false);
   const [forceTouched, setForceTouched] = useState(false);
-  const [validationBannerActive, setValidationBannerActive] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
   const { scrollTo } = useSmoothScroll();
   const { followFirstInvalid, followNextInvalid } = useValidationFollower();
   const { isOnline } = useOfflineStatus();
-  const offline = isNetworkOffline(isOnline);
 
   const hasPendingImages = useMemo(
     () => Object.values(pendingFiles).some(Boolean),
@@ -165,13 +160,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
   const currentSignature = useMemo(() => buildProjectsSignature(draft), [draft]);
   const hasUnsavedChanges =
     currentSignature !== savedSignature || hasPendingImages;
-
-  useBrandPortalWorkspaceSync({
-    moduleId: "projects",
-    moduleLabel: "Projects",
-    hasUnsavedChanges,
-    saving,
-  });
 
   const pendingImageIds = useMemo(() => {
     const ids = new Set<string>();
@@ -195,11 +183,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
   );
 
   const liveErrorsCount = liveValidation.errors.length;
-  const activeErrorBanner =
-    apiError ??
-    (validationBannerActive && liveErrorsCount > 0
-      ? liveValidation.errors[0]
-      : null);
 
   const duplicateTitleSet = useMemo(
     () => findDuplicateValues(draft.map((item) => item.title)),
@@ -260,7 +243,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
 
   const revealInvalidAndFollow = (mode: "first" | "next") => {
     setForceTouched(true);
-    setValidationBannerActive(true);
 
     // If current view has an open project with errors, stay on it; otherwise drill into the first failing project
     const currentErrors = selectedProjectId
@@ -526,8 +508,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
         setNewTechInputs({});
         setTechFeedbacks({});
         setForceTouched(false);
-        setValidationBannerActive(false);
-        setApiError(null);
         announceBrandPortalStatus({
           tone: "synced",
           label: "Changes Discarded",
@@ -539,9 +519,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
 
   const executeSave = async () => {
     if (isNetworkOffline(isOnline)) {
-      const msg =
-        "You appear to be offline. Reconnect to publish project updates.";
-      setApiError(msg);
       setConfirmState(null);
       announceBrandPortalStatus({
         tone: "offline",
@@ -552,7 +529,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
     }
 
     setSaving(true);
-    setApiError(null);
     announceBrandPortalStatus({
       tone: "saving",
       label: "Publishing...",
@@ -603,8 +579,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       setPendingFiles({});
       setTechFeedbacks({});
       setForceTouched(false);
-      setValidationBannerActive(false);
-      setApiError(null);
       setConfirmState(null);
 
       announceBrandPortalStatus({
@@ -617,7 +591,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to save projects.";
-      setApiError(msg);
       setConfirmState(null);
       announceBrandPortalStatus({
         tone: "error",
@@ -632,7 +605,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!liveValidation.valid) {
-      setApiError(null);
       announceBrandPortalStatus({
         tone: "error",
         label: "Check Fields",
@@ -643,8 +615,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       return;
     }
 
-    setValidationBannerActive(false);
-    setApiError(null);
     setConfirmState({
       title: "Save & Publish Projects?",
       description: hasPendingImages
@@ -661,6 +631,20 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       action: executeSave,
     });
   };
+
+  useBrandPortalWorkspaceSync({
+    moduleId: "projects",
+    moduleLabel: "Projects",
+    hasUnsavedChanges,
+    saving,
+    validationErrorCount: hasUnsavedChanges ? liveErrorsCount : 0,
+    onSave: () => formRef.current?.requestSubmit(),
+    onDiscard: handleDiscardDraft,
+    onFollowIssue: () => {
+      setForceTouched(true);
+      revealInvalidAndFollow("next");
+    },
+  });
 
   const filterTabs: TabItem<ProjectFilterMode>[] = [
     { id: "all", label: "All", badge: counts.total },
@@ -682,7 +666,7 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
       noValidate
       className="space-y-4 sm:space-y-8"
     >
-      {/* Header & Sticky Save Bar */}
+      {/* Clean Module Header */}
       <AdminModuleHeaderBar
         dataCascade
         icon={<Briefcase className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
@@ -691,11 +675,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
         tooltipContent="Toggle Live vs Draft visibility, star Featured spotlight items, reorder systems, or expand any card to update architecture notes, stack tags, and cropped screenshots."
         subtitle={`${counts.total} Total · ${counts.live} Live · ${counts.draftOnly} Draft · ${counts.featured} Featured`}
         showSubtitleOnMobile
-        liveErrorsCount={liveErrorsCount}
-        onFollowIssue={() => revealInvalidAndFollow("next")}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onDiscard={handleDiscardDraft}
-        saving={saving}
         extraAction={
           <Button
             type="button"
@@ -711,32 +690,6 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
           </Button>
         }
       />
-
-      {offline && (
-        <AdminAlertBanner
-          variant="offline"
-          message="You are offline."
-          detail="Project draft edits stay safe locally, but screenshot uploads and publishing require an active connection."
-        />
-      )}
-
-      {activeErrorBanner && (
-        <AdminAlertBanner
-          variant="error"
-          message={apiError ? "Save Blocked:" : "Check Required Fields:"}
-          detail={activeErrorBanner}
-          actionLabel={liveErrorsCount > 0 ? "Follow Issue" : undefined}
-          onAction={
-            liveErrorsCount > 0
-              ? () => revealInvalidAndFollow("first")
-              : undefined
-          }
-          onDismiss={() => {
-            setValidationBannerActive(false);
-            setApiError(null);
-          }}
-        />
-      )}
 
       <div className="overflow-x-clip">
         <AdminSlideView
@@ -780,7 +733,13 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
               handlePendingImageChange(selectedProject.id, file)
             }
             onRevertImage={() => handleRevertImage(selectedProject.id)}
-            onUploadError={(message) => setApiError(message)}
+            onUploadError={(message) =>
+              announceBrandPortalStatus({
+                tone: "error",
+                label: "Upload Failed",
+                detail: message,
+              })
+            }
             onNewTechChange={(val) => {
               setNewTechInputs((prev) => ({
                 ...prev,
@@ -842,11 +801,9 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
                         <span className="uppercase tracking-wider font-medium">
                           {activeFilter.label}
                         </span>
-                        <StatusPill
-                          label={String(activeFilter.badge ?? 0)}
-                          variant="accent"
-                          size="xs"
-                        />
+                        <span className="text-[11px] font-mono text-(--text-accent) tabular-nums">
+                          ({activeFilter.badge ?? 0})
+                        </span>
                         <ChevronDown
                           className={cn(
                             "w-3.5 h-3.5 text-(--text-muted) transition-transform duration-200",
@@ -895,11 +852,9 @@ export function ProjectsManager({ projects, onSave }: ProjectsManagerProps) {
                                 {tab.label}
                               </span>
                             </span>
-                            <StatusPill
-                              label={String(tab.badge ?? 0)}
-                              variant={selected ? "accent" : "neutral"}
-                              size="xs"
-                            />
+                            <span className="text-[11px] font-mono text-(--text-muted) tabular-nums">
+                              {tab.badge ?? 0}
+                            </span>
                           </button>
                         );
                       })}

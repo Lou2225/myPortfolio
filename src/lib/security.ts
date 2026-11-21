@@ -30,6 +30,8 @@ const SUPABASE_SECURITY_ROW_ID = "admin_security";
 
 const MAX_AUDIT_ENTRIES = 100;
 const MAX_PAIRING_ENTRIES = 20;
+const MAX_LOGIN_FAILURE_BUCKETS = 500;
+const MAX_USED_PASSKEY_NONCES = 200;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_BLOCK_MS = 15 * 60 * 1000;
@@ -48,8 +50,11 @@ export interface InternalAdminSecurityStore extends AdminSecurityStore {
   totpEnabled: boolean;
   totpSecretEnc: string | null;
   totpPendingSecretEnc: string | null;
+  totpPendingExpiresAt: number | null;
   totpLastStepUsed: number | null;
   passkeys: DevicePasskey[];
+  /** Consumed single-use WebAuthn challenge nonces mapped to their expiry epoch ms */
+  usedPasskeyNonces: Record<string, number>;
 }
 
 /**
@@ -82,9 +87,11 @@ export function getDefaultSecurityStore(): InternalAdminSecurityStore {
     totpEnabled: false,
     totpSecretEnc: null,
     totpPendingSecretEnc: null,
+    totpPendingExpiresAt: null,
     totpLastStepUsed: null,
     devices: [],
     passkeys: [],
+    usedPasskeyNonces: {},
     pairings: [],
     auditLog: [],
     loginFailures: {},
@@ -134,6 +141,40 @@ function normalizeStore(
     deduplicatedDevices.push(d);
   }
 
+  // Prune expired login failure buckets and cap map size so admin_security never grows unboundedly
+  const prunedLoginFailures: InternalAdminSecurityStore["loginFailures"] = {};
+  if (raw.loginFailures && typeof raw.loginFailures === "object") {
+    const activeEntries = Object.entries(raw.loginFailures)
+      .filter(([, bucket]) => {
+        if (!bucket || typeof bucket !== "object") return false;
+        const blockActive =
+          typeof bucket.blockedUntil === "number" && now < bucket.blockedUntil;
+        const windowActive =
+          typeof bucket.firstAttemptAt === "number" &&
+          now - bucket.firstAttemptAt <= LOGIN_WINDOW_MS;
+        return blockActive || windowActive;
+      })
+      .sort(
+        (a, b) => (b[1].firstAttemptAt || 0) - (a[1].firstAttemptAt || 0)
+      )
+      .slice(0, MAX_LOGIN_FAILURE_BUCKETS);
+    for (const [k, v] of activeEntries) {
+      prunedLoginFailures[k] = v;
+    }
+  }
+
+  // Prune expired single-use WebAuthn challenge nonces
+  const prunedNonces: Record<string, number> = {};
+  if (raw.usedPasskeyNonces && typeof raw.usedPasskeyNonces === "object") {
+    const validNonces = Object.entries(raw.usedPasskeyNonces)
+      .filter(([, exp]) => typeof exp === "number" && exp > now)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_USED_PASSKEY_NONCES);
+    for (const [nonce, exp] of validNonces) {
+      prunedNonces[nonce] = exp;
+    }
+  }
+
   return {
     revision:
       typeof raw.revision === "number" && raw.revision >= 0
@@ -158,18 +199,21 @@ function normalizeStore(
       raw.totpPendingSecretEnc.length > 0
         ? raw.totpPendingSecretEnc
         : null,
+    totpPendingExpiresAt:
+      typeof raw.totpPendingExpiresAt === "number" &&
+      raw.totpPendingExpiresAt > 0
+        ? raw.totpPendingExpiresAt
+        : null,
     totpLastStepUsed:
       typeof raw.totpLastStepUsed === "number" ? raw.totpLastStepUsed : null,
     devices: deduplicatedDevices,
     passkeys: Array.isArray(raw.passkeys) ? raw.passkeys : [],
+    usedPasskeyNonces: prunedNonces,
     pairings: pairings.slice(0, MAX_PAIRING_ENTRIES),
     auditLog: Array.isArray(raw.auditLog)
       ? raw.auditLog.slice(0, MAX_AUDIT_ENTRIES)
       : [],
-    loginFailures:
-      raw.loginFailures && typeof raw.loginFailures === "object"
-        ? raw.loginFailures
-        : {},
+    loginFailures: prunedLoginFailures,
     updatedAt: raw.updatedAt || base.updatedAt,
   };
 }
@@ -387,6 +431,7 @@ async function writeAdminSecurityStoreConditional(
             payload: next,
             updated_at: nowIso,
           }),
+          signal: AbortSignal.timeout(8000),
         });
 
         if (res.status === 409) {
@@ -412,6 +457,7 @@ async function writeAdminSecurityStoreConditional(
               payload: next,
               updated_at: nowIso,
             }),
+            signal: AbortSignal.timeout(8000),
           }
         );
       }
@@ -443,12 +489,17 @@ async function writeAdminSecurityStoreConditional(
   }
 
   try {
-    await fs.mkdir(resolveLocalDataDir(), { recursive: true });
-    await fs.writeFile(
-      getLocalSecurityFile(),
-      JSON.stringify(next, null, 2),
-      "utf-8"
-    );
+    const dir = resolveLocalDataDir();
+    const targetFile = getLocalSecurityFile();
+    const tmpFile = `${targetFile}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(tmpFile, JSON.stringify(next, null, 2), "utf-8");
+    try {
+      await fs.rename(tmpFile, targetFile);
+    } catch {
+      await fs.writeFile(targetFile, JSON.stringify(next, null, 2), "utf-8");
+      await fs.unlink(tmpFile).catch(() => undefined);
+    }
   } catch (err) {
     if (mode === "local-json") {
       const detail =

@@ -14,6 +14,16 @@ interface LiquidImageProps {
   placeholderText?: string;
 }
 
+function isExternalNonSupabase(src: string): boolean {
+  if (!src.startsWith("http://") && !src.startsWith("https://")) return false;
+  try {
+    const url = new URL(src);
+    return !url.hostname.endsWith(".supabase.co");
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Hardware-accelerated project showcase frame with GPU-only hover zoom & specular
  * sheen sweep (replaces CPU-heavy SVG turbulence filters for 120 FPS performance).
@@ -54,6 +64,7 @@ export function LiquidImage({
             src={src}
             alt={alt}
             fill
+            unoptimized={isExternalNonSupabase(src)}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 60vw, 45vw"
             className={cn(
               "object-cover transition-[opacity,filter] duration-500 opacity-95 group-hover:opacity-100",

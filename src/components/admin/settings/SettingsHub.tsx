@@ -11,14 +11,9 @@ import {
   Search,
 } from "lucide-react";
 import type { PortfolioDatabase } from "@/types/portfolio";
-import type { AdminPasswordSource } from "@/lib/auth";
 import type { SettingsSectionId } from "@/components/admin/layout/types";
-import { ACCENT_PRESETS, FONT_PAIRINGS } from "@/data/appearance";
-import { useThemePreference } from "@/components/ui/ThemeToggle";
-import { useOfflineStatus } from "@/components/pwa/OfflineManager";
 import { MonogramBadge } from "@/components/common/MonogramBadge";
 import { Collapsible } from "@/components/motion/Collapsible";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import {
@@ -37,9 +32,6 @@ import {
 
 export interface SettingsHubProps {
   db: PortfolioDatabase;
-  storageMode: "local-json" | "supabase";
-  deviceRegistered: boolean;
-  passwordSource: AdminPasswordSource;
   onNavigateSection: (section: Exclude<SettingsSectionId, "hub">) => void;
 }
 
@@ -83,13 +75,8 @@ function toRecommendationSearchItem(
 
 export function SettingsHub({
   db,
-  storageMode,
-  deviceRegistered,
-  passwordSource,
   onNavigateSection,
 }: SettingsHubProps) {
-  const { theme } = useThemePreference();
-  const { isOnline, swState, pendingOutboxCount } = useOfflineStatus();
   const [query, setQuery] = useState("");
   const searchBarRef = useRef<SearchCommandBarHandle>(null);
 
@@ -161,85 +148,9 @@ export function SettingsHub({
     return ids;
   }, [normalizedQuery, recommendations]);
 
-  const getBadgeMeta = (
-    id: SettingsSectionMeta["id"]
-  ): {
-    statusLabel: string;
-    statusVariant: "success" | "accent" | "warning" | "neutral";
-    detailText?: string;
-  } => {
-    switch (id) {
-      case "password":
-        return {
-          statusLabel:
-            passwordSource === "override"
-              ? "Custom Hash"
-              : passwordSource === "env"
-                ? "Env Managed"
-                : "Not Set",
-          statusVariant:
-            passwordSource === "override"
-              ? "accent"
-              : passwordSource === "env"
-                ? "success"
-                : "warning",
-        };
-      case "security":
-        return {
-          statusLabel: deviceRegistered ? "Trusted Device" : "Unregistered",
-          statusVariant: deviceRegistered ? "success" : "neutral",
-        };
-      case "appearance": {
-        const presetMeta = ACCENT_PRESETS.find(
-          (p) => p.id === db.appearance.accentPreset
-        );
-        const accentLabel =
-          db.appearance.accentPreset === "custom"
-            ? "Custom"
-            : presetMeta?.name.split(" ")[0] || "Vermilion";
-        const fontMeta = FONT_PAIRINGS.find(
-          (f) => f.id === db.appearance.fontPairing
-        );
-        return {
-          statusLabel: `${theme === "dark" ? "Obsidian" : "Daylight"} · ${accentLabel}`,
-          statusVariant: "accent",
-          detailText: fontMeta
-            ? `${fontMeta.displayLabel} / ${fontMeta.sansLabel}`
-            : undefined,
-        };
-      }
-      case "pwa":
-        return {
-          statusLabel: isOnline
-            ? swState === "active"
-              ? "SW Ready"
-              : "Online"
-            : "Offline",
-          statusVariant: !isOnline
-            ? "warning"
-            : swState === "active"
-              ? "success"
-              : "neutral",
-          detailText:
-            pendingOutboxCount > 0 ? `${pendingOutboxCount} queued` : undefined,
-        };
-      case "database":
-        return {
-          statusLabel: storageMode === "supabase" ? "Supabase" : "Local JSON",
-          statusVariant: "success",
-          detailText: `${db.projects.length} projects`,
-        };
-      case "maintenance":
-        return {
-          statusLabel: `${db.analytics.length} telemetry events`,
-          statusVariant: "neutral",
-        };
-    }
-  };
-
   return (
     <div>
-      {/* Administrator Identity Card (Clean Rectangular Status Container) */}
+      {/* Administrator Identity Card */}
       <div
         data-cascade
         className="bg-(--bg-surface) border border-(--border-subtle) rounded-(--radius-card) p-3.5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4"
@@ -264,10 +175,9 @@ export function SettingsHub({
                   />
                 </span>
               </p>
-              <StatusPill label="Administrator" variant="accent" size="xs" />
             </div>
             <p className="text-xs font-mono text-(--text-muted) truncate mt-0.5">
-              {db.profile.contact.email} · Last sync{" "}
+              Administrator · {db.profile.contact.email} · Last sync{" "}
               <span suppressHydrationWarning>
                 {new Date(db.updatedAt).toLocaleString()}
               </span>
@@ -376,7 +286,6 @@ export function SettingsHub({
                       .some((laterItem) =>
                         matchedSectionIds.has(laterItem.id)
                       );
-                    const meta = getBadgeMeta(item.id);
                     return (
                       <Collapsible
                         key={item.id}
@@ -390,9 +299,6 @@ export function SettingsHub({
                           icon={getSectionIcon(item.id)}
                           title={item.title}
                           subtitle={item.subtitle}
-                          statusLabel={meta.statusLabel}
-                          statusVariant={meta.statusVariant}
-                          detailText={meta.detailText}
                           tone={item.id === "maintenance" ? "danger" : "default"}
                           onClick={() => onNavigateSection(item.id)}
                         />

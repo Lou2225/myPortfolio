@@ -3,15 +3,19 @@
 import { Profile } from "@/types/portfolio";
 import { AdminTab } from "./types";
 import { DropdownPopover } from "@/components/ui/DropdownPopover";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { useBrandPortal } from "@/components/motion/BrandPortal";
+import {
+  announceBrandPortalStatus,
+  getActiveBrandPortalDraft,
+} from "@/lib/brandPortalStatus";
 import { TruncatedText } from "@/components/ui/Tooltip";
 import { MonogramBadge } from "@/components/common/MonogramBadge";
 import {
   ChevronDown,
   User,
   FolderKanban,
+  HardDrive,
   LogOut,
   Database,
   Settings,
@@ -108,13 +112,10 @@ export function ProfileDropdown({
                 text={profile.contact.email}
                 className="text-[11px] text-(--text-muted)"
               />
-              <StatusPill
-                label={storageMode === "supabase" ? "Supabase PG" : "Local JSON"}
-                variant="neutral"
-                size="xs"
-                className="mt-1"
-                icon={<Database className="w-2.5 h-2.5 text-(--text-accent)" />}
-              />
+              <p className="mt-1 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.12em] text-(--text-muted)">
+                <Database className="w-2.5 h-2.5 text-(--text-accent)" aria-hidden="true" />
+                <span>{storageMode === "supabase" ? "Supabase PG" : "Local JSON"}</span>
+              </p>
             </div>
           </div>
 
@@ -147,6 +148,18 @@ export function ProfileDropdown({
             <button
               type="button"
               onClick={() => {
+                onNavigateTab("vault");
+                close();
+              }}
+              className="w-full px-3 py-2 rounded-lg text-left text-(--text-primary) hover:bg-(--bg-surface-2) hover:text-(--text-accent) transition-colors flex items-center gap-2.5 cursor-pointer"
+            >
+              <HardDrive className="w-4 h-4 text-(--text-muted)" />
+              <span>Personal Drive (Vault)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 onNavigateTab("settings");
                 close();
               }}
@@ -159,6 +172,16 @@ export function ProfileDropdown({
             <button
               type="button"
               onClick={() => {
+                const draft = getActiveBrandPortalDraft();
+                if (draft.hasUnsavedChanges) {
+                  announceBrandPortalStatus({
+                    tone: "draft",
+                    label: "Unsaved Changes",
+                    detail: `${draft.moduleLabel || "Draft"} has unsaved changes. Publish or discard first.`,
+                    durationMs: 4000,
+                  });
+                  return;
+                }
                 close();
                 triggerSlideNavigate("/", "left");
               }}

@@ -14,7 +14,6 @@ import {
   Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { OtpCodeField, TextField } from "@/components/ui/fields";
 import { collectClientDeviceTelemetry } from "@/lib/deviceTelemetry";
 import {
@@ -356,12 +355,12 @@ export function DevicePairClient({ challengeId }: DevicePairClientProps) {
 
           {(challengeState.status === "pending" ||
             challengeState.status === "awaiting_approval") && (
-            <StatusPill
-              label={`${mins}:${secs}`}
-              variant="accent"
-              size="xs"
-              icon={<Clock className="w-3 h-3" />}
-            />
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono tabular-nums text-(--text-accent)">
+              <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
+              <span>
+                {mins}:{secs}
+              </span>
+            </span>
           )}
         </div>
 
@@ -378,11 +377,15 @@ export function DevicePairClient({ challengeId }: DevicePairClientProps) {
                 {telemetry.keyThumbprint || "HTTP Context Mode"}
               </p>
             </div>
-            <StatusPill
-              label={telemetry.keyThumbprint ? "Key Bound" : "Browser"}
-              variant={telemetry.keyThumbprint ? "success" : "neutral"}
-              size="xs"
-            />
+            <span
+              className={`text-[10px] font-mono uppercase tracking-[0.14em] shrink-0 ${
+                telemetry.keyThumbprint
+                  ? "text-emerald-400"
+                  : "text-(--text-muted)"
+              }`}
+            >
+              {telemetry.keyThumbprint ? "Key Bound" : "Browser"}
+            </span>
           </div>
         )}
 
@@ -412,11 +415,9 @@ export function DevicePairClient({ challengeId }: DevicePairClientProps) {
                 on your desktop screen to finish.
               </p>
             </div>
-            <StatusPill
-              label={`Expires in ${mins}:${secs}`}
-              variant="neutral"
-              size="xs"
-            />
+            <span className="inline-block text-[11px] font-mono tabular-nums text-(--text-muted)">
+              Expires in {mins}:{secs}
+            </span>
           </div>
         )}
 

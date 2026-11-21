@@ -3,7 +3,6 @@
 import { Activity, ShieldAlert, ShieldCheck, Info } from "lucide-react";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import type { SecurityAuditEvent } from "@/types/security";
 
@@ -33,11 +32,9 @@ export function SecurityAuditFeed({ events }: SecurityAuditFeedProps) {
           />
         }
         rightSlot={
-          <StatusPill
-            label={`${events.length} Events`}
-            variant="neutral"
-            size="xs"
-          />
+          <span className="text-[11px] font-mono text-(--text-muted) tabular-nums">
+            {events.length} Events
+          </span>
         }
       />
 

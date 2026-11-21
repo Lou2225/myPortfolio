@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ArrowUp } from "lucide-react";
 import { useSmoothScroll } from "@/components/motion/SmoothScroll";
 import { Magnetic } from "@/components/motion/Magnetic";
+import { useBrandPortalStatus } from "@/lib/brandPortalStatus";
 import { cn } from "@/lib/utils";
 
 export interface ScrollToTopProps {
@@ -27,10 +28,19 @@ export function ScrollToTop({
 }: ScrollToTopProps) {
   const pathname = usePathname();
   const { scrollTo, subscribeScroll } = useSmoothScroll();
+  const { workspace, notice } = useBrandPortalStatus();
   const [visible, setVisible] = useState(false);
   const progressCircleRef = useRef<SVGCircleElement>(null);
 
   const isAdminRoute = pathname?.startsWith("/admin");
+  const hideForMobileBrandPortal =
+    Boolean(isAdminRoute) &&
+    Boolean(
+      notice ||
+        workspace.hasUnsavedChanges ||
+        workspace.saving ||
+        workspace.validationErrorCount > 0
+    );
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
@@ -119,7 +129,9 @@ export function ScrollToTop({
             ? "bottom-22 right-4 md:bottom-8 md:right-8 z-30"
             : "bottom-4 right-4 sm:bottom-8 sm:right-8 z-40"),
         visible
-          ? "opacity-100 translate-y-0 pointer-events-auto"
+          ? hideForMobileBrandPortal
+            ? "opacity-0 md:opacity-100 translate-y-4 md:translate-y-0 pointer-events-none md:pointer-events-auto"
+            : "opacity-100 translate-y-0 pointer-events-auto"
           : "opacity-0 translate-y-6 pointer-events-none"
       )}
     >

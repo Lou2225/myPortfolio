@@ -8,6 +8,7 @@ import {
   PORTFOLIO_CACHE_TAG,
   probeDatabaseHealth,
   savePortfolioDB,
+  StorageReadError,
   StorageWriteError,
 } from "@/lib/db";
 import {
@@ -18,7 +19,6 @@ import {
 } from "@/lib/relationalDb";
 import {
   auditOrphanedMedia,
-  computeObjectSha256,
   computeSectionFootprints,
   createPortfolioSnapshot,
   deleteOrphanedMediaFiles,
@@ -26,6 +26,7 @@ import {
   getPortfolioSnapshotById,
   listPortfolioSnapshotMetas,
   mergeRestoredSections,
+  verifyBackupSha256,
   type PortfolioBackupEnvelope,
 } from "@/lib/backups";
 import {
@@ -46,59 +47,73 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const downloadSnapshotId = searchParams.get("downloadSnapshot");
+  try {
+    const { searchParams } = new URL(request.url);
+    const downloadSnapshotId = searchParams.get("downloadSnapshot");
 
-  if (downloadSnapshotId) {
-    const snap = await getPortfolioSnapshotById(downloadSnapshotId);
-    if (!snap) {
-      return NextResponse.json(
-        { error: "Snapshot not found." },
-        { status: 404 }
-      );
+    if (downloadSnapshotId) {
+      const snap = await getPortfolioSnapshotById(downloadSnapshotId);
+      if (!snap) {
+        return NextResponse.json(
+          { error: "Snapshot not found." },
+          { status: 404 }
+        );
+      }
+
+      const envelope: PortfolioBackupEnvelope = {
+        schemaVersion: 2,
+        scope: "full",
+        exportedAt: snap.createdAt,
+        storageMode: getStorageMode(),
+        sha256: snap.sha256,
+        data: snap.data,
+      };
+
+      const dateTag = snap.createdAt.slice(0, 10);
+      return new NextResponse(JSON.stringify(envelope, null, 2), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": `attachment; filename="lou-snapshot-${dateTag}-${snap.id.slice(0, 8)}.json"`,
+          "Cache-Control": "no-store",
+        },
+      });
     }
 
-    const envelope: PortfolioBackupEnvelope = {
-      schemaVersion: 2,
-      scope: "full",
-      exportedAt: snap.createdAt,
-      storageMode: getStorageMode(),
-      sha256: snap.sha256,
-      data: snap.data,
-    };
+    const includeMedia = searchParams.get("includeMedia") === "1";
 
-    const dateTag = snap.createdAt.slice(0, 10);
-    return new NextResponse(JSON.stringify(envelope, null, 2), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="lou-snapshot-${dateTag}-${snap.id.slice(0, 8)}.json"`,
+    const [health, db, snapshots] = await Promise.all([
+      probeDatabaseHealth(),
+      getPortfolioDB({ bypassCache: true }),
+      listPortfolioSnapshotMetas(),
+    ]);
+
+    const footprints = computeSectionFootprints(db);
+    const mediaAudit = includeMedia ? await auditOrphanedMedia(db) : null;
+    const emailDiagnostics = getEmailDiagnostics(
+      db.profile.contact.email,
+      db.profile.fullName
+    );
+
+    return NextResponse.json(
+      {
+        health,
+        footprints,
+        snapshots,
+        mediaAudit,
+        emailDiagnostics,
       },
-    });
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  } catch (err) {
+    if (err instanceof StorageReadError) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+    return NextResponse.json(
+      { error: "Failed to load system diagnostics." },
+      { status: 500 }
+    );
   }
-
-  const includeMedia = searchParams.get("includeMedia") === "1";
-
-  const [health, db, snapshots] = await Promise.all([
-    probeDatabaseHealth(),
-    getPortfolioDB({ bypassCache: true }),
-    listPortfolioSnapshotMetas(),
-  ]);
-
-  const footprints = computeSectionFootprints(db);
-  const mediaAudit = includeMedia ? await auditOrphanedMedia(db) : null;
-  const emailDiagnostics = getEmailDiagnostics(
-    db.profile.contact.email,
-    db.profile.fullName
-  );
-
-  return NextResponse.json({
-    health,
-    footprints,
-    snapshots,
-    mediaAudit,
-    emailDiagnostics,
-  });
 }
 
 export async function POST(request: Request) {
@@ -107,7 +122,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as {
+    let body: {
       action:
         | "create-snapshot"
         | "restore-snapshot"
@@ -126,11 +141,26 @@ export async function POST(request: Request) {
       days?: number;
       targets?: string[];
     };
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as typeof body;
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
     if (body.action === "flush-server-cache") {
       clearPortfolioMemoryCache();
       try {
-        revalidateTag(PORTFOLIO_CACHE_TAG, "max");
+        revalidateTag(PORTFOLIO_CACHE_TAG, { expire: 0 });
         revalidatePath("/", "layout");
       } catch {
         // Ignore if called outside request context
@@ -144,7 +174,10 @@ export async function POST(request: Request) {
     if (body.action === "create-snapshot") {
       const db = await getPortfolioDB({ bypassCache: true });
       const created = await createPortfolioSnapshot({
-        label: body.label?.trim() || "Manual Checkpoint",
+        label:
+          typeof body.label === "string" && body.label.trim()
+            ? body.label.trim()
+            : "Manual Checkpoint",
         trigger: "manual",
         db,
       });
@@ -157,14 +190,14 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "restore-snapshot") {
-      if (!body.snapshotId) {
+      if (typeof body.snapshotId !== "string" || !body.snapshotId.trim()) {
         return NextResponse.json(
           { error: "Snapshot ID is required." },
           { status: 400 }
         );
       }
 
-      const target = await getPortfolioSnapshotById(body.snapshotId);
+      const target = await getPortfolioSnapshotById(body.snapshotId.trim());
       if (!target) {
         return NextResponse.json(
           { error: "Requested snapshot was not found." },
@@ -172,7 +205,16 @@ export async function POST(request: Request) {
         );
       }
 
-      const sections = restoreSectionsSchema.parse(body.sections || {});
+      const sectionsParsed = restoreSectionsSchema.safeParse(
+        body.sections || {}
+      );
+      if (!sectionsParsed.success) {
+        return NextResponse.json(
+          { error: "Invalid restore sections selection." },
+          { status: 400 }
+        );
+      }
+      const sections = sectionsParsed.data;
       const current = await getPortfolioDB({ bypassCache: true });
       await createPortfolioSnapshot({
         label: `Auto-checkpoint before restoring "${target.label}"`,
@@ -213,15 +255,23 @@ export async function POST(request: Request) {
         );
       }
 
-      const sections = restoreSectionsSchema.parse(body.sections || {});
+      const sectionsParsed = restoreSectionsSchema.safeParse(
+        body.sections || {}
+      );
+      if (!sectionsParsed.success) {
+        return NextResponse.json(
+          { error: "Invalid restore sections selection." },
+          { status: 400 }
+        );
+      }
+      const sections = sectionsParsed.data;
       const maybeEnvelope = body.rawBackup as Partial<PortfolioBackupEnvelope>;
 
       let candidateData: unknown = body.rawBackup;
       if (maybeEnvelope.schemaVersion === 2 && maybeEnvelope.data) {
         candidateData = maybeEnvelope.data;
         if (typeof maybeEnvelope.sha256 === "string" && maybeEnvelope.sha256) {
-          const actualDigest = computeObjectSha256(maybeEnvelope.data);
-          if (actualDigest !== maybeEnvelope.sha256) {
+          if (!verifyBackupSha256(maybeEnvelope.data, maybeEnvelope.sha256)) {
             return NextResponse.json(
               {
                 error:
@@ -281,7 +331,13 @@ export async function POST(request: Request) {
     }
 
     if (body.action === "prune-analytics") {
-      const pruneMode = body.mode || "clear-all";
+      if (body.mode !== "older-than-days" && body.mode !== "clear-all") {
+        return NextResponse.json(
+          { error: "Prune mode must explicitly be 'older-than-days' or 'clear-all'." },
+          { status: 400 }
+        );
+      }
+      const pruneMode = body.mode;
       const days =
         typeof body.days === "number" && body.days > 0
           ? Math.min(365, Math.floor(body.days))
@@ -395,7 +451,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: "Unknown system action." }, { status: 400 });
   } catch (err) {
-    if (err instanceof StorageWriteError) {
+    if (err instanceof StorageReadError || err instanceof StorageWriteError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
     }
     return NextResponse.json(
@@ -423,7 +479,7 @@ export async function DELETE(request: Request) {
     const snapshots = await deletePortfolioSnapshot(snapshotId);
     return NextResponse.json({ success: true, snapshots });
   } catch (err) {
-    if (err instanceof StorageWriteError) {
+    if (err instanceof StorageReadError || err instanceof StorageWriteError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
     }
     return NextResponse.json(

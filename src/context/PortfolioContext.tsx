@@ -32,6 +32,7 @@ import { profileData, defaultSectionHeaders } from "@/data/portfolio";
 import { marqueePrinciples } from "@/data/principles";
 import { pillarsData } from "@/data/pillars";
 import { skillsData } from "@/data/skills";
+import { certificatesData } from "@/data/certificates";
 import { projectsData } from "@/data/projects";
 import { impactMetrics } from "@/data/impact";
 import { DEFAULT_APPEARANCE } from "@/data/appearance";
@@ -50,6 +51,7 @@ const defaultPublicData: PublicPortfolioData = {
   marqueePrinciples,
   pillars: pillarsData,
   skills: skillsData,
+  certificates: certificatesData,
   projects: projectsData,
   impactMetrics,
   appearance: DEFAULT_APPEARANCE,
@@ -104,27 +106,30 @@ function PortfolioStateBridge({
         throw new Error("Failed to fetch public portfolio data");
       }
       const fresh = (await res.json()) as PublicPortfolioData;
-      const existing = queryClient.getQueryData<PublicPortfolioData>(
-        queryKeys.publicPortfolio
-      );
-      if (
-        existing &&
-        existing.updatedAt &&
-        fresh.updatedAt &&
-        existing.updatedAt === fresh.updatedAt &&
-        JSON.stringify(existing.appearance) === JSON.stringify(fresh.appearance)
-      ) {
-        return existing;
-      }
       writePersistedPublicCache(fresh);
       return fresh;
     },
-    initialData: () =>
-      pickNewestPortfolioSnapshot(initialData, readPersistedPublicCache()),
-    initialDataUpdatedAt: 0,
-    staleTime: 10 * 1000,
+    // Always hydrate identically to SSR `initialData` to guarantee zero React hydration mismatches;
+    // fresher localStorage snapshots reconcile safely post-mount in useEffect below.
+    initialData: () => initialData || defaultPublicData,
+    initialDataUpdatedAt: () => (initialData ? Date.now() : 0),
+    staleTime: 30 * 1000,
     refetchOnWindowFocus: !pathname?.startsWith("/admin"),
   });
+
+  // Post-mount: reconcile with any newer sanitized localStorage snapshot (e.g. saved in /admin tab)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const persisted = readPersistedPublicCache();
+    if (!persisted) return;
+    const current = queryClient.getQueryData<PublicPortfolioData>(
+      queryKeys.publicPortfolio
+    );
+    const picked = pickNewestPortfolioSnapshot(current, persisted);
+    if (picked === persisted) {
+      queryClient.setQueryData(queryKeys.publicPortfolio, persisted);
+    }
+  }, [queryClient]);
 
   // Live-sync portfolio state across open tabs (e.g. saving in /admin updates open public tab immediately)
   useEffect(() => {

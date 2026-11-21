@@ -22,6 +22,7 @@ import {
   restoreProjectsSchema,
   restoreSectionHeadersSchema,
   restoreSkillsSchema,
+  validateCertificatesDraft,
   validateProfileDraft,
   validateProjectsDraft,
 } from "@/lib/validation";
@@ -56,28 +57,62 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as Partial<PortfolioDatabase>;
+    let body: Partial<PortfolioDatabase>;
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as Partial<PortfolioDatabase>;
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
-    let nextProfileError: string | null = null;
-    const currentSnapshot = await getPortfolioContent();
+    const currentSnapshot = await getPortfolioContent({ bypassCache: true });
 
-    if (body.profile) {
+    const rawProfilePatch = body.profile;
+    let validatedProfileKeys: (keyof PortfolioDatabase["profile"])[] | null =
+      null;
+    let validatedProfileValue: PortfolioDatabase["profile"] | null = null;
+    if (rawProfilePatch) {
+      if (typeof rawProfilePatch !== "object" || Array.isArray(rawProfilePatch)) {
+        return NextResponse.json(
+          { error: "Invalid profile payload." },
+          { status: 400 }
+        );
+      }
+      const rawContactPatch = rawProfilePatch.contact as
+        | (Partial<PortfolioDatabase["profile"]["contact"]> & {
+            address?: PortfolioDatabase["profile"]["contact"]["address"] | null;
+          })
+        | undefined;
+      const mergedContact = {
+        ...currentSnapshot.profile.contact,
+        ...(rawContactPatch || {}),
+      };
+      if (rawContactPatch && rawContactPatch.address === null) {
+        delete mergedContact.address;
+      }
+
       const candidateProfile = {
         ...currentSnapshot.profile,
-        ...body.profile,
+        ...rawProfilePatch,
         education: {
           ...currentSnapshot.profile.education,
-          ...(body.profile.education || {}),
+          ...(rawProfilePatch.education || {}),
         },
-        contact: {
-          ...currentSnapshot.profile.contact,
-          ...(body.profile.contact || {}),
-        },
-        monogramTransform: body.profile.monogramTransform
-          ? sanitizeImageTransform(body.profile.monogramTransform, "circle")
+        contact: mergedContact,
+        monogramTransform: rawProfilePatch.monogramTransform
+          ? sanitizeImageTransform(rawProfilePatch.monogramTransform, "circle")
           : currentSnapshot.profile.monogramTransform,
-        avatarTransform: body.profile.avatarTransform
-          ? sanitizeImageTransform(body.profile.avatarTransform, "squircle")
+        avatarTransform: rawProfilePatch.avatarTransform
+          ? sanitizeImageTransform(rawProfilePatch.avatarTransform, "squircle")
           : currentSnapshot.profile.avatarTransform,
       };
       const syncedAge = calculateAge(candidateProfile.birthDate);
@@ -86,17 +121,19 @@ export async function PUT(request: Request) {
       }
       const check = validateProfileDraft(candidateProfile);
       if (!check.valid) {
-        nextProfileError = check.errors[0] || "Invalid profile data.";
-      } else {
-        body.profile = candidateProfile;
+        return NextResponse.json(
+          { error: check.errors[0] || "Invalid profile data." },
+          { status: 400 }
+        );
       }
+      validatedProfileValue = candidateProfile;
+      validatedProfileKeys = Object.keys(
+        rawProfilePatch
+      ) as (keyof PortfolioDatabase["profile"])[];
     }
 
-    if (nextProfileError) {
-      return NextResponse.json({ error: nextProfileError }, { status: 400 });
-    }
-
-    let nextAppearance = currentSnapshot.appearance;
+    let validatedAppearancePatch: Partial<PortfolioDatabase["appearance"]> | null =
+      null;
     if (body.appearance) {
       const mergedAppearance = sanitizeAppearanceConfig({
         ...currentSnapshot.appearance,
@@ -113,10 +150,11 @@ export async function PUT(request: Request) {
           { status: 400 }
         );
       }
-      nextAppearance = parsedAppearance.data;
+      validatedAppearancePatch = body.appearance;
     }
 
-    let nextSectionHeaders = currentSnapshot.sectionHeaders;
+    let validatedHeaderPatch: Partial<PortfolioDatabase["sectionHeaders"]> | null =
+      null;
     if (body.sectionHeaders !== undefined) {
       const partialHeadersCheck = restoreSectionHeadersSchema
         .partial()
@@ -131,10 +169,7 @@ export async function PUT(request: Request) {
           { status: 400 }
         );
       }
-      nextSectionHeaders = {
-        ...currentSnapshot.sectionHeaders,
-        ...partialHeadersCheck.data,
-      };
+      validatedHeaderPatch = partialHeadersCheck.data;
     }
 
     if (body.marqueePrinciples !== undefined) {
@@ -184,6 +219,24 @@ export async function PUT(request: Request) {
       body.skills = skillsCheck.data;
     }
 
+    if (body.certificates !== undefined) {
+      if (!Array.isArray(body.certificates)) {
+        return NextResponse.json(
+          { error: "Certificates payload must be an array." },
+          { status: 400 }
+        );
+      }
+      const certCheck = validateCertificatesDraft(body.certificates);
+      if (!certCheck.valid) {
+        return NextResponse.json(
+          {
+            error: certCheck.errors[0] || "Certificate validation failed.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (body.projects !== undefined) {
       const projectsSchemaCheck = restoreProjectsSchema.safeParse(body.projects);
       if (!projectsSchemaCheck.success) {
@@ -228,29 +281,77 @@ export async function PUT(request: Request) {
       body.impactMetrics = metricsCheck.data;
     }
 
-    const updated = await savePortfolioDB((current) => ({
-      ...current,
-      profile: body.profile ? { ...current.profile, ...body.profile } : current.profile,
-      sectionHeaders:
-        body.sectionHeaders !== undefined
-          ? nextSectionHeaders
+    // Apply partial domain updates against the freshest serialized DB state inside savePortfolioDB
+    // so concurrent edits across modules never clobber sibling fields.
+    const updated = await savePortfolioDB((current) => {
+      let nextProfile = current.profile;
+      if (validatedProfileValue && validatedProfileKeys) {
+        const mergedProfile: PortfolioDatabase["profile"] = {
+          ...current.profile,
+        };
+        for (const key of validatedProfileKeys) {
+          if (key === "education") {
+            mergedProfile.education = {
+              ...current.profile.education,
+              ...validatedProfileValue.education,
+            };
+          } else if (key === "contact") {
+            const rawContact = rawProfilePatch?.contact as
+              | { address?: unknown }
+              | undefined;
+            const mergedContact = {
+              ...current.profile.contact,
+              ...validatedProfileValue.contact,
+            };
+            if (rawContact && rawContact.address === null) {
+              delete mergedContact.address;
+            }
+            mergedProfile.contact = mergedContact;
+          } else {
+            (mergedProfile as unknown as Record<string, unknown>)[key] = (
+              validatedProfileValue as unknown as Record<string, unknown>
+            )[key];
+          }
+        }
+        const syncedAge = calculateAge(mergedProfile.birthDate);
+        if (syncedAge !== null) {
+          mergedProfile.age = syncedAge;
+        }
+        nextProfile = mergedProfile;
+      }
+
+      return {
+        ...current,
+        profile: nextProfile,
+        sectionHeaders: validatedHeaderPatch
+          ? { ...current.sectionHeaders, ...validatedHeaderPatch }
           : current.sectionHeaders,
-      marqueePrinciples: body.marqueePrinciples ?? current.marqueePrinciples,
-      pillars: body.pillars ?? current.pillars,
-      skills: body.skills ?? current.skills,
-      projects: body.projects ?? current.projects,
-      impactMetrics: body.impactMetrics ?? current.impactMetrics,
-      appearance: body.appearance ? nextAppearance : current.appearance,
-    }));
+        marqueePrinciples: body.marqueePrinciples ?? current.marqueePrinciples,
+        pillars: body.pillars ?? current.pillars,
+        skills: body.skills ?? current.skills,
+        certificates: body.certificates ?? current.certificates ?? [],
+        projects: body.projects ?? current.projects,
+        impactMetrics: body.impactMetrics ?? current.impactMetrics,
+        appearance: validatedAppearancePatch
+          ? sanitizeAppearanceConfig({
+              ...current.appearance,
+              ...validatedAppearancePatch,
+            })
+          : current.appearance,
+      };
+    });
 
     revalidatePath("/", "layout");
 
-    return NextResponse.json({
-      success: true,
-      data: updated,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: updated,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
-    if (err instanceof StorageWriteError) {
+    if (err instanceof StorageReadError || err instanceof StorageWriteError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
     }
     return NextResponse.json(
@@ -266,12 +367,30 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as { action?: string };
+    let body: { action?: string };
+    try {
+      const parsed = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return NextResponse.json(
+          { error: "Invalid JSON request body." },
+          { status: 400 }
+        );
+      }
+      body = parsed as { action?: string };
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed JSON request body." },
+        { status: 400 }
+      );
+    }
 
     if (body.action === "clear-analytics") {
       await pruneRelationalAnalytics({ mode: "clear-all" });
       const updated = await getPortfolioDB({ bypassCache: true });
-      return NextResponse.json({ success: true, data: updated });
+      return NextResponse.json(
+        { success: true, data: updated },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     if (body.action === "reset-seed") {
@@ -289,12 +408,15 @@ export async function POST(request: Request) {
         analytics: curr.analytics,
       }));
       revalidatePath("/", "layout");
-      return NextResponse.json({ success: true, data: updated });
+      return NextResponse.json(
+        { success: true, data: updated },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
-    if (err instanceof StorageWriteError) {
+    if (err instanceof StorageReadError || err instanceof StorageWriteError) {
       return NextResponse.json({ error: err.message }, { status: 503 });
     }
     return NextResponse.json({ error: "Action failed" }, { status: 500 });

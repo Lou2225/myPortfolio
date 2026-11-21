@@ -14,6 +14,7 @@ import { measureStickyCeilingPx } from "@/lib/utils";
 export function useValidationFollower() {
   const { scrollTo, refreshScroll } = useSmoothScroll();
   const issueCursorRef = useRef(0);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const collectInvalidNodes = useCallback(
     (root?: HTMLElement | null): HTMLElement[] => {
@@ -44,7 +45,12 @@ export function useValidationFollower() {
         new CustomEvent("lou-follow-invalid", { bubbles: true })
       );
 
-      setTimeout(() => {
+      if (focusTimerRef.current !== null) {
+        clearTimeout(focusTimerRef.current);
+      }
+
+      focusTimerRef.current = setTimeout(() => {
+        focusTimerRef.current = null;
         refreshScroll();
         scrollTo(target, {
           offset: -measureStickyCeilingPx(164, 16),

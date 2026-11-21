@@ -243,7 +243,7 @@ async function cacheFirst(request, cacheName) {
   return networkRes;
 }
 
-async function staleWhileRevalidate(request, url, cacheName, shouldTrimMedia) {
+async function staleWhileRevalidate(request, url, cacheName, shouldTrimMedia, event) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
 
@@ -258,6 +258,10 @@ async function staleWhileRevalidate(request, url, cacheName, shouldTrimMedia) {
       return res;
     })
     .catch(() => null);
+
+  if (event && typeof event.waitUntil === "function") {
+    event.waitUntil(networkPromise);
+  }
 
   if (cached) {
     return cached;
@@ -348,18 +352,25 @@ self.addEventListener("fetch", (event) => {
 
   if (!sameOrigin) {
     if (isSupabasePublicMediaUrl(url)) {
-      event.respondWith(staleWhileRevalidate(request, url, MEDIA_CACHE, true));
+      event.respondWith(staleWhileRevalidate(request, url, MEDIA_CACHE, true, event));
     }
     return;
   }
 
-  // Never cache authenticated admin APIs, contact submissions, analytics, or live Next RSC payloads
+  // Never cache authenticated admin APIs, contact submissions, analytics, PDF binary stream, or live Next RSC payloads
   if (
     url.pathname.startsWith("/api/admin") ||
     url.pathname.startsWith("/api/contact") ||
     url.pathname.startsWith("/api/analytics") ||
+    url.pathname.startsWith("/api/resume") ||
     isNextRscRequest(request, url)
   ) {
+    return;
+  }
+
+  // Cache static PDF.js worker script for instant offline resume rendering
+  if (url.pathname === "/api/pdf-worker") {
+    event.respondWith(cacheFirst(request, STATIC_CACHE));
     return;
   }
 
@@ -379,7 +390,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isSameOriginStaticPath(url.pathname)) {
-    event.respondWith(staleWhileRevalidate(request, url, STATIC_CACHE, false));
+    event.respondWith(staleWhileRevalidate(request, url, STATIC_CACHE, false, event));
     return;
   }
 

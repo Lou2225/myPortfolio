@@ -4,17 +4,24 @@ import {
   readAdminCredentialOverride,
   StorageReadError,
 } from "@/lib/db";
-import { readAdminSecurityStore, verifyStealthRecoveryKey } from "@/lib/security";
+import {
+  type InternalAdminSecurityStore,
+  readAdminSecurityStore,
+  verifyStealthRecoveryKey,
+} from "@/lib/security";
 
 export const ADMIN_COOKIE_NAME = "lou_admin_session";
 export const REGISTERED_DEVICE_COOKIE = "lou_registered_device";
 
 /**
  * Determines whether cookies on an API response should carry the `Secure` attribute.
- * Respects `x-forwarded-proto` / request URL protocol so `npm run start` over local LAN HTTP
- * (e.g., QR mobile pairing) continues to issue cookies while TLS origins enforce `Secure`.
+ * Forces `Secure` on Vercel production; respects `x-forwarded-proto` / request URL protocol
+ * on local/self-hosted origins so LAN HTTP testing still works.
  */
 export function isSecureRequest(request?: Request): boolean {
+  if (process.env.NODE_ENV === "production" && process.env.VERCEL === "1") {
+    return true;
+  }
   if (request) {
     const forwardedProto = request.headers
       .get("x-forwarded-proto")
@@ -27,10 +34,10 @@ export function isSecureRequest(request?: Request): boolean {
     try {
       return new URL(request.url).protocol === "https:";
     } catch {
-      // Fall back to environment detection below
+      // Fall back to false for non-TLS local origins
     }
   }
-  return process.env.NODE_ENV === "production" && process.env.VERCEL === "1";
+  return false;
 }
 
 export type AdminPasswordSource = "override" | "env" | "unconfigured";
@@ -156,8 +163,10 @@ function verifySignedToken<T extends { exp?: number }>(
   token?: string
 ): T | null {
   const secret = getSecret();
-  if (!secret || !token || !token.includes(".")) return null;
-  const [encoded, signature] = token.split(".");
+  if (!secret || !token || typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [encoded, signature] = parts;
   if (!encoded || !signature) return null;
 
   const expectedSig = crypto
@@ -165,13 +174,10 @@ function verifySignedToken<T extends { exp?: number }>(
     .update(encoded)
     .digest("base64url");
 
-  if (signature.length !== expectedSig.length) return null;
-  if (
-    !crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSig)
-    )
-  ) {
+  const sigBuf = Buffer.from(signature, "utf-8");
+  const expectedBuf = Buffer.from(expectedSig, "utf-8");
+  if (sigBuf.length !== expectedBuf.length) return null;
+  if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) {
     return null;
   }
 
@@ -326,7 +332,9 @@ function verifyStealthUnlockPass(token?: string | null): boolean {
   return payload?.kind === "stealth_unlock_pass";
 }
 
-export async function getSessionAndDeviceContext(): Promise<{
+export async function getSessionAndDeviceContext(options?: {
+  securityStore?: InternalAdminSecurityStore;
+}): Promise<{
   authenticated: boolean;
   deviceRegistered: boolean;
   currentDeviceId: string | null;
@@ -334,11 +342,14 @@ export async function getSessionAndDeviceContext(): Promise<{
   deviceTokenNeedsRefresh?: boolean;
   sessionEpoch: number;
   storageUnavailable?: boolean;
+  securityStore?: InternalAdminSecurityStore;
 }> {
   try {
     const [cookieStore, securityStore] = await Promise.all([
       cookies(),
-      readAdminSecurityStore(),
+      options?.securityStore
+        ? Promise.resolve(options.securityStore)
+        : readAdminSecurityStore(),
     ]);
 
     const sessionCookie = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
@@ -360,7 +371,7 @@ export async function getSessionAndDeviceContext(): Promise<{
           : isLegacyPermitted;
 
       let deviceStillAllowed = true;
-      if (sessionPayload.deviceId && securityStore.devices.length > 0) {
+      if (sessionPayload.deviceId) {
         const boundDevice = securityStore.devices.find(
           (d) => d.id === sessionPayload.deviceId
         );
@@ -370,14 +381,19 @@ export async function getSessionAndDeviceContext(): Promise<{
       authenticated = epochMatches && deviceStillAllowed;
     }
 
-    // Validate Registered Device Cookie against Server Registry
+    // Validate Registered Device Cookie against Server Registry & Session Epoch
     let deviceRegistered = false;
     let currentDeviceId: string | null = null;
     let currentDeviceThumbprint: string | null = null;
     let deviceTokenNeedsRefresh = false;
 
     if (devicePayload?.device === "registered_admin_device") {
-      if (devicePayload.deviceId) {
+      const deviceEpochMatches =
+        typeof devicePayload.epoch === "number"
+          ? devicePayload.epoch === securityStore.sessionEpoch
+          : isLegacyPermitted;
+
+      if (deviceEpochMatches && devicePayload.deviceId) {
         const match = securityStore.devices.find(
           (d) => d.id === devicePayload.deviceId && d.status === "active"
         );
@@ -393,7 +409,7 @@ export async function getSessionAndDeviceContext(): Promise<{
             deviceTokenNeedsRefresh = true;
           }
         }
-      } else if (isLegacyPermitted) {
+      } else if (deviceEpochMatches && isLegacyPermitted) {
         deviceRegistered = true;
       }
     }
@@ -417,6 +433,7 @@ export async function getSessionAndDeviceContext(): Promise<{
       currentDeviceThumbprint,
       deviceTokenNeedsRefresh,
       sessionEpoch: securityStore.sessionEpoch,
+      securityStore,
     };
   } catch (err) {
     return {
@@ -439,19 +456,20 @@ export async function isAdminAuthenticated(): Promise<boolean> {
 export async function checkStealthGateAccess(options?: {
   portalKey?: string | null;
   stealthUnlockToken?: string | null;
+  securityStore?: InternalAdminSecurityStore;
 }): Promise<{
   allowed: boolean;
   stealthActive: boolean;
   unlockedViaKey: boolean;
   storageUnavailable?: boolean;
+  securityStore?: InternalAdminSecurityStore;
 }> {
   try {
-    const [ctx, store] = await Promise.all([
-      getSessionAndDeviceContext(),
-      readAdminSecurityStore(),
-    ]);
+    const ctx = await getSessionAndDeviceContext({
+      securityStore: options?.securityStore,
+    });
 
-    if (ctx.storageUnavailable) {
+    if (ctx.storageUnavailable || !ctx.securityStore) {
       return {
         allowed: false,
         stealthActive: true,
@@ -460,6 +478,7 @@ export async function checkStealthGateAccess(options?: {
       };
     }
 
+    const store = ctx.securityStore;
     const activeDeviceCount = store.devices.filter(
       (d) => d.status === "active"
     ).length;
@@ -467,21 +486,41 @@ export async function checkStealthGateAccess(options?: {
     // Bootstrap Safety: never block /admin when Stealth Gate is OFF or 0 active devices exist
     const stealthActive = store.stealthGateEnabled && activeDeviceCount > 0;
     if (!stealthActive) {
-      return { allowed: true, stealthActive: false, unlockedViaKey: false };
+      return {
+        allowed: true,
+        stealthActive: false,
+        unlockedViaKey: false,
+        securityStore: store,
+      };
     }
 
     if (ctx.authenticated || ctx.deviceRegistered) {
-      return { allowed: true, stealthActive: true, unlockedViaKey: false };
+      return {
+        allowed: true,
+        stealthActive: true,
+        unlockedViaKey: false,
+        securityStore: store,
+      };
     }
 
     if (
       verifyStealthRecoveryKey(options?.portalKey, store) ||
       verifyStealthUnlockPass(options?.stealthUnlockToken)
     ) {
-      return { allowed: true, stealthActive: true, unlockedViaKey: true };
+      return {
+        allowed: true,
+        stealthActive: true,
+        unlockedViaKey: true,
+        securityStore: store,
+      };
     }
 
-    return { allowed: false, stealthActive: true, unlockedViaKey: false };
+    return {
+      allowed: false,
+      stealthActive: true,
+      unlockedViaKey: false,
+      securityStore: store,
+    };
   } catch (err) {
     return {
       allowed: false,

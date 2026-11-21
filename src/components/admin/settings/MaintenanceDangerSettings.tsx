@@ -26,7 +26,6 @@ import {
   useStepNavigation,
 } from "@/components/admin/AdminMobileStepView";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { InfoTooltip } from "@/components/ui/Tooltip";
@@ -342,11 +341,9 @@ export function MaintenanceDangerSettings({
               <p className="text-sm font-semibold text-(--text-primary)">
                 Analytics Telemetry Retention
               </p>
-              <StatusPill
-                label={`${analyticsCount} total`}
-                variant="neutral"
-                size="xs"
-              />
+              <span className="text-[11px] font-mono text-(--text-muted) tabular-nums">
+                {analyticsCount} total
+              </span>
             </div>
             <p className="text-xs text-(--text-muted) mt-1 leading-relaxed">
               Prune aging funnel logs by age while keeping recent activity, or
@@ -419,11 +416,15 @@ export function MaintenanceDangerSettings({
               <p className="text-sm font-semibold text-(--text-primary)">
                 Purge Read Inbox Inquiries
               </p>
-              <StatusPill
-                label={`${readUnstarredCount} eligible`}
-                variant={readUnstarredCount > 0 ? "accent" : "neutral"}
-                size="xs"
-              />
+              <span
+                className={`text-[11px] font-mono tabular-nums ${
+                  readUnstarredCount > 0
+                    ? "text-(--text-accent)"
+                    : "text-(--text-muted)"
+                }`}
+              >
+                {readUnstarredCount} eligible
+              </span>
             </div>
             <p className="text-xs text-(--text-muted) mt-1 leading-relaxed">
               Deletes archived read messages only. Unread and starred inquiries
@@ -517,17 +518,17 @@ export function MaintenanceDangerSettings({
                   · {mediaAudit.totalFiles} files (
                   {formatByteSize(mediaAudit.totalBytes)})
                 </span>
-                <StatusPill
-                  label={
+                <span
+                  className={`text-[10px] font-mono uppercase tracking-[0.14em] shrink-0 ${
                     mediaAudit.orphans.length === 0
-                      ? "0 Orphans Found"
-                      : `${mediaAudit.orphans.length} Unreferenced`
-                  }
-                  variant={
-                    mediaAudit.orphans.length === 0 ? "success" : "warning"
-                  }
-                  size="xs"
-                />
+                      ? "text-emerald-400"
+                      : "text-amber-400"
+                  }`}
+                >
+                  {mediaAudit.orphans.length === 0
+                    ? "0 Orphans Found"
+                    : `${mediaAudit.orphans.length} Unreferenced`}
+                </span>
               </div>
               {mediaAudit.scanWarning && (
                 <p className="text-amber-400">{mediaAudit.scanWarning}</p>

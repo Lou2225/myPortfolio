@@ -24,6 +24,7 @@ import type {
   SectionFootprint,
 } from "@/lib/backups";
 import type { RestoreSectionFlags } from "@/lib/validation";
+import { canonicalJsonStringify } from "@/lib/canonicalJson";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import {
   useOfflineStatus,
@@ -36,7 +37,6 @@ import {
   useStepNavigation,
 } from "@/components/admin/AdminMobileStepView";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { IconActionButton } from "@/components/ui/ActionButtons";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -70,12 +70,18 @@ function formatByteSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-async function computeBrowserSha256(payload: unknown): Promise<string | null> {
+async function computeBrowserSha256(
+  payload: unknown,
+  legacy = false
+): Promise<string | null> {
   if (typeof window === "undefined" || !window.crypto?.subtle) {
     return null;
   }
   try {
-    const encoded = new TextEncoder().encode(JSON.stringify(payload));
+    const serialized = legacy
+      ? JSON.stringify(payload)
+      : canonicalJsonStringify(payload);
+    const encoded = new TextEncoder().encode(serialized);
     const digest = await window.crypto.subtle.digest("SHA-256", encoded);
     return Array.from(new Uint8Array(digest))
       .map((b) => b.toString(16).padStart(2, "0"))
@@ -183,7 +189,7 @@ export function DatabaseBackupSettings({
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       onFeedback(null);
       announceBrandPortalStatus({
@@ -249,12 +255,15 @@ export function DatabaseBackupSettings({
       if (isEnvelope) {
         const expectedSha = (parsed as PortfolioBackupEnvelope).sha256;
         if (expectedSha) {
-          const actualSha = await computeBrowserSha256(candidate);
-          if (!actualSha) {
+          const canonicalSha = await computeBrowserSha256(candidate, false);
+          if (!canonicalSha) {
             integrityStatus = "legacy";
+          } else if (canonicalSha === expectedSha) {
+            integrityStatus = "verified";
           } else {
+            const legacySha = await computeBrowserSha256(candidate, true);
             integrityStatus =
-              actualSha === expectedSha ? "verified" : "mismatch";
+              legacySha === expectedSha ? "verified" : "mismatch";
           }
         }
       }
@@ -540,33 +549,31 @@ export function DatabaseBackupSettings({
                 ? "Supabase PostgreSQL"
                 : "Local Hybrid JSON"}
             </span>
-            <StatusPill
-              label={
-                systemQuery.isError
-                  ? "Unreachable"
-                  : systemQuery.isPending
-                    ? "Checking"
-                    : health?.status === "healthy"
-                      ? "Healthy"
-                      : health?.status === "degraded"
-                        ? "Degraded"
-                        : health?.status === "offline"
-                          ? "Offline"
-                          : "Unknown"
-              }
-              variant={
+            <span
+              className={`text-[10px] font-mono uppercase tracking-[0.14em] shrink-0 ${
                 systemQuery.isError || health?.status === "offline"
-                  ? "danger"
+                  ? "text-rose-400"
                   : systemQuery.isPending
-                    ? "neutral"
+                    ? "text-(--text-muted)"
                     : health?.status === "degraded"
-                      ? "warning"
+                      ? "text-amber-400"
                       : health?.status === "healthy"
-                        ? "success"
-                        : "neutral"
-              }
-              size="xs"
-            />
+                        ? "text-emerald-400"
+                        : "text-(--text-muted)"
+              }`}
+            >
+              {systemQuery.isError
+                ? "Unreachable"
+                : systemQuery.isPending
+                  ? "Checking"
+                  : health?.status === "healthy"
+                    ? "Healthy"
+                    : health?.status === "degraded"
+                      ? "Degraded"
+                      : health?.status === "offline"
+                        ? "Offline"
+                        : "Unknown"}
+            </span>
           </div>
         </div>
 
@@ -597,54 +604,50 @@ export function DatabaseBackupSettings({
       </div>
 
       {health && storageMode === "supabase" && (
-        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
-          <StatusPill
-            label={
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono">
+          <span
+            className={
               health.tables.analyticsEventsV2
-                ? "analytics_events v2"
+                ? "text-emerald-400"
                 : health.tables.analyticsEvents
-                  ? "analytics_events (missing v2 cols)"
-                  : "analytics_events missing"
+                  ? "text-amber-400"
+                  : "text-rose-400"
             }
-            variant={
-              health.tables.analyticsEventsV2
-                ? "success"
-                : health.tables.analyticsEvents
-                  ? "warning"
-                  : "danger"
-            }
-            size="xs"
-          />
-          <StatusPill
-            label={
+          >
+            {health.tables.analyticsEventsV2
+              ? "analytics_events v2"
+              : health.tables.analyticsEvents
+                ? "analytics_events (missing v2 cols)"
+                : "analytics_events missing"}
+          </span>
+          <span className="text-(--text-muted)">·</span>
+          <span
+            className={
               health.tables.contactMessagesV2
-                ? "contact_messages v2"
+                ? "text-emerald-400"
                 : health.tables.contactMessages
-                  ? "contact_messages (missing v2 cols)"
-                  : "contact_messages missing"
+                  ? "text-amber-400"
+                  : "text-rose-400"
             }
-            variant={
-              health.tables.contactMessagesV2
-                ? "success"
-                : health.tables.contactMessages
-                  ? "warning"
-                  : "danger"
-            }
-            size="xs"
-          />
-          <StatusPill
-            label={
-              health.storage.exists
-                ? `Bucket ${health.storage.bucket} (${health.storage.isPublic ? "Public" : "Private"})`
-                : `Bucket ${health.storage.bucket} missing`
-            }
-            variant={
+          >
+            {health.tables.contactMessagesV2
+              ? "contact_messages v2"
+              : health.tables.contactMessages
+                ? "contact_messages (missing v2 cols)"
+                : "contact_messages missing"}
+          </span>
+          <span className="text-(--text-muted)">·</span>
+          <span
+            className={
               health.storage.exists && health.storage.isPublic
-                ? "success"
-                : "warning"
+                ? "text-emerald-400"
+                : "text-amber-400"
             }
-            size="xs"
-          />
+          >
+            {health.storage.exists
+              ? `Bucket ${health.storage.bucket} (${health.storage.isPublic ? "Public" : "Private"})`
+              : `Bucket ${health.storage.bucket} missing`}
+          </span>
         </div>
       )}
 
@@ -767,17 +770,19 @@ export function DatabaseBackupSettings({
                   <span className="text-sm font-semibold text-(--text-primary) truncate max-w-full">
                     {snap.label}
                   </span>
-                  <StatusPill
-                    label={
-                      snap.trigger === "pre-reset"
-                        ? "Pre-Reset"
-                        : snap.trigger === "pre-restore"
-                          ? "Pre-Restore"
-                          : "Manual"
-                    }
-                    variant={snap.trigger === "manual" ? "accent" : "warning"}
-                    size="xs"
-                  />
+                  <span
+                    className={`text-[10px] font-mono uppercase tracking-[0.14em] ${
+                      snap.trigger === "manual"
+                        ? "text-(--text-accent)"
+                        : "text-amber-400"
+                    }`}
+                  >
+                    {snap.trigger === "pre-reset"
+                      ? "Pre-Reset"
+                      : snap.trigger === "pre-restore"
+                        ? "Pre-Restore"
+                        : "Manual"}
+                  </span>
                 </div>
                 <p className="text-[11px] font-mono text-(--text-muted) leading-relaxed">
                   <span suppressHydrationWarning>

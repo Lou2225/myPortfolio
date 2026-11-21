@@ -5,7 +5,6 @@ import gsap from "gsap";
 import type { AnalyticsEvent } from "@/types/portfolio";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ScrollArea } from "@/components/ui/ScrollArea";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Tabs, type TabItem } from "@/components/ui/Tabs";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import { shouldReduceMotion } from "@/lib/appearance";
@@ -21,14 +20,15 @@ const EVENT_TYPE_META: Record<
   AnalyticsEvent["type"],
   {
     label: string;
-    variant: "neutral" | "accent" | "success" | "warning" | "solid";
+    toneClass: string;
   }
 > = {
-  page_view: { label: "View", variant: "neutral" },
-  chapter_view: { label: "Chapter", variant: "neutral" },
-  project_click: { label: "Project", variant: "accent" },
-  cv_download: { label: "CV Download", variant: "success" },
-  contact_click: { label: "Contact", variant: "solid" },
+  page_view: { label: "View", toneClass: "text-(--text-muted)" },
+  chapter_view: { label: "Chapter", toneClass: "text-(--text-secondary)" },
+  project_click: { label: "Project", toneClass: "text-(--text-accent)" },
+  cv_download: { label: "CV Download", toneClass: "text-emerald-400" },
+  contact_click: { label: "Contact", toneClass: "text-brand" },
+  certificate_click: { label: "Certificate", toneClass: "text-cyan-400" },
 };
 
 /**
@@ -47,6 +47,7 @@ export function TelemetryEventFeed({ events }: TelemetryEventFeedProps) {
       project_click: 0,
       cv_download: 0,
       contact_click: 0,
+      certificate_click: 0,
     };
     for (const ev of events) {
       counts[ev.type] = (counts[ev.type] || 0) + 1;
@@ -138,11 +139,11 @@ export function TelemetryEventFeed({ events }: TelemetryEventFeedProps) {
                   className="py-2.5 px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs transition-colors hover:bg-(--bg-surface-2)/55 rounded-xs"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <StatusPill
-                      label={meta.label}
-                      variant={meta.variant}
-                      size="xs"
-                    />
+                    <span
+                      className={`text-[10px] font-mono uppercase tracking-[0.14em] font-semibold shrink-0 ${meta.toneClass}`}
+                    >
+                      {meta.label}
+                    </span>
                     <span className="font-medium text-(--text-primary) truncate">
                       {ev.target}
                     </span>

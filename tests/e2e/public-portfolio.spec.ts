@@ -186,7 +186,7 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
     expect(resumeRes.status()).toBe(404);
 
     // Offline fallback skips Preloader, uses Button controls, and hides home scroll chapters.
-    await page.goto("/offline", { waitUntil: "networkidle" });
+    await page.goto("/offline", { waitUntil: "domcontentloaded" });
     await expect(
       page.locator('aside[aria-label="Site loader"]')
     ).not.toBeAttached();
@@ -211,7 +211,7 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
     await projectsSection.scrollIntoViewIfNeeded();
 
     const analyticsSpotlightTab = projectsSection.getByRole("tab", {
-      name: /Predictive Business Analytics Intelligence Hub/i,
+      name: /Predictive Business Analytics Intelligence Hub|Cart Flow/i,
     });
     await expect(analyticsSpotlightTab).toBeVisible({ timeout: 10000 });
     await analyticsSpotlightTab.click();
@@ -219,24 +219,24 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
 
     await expect(
       projectsSection.getByRole("heading", {
-        name: /Predictive Business Analytics Intelligence Hub/i,
+        name: /Predictive Business Analytics Intelligence Hub|Cart Flow/i,
       })
     ).toBeVisible();
     await expect(
       projectsSection.getByRole("heading", {
-        name: /Enterprise Group Capstone System/i,
+        name: /Enterprise Group Capstone System|Mister Takoyaki/i,
       })
     ).not.toBeVisible();
 
     // Switch back to Capstone System and also test the Grid View toggle
     const capstoneSpotlightTab = projectsSection.getByRole("tab", {
-      name: /Enterprise Group Capstone System/i,
+      name: /Enterprise Group Capstone System|Mister Takoyaki/i,
     });
     await capstoneSpotlightTab.click();
     await expect(capstoneSpotlightTab).toHaveAttribute("aria-selected", "true");
     await expect(
       projectsSection.getByRole("heading", {
-        name: /Enterprise Group Capstone System/i,
+        name: /Enterprise Group Capstone System|Mister Takoyaki/i,
       })
     ).toBeVisible();
 
@@ -247,20 +247,20 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
       await gridToggleBtn.click();
       await expect(
         projectsSection.getByRole("heading", {
-          name: /Predictive Business Analytics Intelligence Hub/i,
+          name: /Predictive Business Analytics Intelligence Hub|Cart Flow/i,
         })
       ).toBeVisible();
     }
 
     await projectsSection
       .getByRole("link", {
-        name: /Read full case study for Enterprise Group Capstone System/i,
+        name: /Read full case study for (Enterprise Group Capstone System|Mister Takoyaki)/i,
       })
       .click();
 
     await page.waitForURL("**/projects/capstone-system", { timeout: 10000 });
     await expect(
-      page.getByRole("heading", { name: /Enterprise Group Capstone System/i })
+      page.getByRole("heading", { name: /Enterprise Group Capstone System|Mister Takoyaki/i })
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /Core Engineering Challenge/i })
@@ -358,6 +358,7 @@ test.describe("Public Portfolio & Offline Queue E2E", () => {
     const drawerContactLink = page.getByRole("link", {
       name: /Contact Lou Diamond/i,
     });
+    await expect(drawerContactLink).toBeVisible({ timeout: 10000 });
     await drawerContactLink.scrollIntoViewIfNeeded();
     await expect(drawerContactLink).toBeVisible();
   });

@@ -5,7 +5,6 @@ import gsap from "gsap";
 import type { AnalyticsSnapshotSummary } from "@/lib/analytics";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ScrollArea } from "@/components/ui/ScrollArea";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip, TruncatedText } from "@/components/ui/Tooltip";
 import { Button } from "@/components/ui/Button";
 import { AnimatedCounter } from "@/components/motion/AdminMotion";
@@ -126,11 +125,9 @@ export function ProjectPerformanceCard({
                           className="text-(--text-primary) font-medium min-w-0"
                         />
                         {!proj.published && (
-                          <StatusPill
-                            label="Archived"
-                            variant="neutral"
-                            size="xs"
-                          />
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-(--text-muted) shrink-0">
+                            Archived
+                          </span>
                         )}
                       </div>
 

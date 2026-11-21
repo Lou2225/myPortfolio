@@ -2,7 +2,6 @@
 
 import type { PortfolioDatabase } from "@/types/portfolio";
 import type { AnalyticsSnapshotSummary, PeriodDelta } from "@/lib/analytics";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { InfoTooltip } from "@/components/ui/Tooltip";
 import {
   AnimatedCounter,
@@ -298,11 +297,9 @@ export function AnalyticsKpiGrid({
                     />
                   </span>
                   {kpis.unreadInbox > 0 ? (
-                    <StatusPill
-                      label={`${kpis.unreadInbox} unread`}
-                      variant="solid"
-                      size="xs"
-                    />
+                    <span className="text-[10px] font-mono uppercase tracking-[0.14em] font-semibold text-(--text-accent)">
+                      {kpis.unreadInbox} unread
+                    </span>
                   ) : (
                     <DeltaPill delta={kpis.inquiries} />
                   )}

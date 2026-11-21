@@ -335,6 +335,72 @@ flowchart LR
   - [x] Upgrade `TechBento.tsx` to render a balanced **2×2 Bento Matrix** on desktop (`>= 768px`) and a horizontally scrollable `<Tabs />` + stacked GPU crossfade single card on mobile (`< 768px`).
   - [x] Implement smart presence-aware auto-advance (`9s` interaction cooldown + pointer/focus pause) so cards never auto-advance while the user is reading or interacting.
 
+---
+
+### Track F (Milestone 11 — Priority 6): Public Certificates & Credentials Showcase (`P1`)
+
+Adds a dedicated verifiable **Certificates & Credentials** feature across both the public portfolio and `/admin` CMS so recruiters can inspect certifications, honors, and seminar credentials in-app without leaving the page.
+
+```mermaid
+flowchart LR
+    AdminCert["/admin Certificates CRUD"] -->|"Upload PDF/Image"| PubBucket[("Public Storage\n/certificates/")]
+    AdminCert -->|"Save & Publish"| Store[("portfolio_store /\nportfolio-db.json")]
+    Store -->|"Filter published=true"| PublicSec["Public Certificates Section"]
+    PublicSec -->|"View In-App"| Modal["CertificateViewerModal\n(PdfDocumentCanvas / Image Zoom)"]
+    PublicSec -->|"Verify ↗"| External["Issuer Verification URL"]
+```
+
+* **Data Model, Validation & Hybrid Storage (`src/types/portfolio.ts`, `src/data/certificates.ts`, `src/lib/validation.ts`, `src/lib/db.ts`, `src/lib/portfolioPublic.ts`, `src/lib/backups.ts`):**
+  - [ ] Define `Certificate` schema (`id`, `title`, `issuer`, `category`, `issuedDate`, `expiryDate?`, `credentialId?`, `credentialUrl?`, `fileUrl?`, `fileType?: "image" | "pdf"`, `thumbnailUrl?`, `thumbnailTransform?`, `skills[]`, `summary?`, `featured`, `published?`) and add `certificates: Certificate[]` to `PortfolioDatabase`.
+  - [ ] Extend `SectionHeaders` with `certificatesEyebrow`, `certificatesHeading`, and `certificatesSubtitle`, and extend `AnalyticsEvent.type` with `"certificate_view"`.
+  - [ ] Add `"certificates"` to `UPLOAD_SUBFOLDERS` (`src/lib/backups.ts`) and allow verified raster images + PDFs (`%PDF-` magic-byte check) for `folder === "certificates"` in `POST /api/admin/upload`.
+  - [ ] Register certificate asset URLs in `extractReferencedAssetPaths()` (protecting active certificates from orphan cleanup), strip draft certificates (`published === false`) in `src/lib/portfolioPublic.ts`, and include `certificates` in Backup/Snapshot export & selective restore.
+* **Public Portfolio Showcase & In-App Viewer (`src/components/sections/Certificates.tsx`, `src/components/common/CertificateViewerModal.tsx`, `src/app/api/certificates/[id]/file/route.ts`):**
+  - [ ] Build `Certificates.tsx` chapter partial with category filter tabs (reusing `<Tabs />`), featured credential badges, issuer & date metadata, skill chips, external `Verify ↗` link, and an in-app `View Certificate` trigger (auto-hides cleanly when zero published certificates exist).
+  - [ ] Build `CertificateViewerModal.tsx` reusing the multi-page `PdfDocumentCanvas` for PDF certificates and a crisp zoomable image frame for image certificates, plus same-origin SSRF-guarded `/api/certificates/[id]/file` streaming proxy.
+  - [ ] Wire section into `src/app/page.tsx`, `Navbar.tsx` chapter links/scroll observer, and `AnalyticsOverview.tsx` telemetry feed.
+* **Admin CMS Manager (`src/components/admin/CertificatesManager.tsx`, `src/components/admin/CertificateCardEditor.tsx`, `src/components/admin/layout/types.ts`, `globalSearchIndex.ts`):**
+  - [ ] Add a dedicated `certificates` tab in `/admin` with Create/Edit/Delete, pointer drag-to-reorder (`usePointerReorder`), Featured & Published/Draft toggles, certificate PDF/image uploader, issuer verification URL validation, and Global Search indexing.
+* **Verification:**
+  - [ ] Add Vitest unit tests covering certificate Zod validation, public draft redaction, orphan media reference protection, and `/api/certificates/[id]/file` proxy security.
+
+---
+
+### Track G (Milestone 12 — Priority 7): Private Personal Document Vault — "My Drive" (`P1`)
+
+Adds an **owner-only, Google-Drive-style Personal Document Storage Vault** inside `/admin` for soft-copy personal documents (government IDs, transcripts/TOR, diploma, clearances, contracts, medical/financial records) with strict zero-public-exposure isolation and $0/month Vercel + Supabase Free Tier compatibility.
+
+```mermaid
+flowchart TD
+    AdminUser["Lou (/admin → My Drive)"] -->|"1. Auth Session + Device Check"| IntentAPI["POST /api/admin/vault/upload-intent"]
+    IntentAPI -->|"2. Mint 2-min Signed Upload URL\n(bypasses Vercel 4.5MB body cap)"| PrivBucket[("Supabase PRIVATE Bucket\nmyPortfolio-vault · Public=OFF")]
+    AdminUser -->|"3. Direct Browser PUT (up to 50MB)"| PrivBucket
+    AdminUser -->|"4. Commit + Metadata"| VaultDB[("PostgreSQL RLS Tables\nvault_folders & vault_files")]
+    AdminUser -->|"Preview / Download"| StreamAPI["GET /api/admin/vault/files/[id]/content\n(no-store · noindex · 60s signed URL)"]
+    StreamAPI --> PrivBucket
+    LocalDev["Local JSON Fallback"] --> LocalPriv["data/private-vault/\n(Outside public/ · Gitignored)"]
+```
+
+* **Zero-Public-Exposure Security & Storage Isolation (`supabase/schema.sql`, `src/lib/vaultDb.ts`, `src/lib/vaultStorage.ts`, `.gitignore`):**
+  - [ ] Provision isolated PostgreSQL tables (`public.vault_folders`, `public.vault_files`) with **Row Level Security enabled** (Service Role only) and a local fallback index at `data/private-vault-index.json` + binary store at `data/private-vault/` (strictly outside `public/` and ignored in `.gitignore`).
+  - [ ] Store cloud binaries in a dedicated **private** Supabase Storage bucket (`SUPABASE_VAULT_BUCKET`, default `myPortfolio-vault`, `Public = OFF`), completely decoupled from the public `myPortfolio` bucket, public `/api/portfolio` DTO, `sitemap.xml`, and public orphan media scanner.
+  - [ ] Enforce strict admin authentication (`getSessionAndDeviceContext()` + active session epoch) on every `/api/admin/vault/**` endpoint, emit `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`, and log every upload/view/download/delete to the `admin-security` audit trail.
+  - [ ] Add optional **Vault Idle Lock** (re-verify via Passkey, TOTP 2FA, or Admin Password after configurable idle timeout for sensitive folders).
+* **Vercel-Safe Large File Upload & Streaming APIs (`src/app/api/admin/vault/**`):**
+  - [ ] `GET/POST /api/admin/vault/folders` & `PATCH/DELETE /api/admin/vault/folders/[id]` — Nested folder CRUD, pin/color, and safe move/delete.
+  - [ ] `GET /api/admin/vault/files` — Paginated listing with folder scope, `starred`, `recent`, `trash`, file-type filter, search query, sort order, and total storage quota stats (against the 1 GB Supabase Free Tier).
+  - [ ] `POST /api/admin/vault/upload-intent` + `POST /api/admin/vault/files/commit` — Presigned direct-to-private-bucket upload flow (supports files up to 50 MB without hitting Vercel's 4.5 MB serverless body limit; local mode streams to `data/private-vault/`), enforcing a strict soft-copy allowlist (`.pdf`, `.png`, `.jpg`, `.webp`, `.avif`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt`, `.pptx`, `.txt`, `.md`, `.csv`, `.zip`) and blocking active executable/XSS formats (`.svg`, `.html`, `.js`, `.exe`, `.sh`).
+  - [ ] `GET /api/admin/vault/files/[id]/content` & `PATCH/DELETE /api/admin/vault/files/[id]` — Authenticated inline preview / attachment download (short-lived 60s signed URL or proxied byte-range stream), rename, move folder, edit tags/notes, star, soft-delete to Trash, restore, and permanent purge (removing both DB row and storage blob).
+  - [ ] Optional explicit **"Copy to Public Certificates"** action (`POST /api/admin/vault/files/[id]/promote-certificate`) to duplicate a selected certificate soft copy from Private Vault into a new public Certificates draft without ever exposing the vault original.
+* **Google-Drive-Style Modular Admin UI (`src/components/admin/VaultManager.tsx`, `src/components/admin/vault/*`):**
+  - [ ] `VaultSidebar.tsx`: Quick views (`My Drive`, `Starred`, `Recent`, `Trash`), collapsible folder tree (with starter folder templates: *Government IDs*, *Academic & Transcripts*, *Certificates & Licenses*, *Employment & Contracts*, *Personal & Medical*), and live **Storage Quota Meter**.
+  - [ ] `VaultToolbar.tsx` & `VaultDropzone.tsx`: Breadcrumb trail, instant search across filename/tags/notes, file-type chips, `[ Grid | List ]` toggle, drag-and-drop multi-file uploader with per-file progress bars.
+  - [ ] `VaultFileBrowser.tsx`: Responsive grid cards and detail table with multi-select batch actions (Move, Star, Trash, Restore, Permanent Delete).
+  - [ ] `VaultPreviewModal.tsx`: Universal in-app viewer reusing `PdfDocumentCanvas` for multi-page PDFs, zoomable image viewer for scanned IDs/photos, clean monospace viewer for text/CSV/Markdown, and rich metadata + 1-click download card for Office/ZIP archives.
+* **Verification:**
+  - [ ] Add Vitest unit & security tests verifying unauthenticated `401` rejection on all vault routes, path-traversal/MIME blocking, soft-delete & permanent purge cleanup, signed upload intent validation, and zero vault leakage in public `/api/portfolio` DTOs.
+
+
 
 
 

@@ -1,19 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
   FileDown,
   FileText,
   Loader2,
   Maximize2,
   Minimize2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { MonogramBadge } from "@/components/common/MonogramBadge";
+import { PdfDocumentCanvas } from "@/components/common/PdfDocumentCanvas";
+import {
+  buildSafeResumeFilename,
+  resolveResumeTargets,
+} from "@/lib/resumeCache";
 import { cn } from "@/lib/utils";
 import type { ImageTransform } from "@/types/portfolio";
 
@@ -29,38 +39,9 @@ export interface ResumeViewerModalProps {
   onDownload?: () => void;
 }
 
-function resolveResumeTargets(rawUrl: string): {
-  viewerSrc: string;
-  downloadHref: string;
-} {
-  const trimmed = (rawUrl || "").trim();
-  const driveMatch =
-    /^https?:\/\/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i.exec(trimmed) ||
-    /^https?:\/\/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/i.exec(trimmed);
-
-  if (driveMatch?.[1]) {
-    const fileId = driveMatch[1];
-    return {
-      viewerSrc: `https://drive.google.com/file/d/${fileId}/preview`,
-      downloadHref: `https://drive.google.com/uc?export=download&id=${fileId}`,
-    };
-  }
-
-  const versionTag = encodeURIComponent(trimmed);
-  return {
-    viewerSrc: `/api/resume?v=${versionTag}#toolbar=1&navpanes=0&view=FitH`,
-    downloadHref: `/api/resume?download=1&v=${versionTag}`,
-  };
-}
-
-function buildSafeFilename(fullName: string): string {
-  const slug = (fullName || "Portfolio")
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return `${slug || "Portfolio"}-Resume.pdf`;
-}
+const MIN_ZOOM = 60;
+const MAX_ZOOM = 200;
+const ZOOM_STEP = 20;
 
 /**
  * Architectural document skeleton shown while the PDF streams into the embedded reader.
@@ -142,8 +123,9 @@ function ResumeDocumentSkeleton() {
 }
 
 /**
- * In-app Resume / CV modal viewer with fullscreen toggle and document skeleton
- * so visitors inspect and download the PDF inside the portfolio UI without leaving the tab.
+ * In-app multi-page Resume / CV modal viewer with full PDF.js page-stack rendering,
+ * live page navigation, zoom controls, fullscreen toggle, and automatic fallback
+ * so all pages render cleanly across Desktop, iOS Safari, iPadOS, and Android.
  */
 export function ResumeViewerModal({
   open,
@@ -156,30 +138,80 @@ export function ResumeViewerModal({
   monogramTransform,
   onDownload,
 }: ResumeViewerModalProps) {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const [fallbackForSrc, setFallbackForSrc] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [numPages, setNumPages] = useState(0);
+  const [activePage, setActivePage] = useState(1);
+  const [zoomPercent, setZoomPercent] = useState(100);
 
-  const { viewerSrc, downloadHref } = useMemo(
-    () => resolveResumeTargets(resumeUrl),
-    [resumeUrl]
-  );
-
+  const targets = useMemo(() => resolveResumeTargets(resumeUrl), [resumeUrl]);
   const downloadFilename = useMemo(
-    () => buildSafeFilename(fullName),
+    () => buildSafeResumeFilename(fullName),
     [fullName]
   );
 
-  const iframeLoaded = loadedSrc === viewerSrc;
+  const useNativeIframe =
+    targets.isGoogleDrive || fallbackForSrc === targets.apiSrc;
+  const activeSrc = useNativeIframe ? targets.iframeSrc : targets.apiSrc;
+  const documentReady = loadedSrc === activeSrc;
 
   useEffect(() => {
     if (!open) {
       const id = requestAnimationFrame(() => {
         setLoadedSrc(null);
+        setFallbackForSrc(null);
         setIsFullscreen(false);
+        setNumPages(0);
+        setActivePage(1);
+        setZoomPercent(100);
       });
       return () => cancelAnimationFrame(id);
     }
   }, [open]);
+
+  const handleDocumentLoaded = useCallback(
+    ({ numPages: total }: { numPages: number }) => {
+      setNumPages(total);
+      setActivePage(1);
+    },
+    []
+  );
+
+  const handleFirstPageRendered = useCallback(() => {
+    setLoadedSrc(targets.apiSrc);
+  }, [targets.apiSrc]);
+
+  const handlePdfJsError = useCallback(() => {
+    setFallbackForSrc(targets.apiSrc);
+    setLoadedSrc(null);
+  }, [targets.apiSrc]);
+
+  const scrollToPage = useCallback((pageNum: number) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const clamped = Math.max(1, Math.min(numPages || 1, pageNum));
+    const targetEl = container.querySelector<HTMLElement>(
+      `[data-pdf-page="${clamped}"]`
+    );
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActivePage(clamped);
+    }
+  }, [numPages]);
+
+  const handleZoomOut = () =>
+    setZoomPercent((prev) => Math.max(MIN_ZOOM, prev - ZOOM_STEP));
+  const handleZoomIn = () =>
+    setZoomPercent((prev) => Math.min(MAX_ZOOM, prev + ZOOM_STEP));
+  const handleZoomReset = () => setZoomPercent(100);
+
+  const showPdfToolbar = !useNativeIframe && numPages > 0;
+  const quickPageButtons =
+    numPages > 1 && numPages <= 8
+      ? Array.from({ length: numPages }, (_, idx) => idx + 1)
+      : [];
 
   return (
     <ModalShell
@@ -196,7 +228,7 @@ export function ResumeViewerModal({
     >
       <div
         className={cn(
-          "flex flex-col overflow-hidden",
+          "flex flex-col flex-1 min-h-0 overflow-hidden",
           isFullscreen ? "h-dvh max-h-dvh" : "h-[88dvh] max-h-[90dvh]"
         )}
       >
@@ -213,7 +245,10 @@ export function ResumeViewerModal({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-[0.625rem] font-mono uppercase tracking-[0.18em] text-(--text-accent)">
                 <FileText className="w-3 h-3 shrink-0" aria-hidden="true" />
-                <span className="truncate">CH // CV · Curriculum Vitae</span>
+                <span className="truncate">
+                  CH // CV · Curriculum Vitae
+                  {numPages > 0 ? ` · ${numPages} ${numPages === 1 ? "Page" : "Pages"}` : ""}
+                </span>
               </div>
               <h2
                 id="resume-viewer-title"
@@ -227,7 +262,7 @@ export function ResumeViewerModal({
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Magnetic strength={0.18}>
               <a
-                href={downloadHref}
+                href={targets.downloadHref}
                 download={downloadFilename}
                 onClick={onDownload}
                 className="btn-primary bg-brand-solid text-brand-contrast hover:bg-brand-solid-hover hover:shadow-[0_6px_24px_var(--accent-glow)] active:scale-[0.98] rounded-full h-[2.125rem] px-3 sm:px-4 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] inline-flex items-center justify-center gap-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand whitespace-nowrap"
@@ -237,6 +272,17 @@ export function ResumeViewerModal({
                 <span className="min-[440px]:hidden">PDF</span>
               </a>
             </Magnetic>
+
+            <a
+              href={targets.openTabHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open resume PDF in new tab"
+              title="Open in new tab"
+              className="hidden sm:inline-flex items-center justify-center w-[2.125rem] h-[2.125rem] rounded-full border border-(--border-strong) bg-(--bg-surface-2)/70 text-(--text-secondary) hover:text-(--text-primary) hover:border-brand/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+            </a>
 
             <Button
               type="button"
@@ -267,35 +313,164 @@ export function ResumeViewerModal({
           </div>
         </div>
 
-        {/* Embedded Document Frame + Skeleton Overlay */}
+        {/* Multi-Page Reader Toolbar (Page Jump + Zoom) */}
+        {showPdfToolbar && (
+          <div className="px-3.5 sm:px-6 py-2 border-b border-(--border-subtle) bg-(--bg-surface-2)/80 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            {/* Page Navigation */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                disabled={activePage <= 1}
+                onClick={() => scrollToPage(activePage - 1)}
+                aria-label="Previous resume page"
+                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-(--border-subtle) bg-(--bg-surface) text-(--text-secondary) hover:text-(--text-primary) hover:border-brand/50 disabled:opacity-35 disabled:pointer-events-none transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+
+              <span className="text-[11px] font-mono uppercase tracking-[0.14em] text-(--text-primary) tabular-nums px-1">
+                Page {activePage} / {numPages}
+              </span>
+
+              <button
+                type="button"
+                disabled={activePage >= numPages}
+                onClick={() => scrollToPage(activePage + 1)}
+                aria-label="Next resume page"
+                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-(--border-subtle) bg-(--bg-surface) text-(--text-secondary) hover:text-(--text-primary) hover:border-brand/50 disabled:opacity-35 disabled:pointer-events-none transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+
+              {quickPageButtons.length > 0 && (
+                <div
+                  role="group"
+                  aria-label="Jump to resume page"
+                  className="hidden sm:flex items-center gap-1 pl-1.5 ml-1 border-l border-(--border-subtle)"
+                >
+                  {quickPageButtons.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => scrollToPage(p)}
+                      aria-label={`Jump to page ${p}`}
+                      aria-current={activePage === p ? "page" : undefined}
+                      className={cn(
+                        "h-6 min-w-6 px-1.5 rounded-full text-[10px] font-mono tabular-nums transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                        activePage === p
+                          ? "bg-brand-solid text-brand-contrast font-semibold"
+                          : "bg-(--bg-surface) text-(--text-muted) border border-(--border-subtle) hover:text-(--text-primary) hover:border-brand/40"
+                      )}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={zoomPercent <= MIN_ZOOM}
+                onClick={handleZoomOut}
+                aria-label="Zoom out resume"
+                title="Zoom out"
+                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-(--border-subtle) bg-(--bg-surface) text-(--text-secondary) hover:text-(--text-primary) hover:border-brand/50 disabled:opacity-35 disabled:pointer-events-none transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleZoomReset}
+                aria-label="Reset resume zoom to fit width"
+                title="Fit width (100%)"
+                className="h-7 min-w-12 px-2 rounded-full border border-(--border-subtle) bg-(--bg-surface) text-[11px] font-mono text-(--text-primary) hover:border-brand/50 tabular-nums transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                {zoomPercent}%
+              </button>
+
+              <button
+                type="button"
+                disabled={zoomPercent >= MAX_ZOOM}
+                onClick={handleZoomIn}
+                aria-label="Zoom in resume"
+                title="Zoom in"
+                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-(--border-subtle) bg-(--bg-surface) text-(--text-secondary) hover:text-(--text-primary) hover:border-brand/50 disabled:opacity-35 disabled:pointer-events-none transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Document Stage + Skeleton Overlay */}
         <div className="relative flex-1 min-h-0 bg-(--bg-canvas)">
-          {!iframeLoaded && <ResumeDocumentSkeleton />}
+          {!documentReady && <ResumeDocumentSkeleton />}
 
           {open && resumeUrl && (
-            <iframe
-              key={viewerSrc}
-              title={`${fullName} Resume PDF`}
-              src={viewerSrc}
-              onLoad={() => setLoadedSrc(viewerSrc)}
-              className={cn(
-                "relative z-10 w-full h-full border-0 bg-white transition-opacity duration-200",
-                iframeLoaded ? "opacity-100" : "opacity-0"
-              )}
-            />
+            useNativeIframe ? (
+              <iframe
+                key={targets.iframeSrc}
+                title={`${fullName} Resume PDF`}
+                src={targets.iframeSrc}
+                onLoad={() => setLoadedSrc(targets.iframeSrc)}
+                className={cn(
+                  "absolute inset-0 z-10 w-full h-full border-0 bg-white transition-opacity duration-200",
+                  documentReady ? "opacity-100" : "opacity-0"
+                )}
+              />
+            ) : (
+              <div
+                ref={scrollContainerRef}
+                data-lenis-prevent
+                tabIndex={0}
+                aria-label={`${fullName} Resume Document Viewer`}
+                className={cn(
+                  "absolute inset-0 z-10 w-full h-full overflow-y-auto overflow-x-auto overscroll-contain [scrollbar-gutter:stable] focus:outline-none transition-opacity duration-200",
+                  documentReady ? "opacity-100" : "opacity-0"
+                )}
+              >
+                <PdfDocumentCanvas
+                  open={open}
+                  pdfUrl={targets.apiSrc}
+                  fullName={fullName}
+                  zoomPercent={zoomPercent}
+                  isFullscreen={isFullscreen}
+                  scrollContainerRef={scrollContainerRef}
+                  onDocumentLoaded={handleDocumentLoaded}
+                  onFirstPageRendered={handleFirstPageRendered}
+                  onActivePageChange={setActivePage}
+                  onLoadError={handlePdfJsError}
+                />
+              </div>
+            )
           )}
         </div>
 
         {/* Compact Footer Strip */}
         <div className="px-3.5 sm:px-6 py-2.5 border-t border-(--border-subtle) bg-(--bg-surface) flex items-center justify-between gap-2 text-[0.6875rem] font-mono text-(--text-muted) shrink-0">
           <span className="truncate">{headline}</span>
-          <a
-            href={downloadHref}
-            download={downloadFilename}
-            onClick={onDownload}
-            className="text-(--text-accent) hover:underline shrink-0"
-          >
-            Direct PDF Download ↓
-          </a>
+          <div className="flex items-center gap-3 shrink-0">
+            <a
+              href={targets.openTabHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sm:hidden text-(--text-secondary) hover:text-(--text-primary) hover:underline"
+            >
+              Open Tab ↗
+            </a>
+            <a
+              href={targets.downloadHref}
+              download={downloadFilename}
+              onClick={onDownload}
+              className="text-(--text-accent) hover:underline"
+            >
+              Direct PDF Download ↓
+            </a>
+          </div>
         </div>
       </div>
     </ModalShell>

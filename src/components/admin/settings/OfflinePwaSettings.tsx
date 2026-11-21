@@ -28,7 +28,6 @@ import {
   useStepNavigation,
 } from "@/components/admin/AdminMobileStepView";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { InfoTooltip } from "@/components/ui/Tooltip";
@@ -297,13 +296,15 @@ export function OfflinePwaSettings({ onFeedback }: OfflinePwaSettingsProps) {
             Connectivity
           </span>
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            <StatusPill
-              label={isOnline ? "Online" : "Offline"}
-              variant={isOnline ? "success" : "warning"}
-              size="xs"
-            />
+            <span
+              className={`text-xs font-mono uppercase tracking-wider font-semibold ${
+                isOnline ? "text-emerald-400" : "text-amber-400"
+              }`}
+            >
+              {isOnline ? "Online" : "Offline"}
+            </span>
             <span className="text-[11px] text-(--text-secondary) hidden sm:inline">
-              {isOnline ? "Admin writes enabled" : "Read-only mode"}
+              · {isOnline ? "Admin writes enabled" : "Read-only mode"}
             </span>
           </div>
           <p className="text-[11px] text-(--text-muted) sm:hidden">
@@ -316,26 +317,26 @@ export function OfflinePwaSettings({ onFeedback }: OfflinePwaSettingsProps) {
             Install Posture
           </span>
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            <StatusPill
-              label={
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-mono font-semibold ${
                 installPosture === "standalone"
+                  ? "text-emerald-400"
+                  : installPosture === "prompt-ready"
+                    ? "text-(--text-accent)"
+                    : "text-(--text-primary)"
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                {installPosture === "standalone"
                   ? "Installed"
                   : installPosture === "prompt-ready"
                     ? "Install Ready"
                     : installPosture === "ios-safari"
                       ? "Safari A2HS"
-                      : "Browser Tab"
-              }
-              variant={
-                installPosture === "standalone"
-                  ? "success"
-                  : installPosture === "prompt-ready"
-                    ? "accent"
-                    : "neutral"
-              }
-              size="xs"
-              icon={<Smartphone className="w-3 h-3" />}
-            />
+                      : "Browser Tab"}
+              </span>
+            </span>
           </div>
           {installPosture === "ios-safari" && (
             <p className="text-[10px] text-(--text-muted)">
@@ -349,17 +350,17 @@ export function OfflinePwaSettings({ onFeedback }: OfflinePwaSettingsProps) {
             Service Worker Cache
           </span>
           <div className="flex items-center gap-2 pt-0.5">
-            <StatusPill
-              label={swStatusLabel}
-              variant={
+            <span
+              className={`text-xs font-mono font-semibold ${
                 swState === "active"
-                  ? "success"
+                  ? "text-emerald-400"
                   : swState === "updating"
-                    ? "accent"
-                    : "neutral"
-              }
-              size="xs"
-            />
+                    ? "text-(--text-accent)"
+                    : "text-(--text-secondary)"
+              }`}
+            >
+              {swStatusLabel}
+            </span>
           </div>
         </div>
       </div>
@@ -515,11 +516,9 @@ export function OfflinePwaSettings({ onFeedback }: OfflinePwaSettingsProps) {
                   <span className="text-xs font-mono font-semibold text-(--text-primary) truncate">
                     {bucket.name}
                   </span>
-                  <StatusPill
-                    label={`${bucket.urls.length} files`}
-                    variant="neutral"
-                    size="xs"
-                  />
+                  <span className="text-[11px] font-mono text-(--text-muted) tabular-nums shrink-0">
+                    {bucket.urls.length} files
+                  </span>
                 </div>
                 <ul
                   data-lenis-prevent
@@ -587,11 +586,13 @@ export function OfflinePwaSettings({ onFeedback }: OfflinePwaSettingsProps) {
           />
         }
         rightSlot={
-          <StatusPill
-            label={`${pendingOutboxCount} Queued`}
-            variant={pendingOutboxCount > 0 ? "warning" : "success"}
-            size="xs"
-          />
+          <span
+            className={`text-[11px] font-mono tabular-nums ${
+              pendingOutboxCount > 0 ? "text-amber-400" : "text-(--text-muted)"
+            }`}
+          >
+            {pendingOutboxCount} Queued
+          </span>
         }
       />
 

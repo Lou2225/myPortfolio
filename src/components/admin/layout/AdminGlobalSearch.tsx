@@ -8,11 +8,13 @@ import {
   useState,
 } from "react";
 import {
+  Award,
   BarChart3,
   BookOpen,
   Cpu,
   Database,
   FolderKanban,
+  HardDrive,
   HardDriveDownload,
   Inbox,
   KeyRound,
@@ -60,10 +62,14 @@ function renderEntryIcon(iconKey: GlobalSearchIconKey) {
       return <BookOpen className={cls} />;
     case "skills":
       return <Cpu className={cls} />;
+    case "certificates":
+      return <Award className={cls} />;
     case "projects":
       return <FolderKanban className={cls} />;
     case "inbox":
       return <Inbox className={cls} />;
+    case "vault":
+      return <HardDrive className={cls} />;
     case "settings":
       return <Settings className={cls} />;
     case "password":

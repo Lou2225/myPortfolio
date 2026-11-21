@@ -4,6 +4,7 @@ import { Story } from "@/components/sections/Story";
 import { TechBento } from "@/components/sections/TechBento";
 import { Impact } from "@/components/sections/Impact";
 import {
+  DeferredCertificates,
   DeferredProjects,
   DeferredContact,
 } from "@/components/sections/DeferredSections";
@@ -41,7 +42,7 @@ export default async function Home() {
   };
 
   return (
-    <main className="lou-public-root relative w-full overflow-x-hidden">
+    <main className="lou-public-root relative w-full overflow-x-clip">
       <StarfieldCanvas />
       <script
         type="application/ld+json"
@@ -61,6 +62,10 @@ export default async function Home() {
       />
       <TechBento
         skills={db.skills}
+        sectionHeaders={db.sectionHeaders}
+      />
+      <DeferredCertificates
+        certificates={db.certificates}
         sectionHeaders={db.sectionHeaders}
       />
       <DeferredProjects />

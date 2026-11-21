@@ -98,6 +98,9 @@ function mapSupabaseContactRow(row: SupabaseContactRow): ContactMessage {
   };
 }
 
+const STRICT_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function toSupabaseContactRow(msg: ContactMessage, includeExtended = true) {
   const base = {
     id: msg.id,
@@ -112,16 +115,14 @@ function toSupabaseContactRow(msg: ContactMessage, includeExtended = true) {
 
   if (!includeExtended) return base;
 
+  // Always emit every extended column explicitly (null/0) so multi-row PostgREST bulk
+  // inserts never fail with PGRST102 ("All object keys must match").
   return {
     ...base,
-    ...(msg.emailDispatchStatus !== undefined
-      ? { email_dispatch_status: msg.emailDispatchStatus }
-      : {}),
-    ...(msg.repliedAt !== undefined ? { replied_at: msg.repliedAt } : {}),
-    ...(msg.replyCount !== undefined ? { reply_count: msg.replyCount } : {}),
-    ...(msg.lastReplySubject !== undefined
-      ? { last_reply_subject: msg.lastReplySubject }
-      : {}),
+    email_dispatch_status: msg.emailDispatchStatus ?? null,
+    replied_at: msg.repliedAt ?? null,
+    reply_count: typeof msg.replyCount === "number" ? msg.replyCount : 0,
+    last_reply_subject: msg.lastReplySubject ?? null,
   };
 }
 
@@ -147,11 +148,13 @@ function toSupabaseAnalyticsRow(ev: AnalyticsEvent, includeExtended = true) {
 
   if (!includeExtended) return base;
 
+  // Always emit every extended column explicitly (null) so multi-row PostgREST bulk
+  // inserts never fail with PGRST102 ("All object keys must match").
   return {
     ...base,
-    ...(ev.sessionId ? { session_id: ev.sessionId } : {}),
-    ...(ev.device ? { device: ev.device } : {}),
-    ...(ev.referrer ? { referrer: ev.referrer } : {}),
+    session_id: ev.sessionId ?? null,
+    device: ev.device ?? null,
+    referrer: ev.referrer ?? null,
   };
 }
 
@@ -336,7 +339,7 @@ export async function backfillLegacyRelationalData(legacy: {
 
   if (Array.isArray(legacy.messages) && legacy.messages.length > 0) {
     const valid = legacy.messages.filter(
-      (m) => m && typeof m.id === "string" && /^[0-9a-f-]{36}$/i.test(m.id)
+      (m) => m && typeof m.id === "string" && STRICT_UUID_REGEX.test(m.id)
     );
     if (valid.length > 0) {
       await supabaseInsertRows(
@@ -351,7 +354,7 @@ export async function backfillLegacyRelationalData(legacy: {
 
   if (Array.isArray(legacy.analytics) && legacy.analytics.length > 0) {
     const valid = legacy.analytics.filter(
-      (e) => e && typeof e.id === "string" && /^[0-9a-f-]{36}$/i.test(e.id)
+      (e) => e && typeof e.id === "string" && STRICT_UUID_REGEX.test(e.id)
     );
     const chunkSize = 250;
     for (let i = 0; i < valid.length; i += chunkSize) {
@@ -476,9 +479,19 @@ export async function updateContactMessageById(
     repliedAt?: string | null;
     replyCount?: number;
     lastReplySubject?: string | null;
-  }
+  },
+  options?: { returnAll?: boolean }
 ): Promise<{ updated: ContactMessage | null; messages: ContactMessage[] }> {
+  const returnAll = options?.returnAll !== false;
+
   if (getStorageMode() === "supabase") {
+    if (!STRICT_UUID_REGEX.test(id)) {
+      return {
+        updated: null,
+        messages: returnAll ? await listContactMessages() : [],
+      };
+    }
+
     const { url, key } = getSupabaseCreds();
     const extendedPatch: Record<string, unknown> = {};
     const basePatch: Record<string, unknown> = {};
@@ -504,6 +517,7 @@ export async function updateContactMessageById(
       extendedPatch.last_reply_subject = updates.lastReplySubject;
     }
 
+    let patchedRow: ContactMessage | null = null;
     if (Object.keys(extendedPatch).length > 0) {
       const sendPatch = (body: Record<string, unknown>) =>
         fetch(
@@ -520,26 +534,42 @@ export async function updateContactMessageById(
         );
 
       let res = await sendPatch(extendedPatch);
+      let v2OnlyMissingColumn = false;
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        if (isMissingColumnError(res.status, text) && Object.keys(basePatch).length > 0) {
-          res = await sendPatch(basePatch);
-        } else if (!isMissingColumnError(res.status, text)) {
+        if (isMissingColumnError(res.status, text)) {
+          if (Object.keys(basePatch).length > 0) {
+            res = await sendPatch(basePatch);
+          } else {
+            // v1 table without extended columns: skip silently rather than failing email status sync
+            v2OnlyMissingColumn = true;
+          }
+        } else {
           throw new StorageWriteError(
             `Failed to update message in Supabase (HTTP ${res.status}).`
           );
         }
       }
 
-      if (!res.ok) {
+      if (!v2OnlyMissingColumn && !res.ok) {
         throw new StorageWriteError(
           `Failed to update message in Supabase (HTTP ${res.status}).`
         );
       }
+
+      if (!v2OnlyMissingColumn && res.ok) {
+        const rows = (await res.json().catch(() => [])) as SupabaseContactRow[];
+        if (Array.isArray(rows) && rows.length > 0) {
+          patchedRow = mapSupabaseContactRow(rows[0]);
+        }
+      }
     }
 
+    if (!returnAll) {
+      return { updated: patchedRow, messages: [] };
+    }
     const messages = await listContactMessages();
-    const updated = messages.find((m) => m.id === id) || null;
+    const updated = patchedRow || messages.find((m) => m.id === id) || null;
     return { updated, messages };
   }
 
@@ -660,10 +690,15 @@ export async function replaceAllContactMessages(
       );
     }
 
-    const normalized = messages.map((m) => ({
-      ...m,
-      id: /^[0-9a-f-]{36}$/i.test(m.id) ? m.id : crypto.randomUUID(),
-    }));
+    const seenIds = new Set<string>();
+    const normalized = messages.map((m) => {
+      let safeId = STRICT_UUID_REGEX.test(m.id) ? m.id : crypto.randomUUID();
+      if (seenIds.has(safeId)) {
+        safeId = crypto.randomUUID();
+      }
+      seenIds.add(safeId);
+      return { ...m, id: safeId };
+    });
     const chunkSize = 200;
     for (let i = 0; i < normalized.length; i += chunkSize) {
       const batch = normalized.slice(i, i + chunkSize);
@@ -817,10 +852,15 @@ export async function replaceAllAnalyticsEvents(
       );
     }
 
-    const normalized = events.map((ev) => ({
-      ...ev,
-      id: /^[0-9a-f-]{36}$/i.test(ev.id) ? ev.id : crypto.randomUUID(),
-    }));
+    const seenIds = new Set<string>();
+    const normalized = events.map((ev) => {
+      let safeId = STRICT_UUID_REGEX.test(ev.id) ? ev.id : crypto.randomUUID();
+      if (seenIds.has(safeId)) {
+        safeId = crypto.randomUUID();
+      }
+      seenIds.add(safeId);
+      return { ...ev, id: safeId };
+    });
     const chunkSize = 250;
     for (let i = 0; i < normalized.length; i += chunkSize) {
       const batch = normalized.slice(i, i + chunkSize);
